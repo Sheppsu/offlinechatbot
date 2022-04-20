@@ -24,7 +24,7 @@ def stop(runner):
     subprocess.run(['sudo', 'reboot'])
 
 
-timer = Timer(604800, stop)
+timer = Timer(86400, stop)
 try:
     timer.start()
 except KeyboardInterrupt:
