@@ -186,6 +186,7 @@ class Bot:
             "afk": self.afk,
             "help": self.help_command,
             "trivia_category": self.trivia_category,
+            "sourcecode": self.sourcecode,
         }  # Update pastebins when adding new commands
         self.cooldown = {}
         self.overall_cooldown = {}
@@ -290,6 +291,22 @@ class Bot:
 
     def set_timed_event(self, wait, callback, *args, **kwargs):
         return asyncio.run_coroutine_threadsafe(do_timed_event(wait, callback, *args, **kwargs), self.loop)
+
+    @staticmethod
+    def format_date(date):
+        minutes = (datetime.now() - date).seconds // 60
+        hours = 0
+        days = 0
+        if minutes >= 60:
+            hours = minutes // 60
+            minutes = minutes % 60
+            if hours >= 24:
+                days = hours // 24
+                hours = hours % 24
+        elif minutes == 0:
+            return f"{(datetime.now() - date).seconds} seconds"
+        return ((f"{days} day(s) " if days != 0 else "") + (f" {hours} hour(s) " if hours != 0 else "") + (
+            f" {minutes} minute(s)" if minutes != 0 else "")).strip()
 
     # File save/load
 
@@ -951,24 +968,13 @@ class Bot:
             del self.afk[user]
             self.save_afk()
 
-    @staticmethod
-    def format_date(date):
-        minutes = (datetime.now() - date).seconds // 60
-        hours = 0
-        days = 0
-        if minutes >= 60:
-            hours = minutes // 60
-            minutes = minutes % 60
-            if hours >= 24:
-                days = hours // 24
-                hours = hours % 24
-        elif minutes == 0:
-            return f"{(datetime.now() - date).seconds} seconds"
-        return ((f"{days} day(s) " if days != 0 else "") + (f" {hours} hour(s) " if hours != 0 else "") + (f" {minutes} minute(s)" if minutes != 0 else "")).strip()
-
     @cooldown()
     async def trivia_category(self, user, channel, args):
         await self.send_message(channel, f"@{user} I'll make something more intuitive later but for now, if you want to know which number correlates to which category, go here https://opentdb.com/api_config.php, click a category, click generate url and then check the category specified in the url.")
+
+    @cooldown()
+    async def sourcecode(self, user, channel, args):
+        await self.send_message(channel, f"@{user} https://github.com/Sheepposu/offlinechatbot")
 
 
 bot = Bot()
