@@ -1,0 +1,112 @@
+body {
+    background-color: #888FE0;
+}
+
+a, h1, h3, p {
+    font-family: "Arial", "Helvetica", "sans-serif"
+}
+
+.page-container {
+    margin: auto;
+    margin-top: 150px;
+    padding: 10px;
+    width: 500px;
+    background-color: #8BB0F7;
+    border-radius: 15px;
+}
+
+.page-header {
+    width: 100%;
+    height: 100px;
+    background-color: #9F8BF7;
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+}
+
+.header-links-container {
+    margin: 0 20px;
+}
+
+.header-link-container {
+    line-height: 100px;
+    display: inline-block;
+    padding: 0 10px;
+}
+
+.current-page-identifier {
+    background-color: #B585ED;
+}
+
+.header-link {
+    color: white;
+    text-decoration-line: none;
+    font-size: 30px;
+    vertical-align: middle;
+    padding: 35px 0;
+}
+
+.title-text {
+    text-align: center;
+    color: white;
+}
+
+.text {
+    color: white;
+}
+
+.hyperlink {
+    color: #0d4cde;
+}
+
+.line-break {
+    height: 2px;
+    color: black;
+    background-color: black;
+    border-width: 0;
+}
+
+.content-container {
+
+}
+
+.social-img-link {
+    height: 75px;
+}
+
+.command-container {
+    background-color: #888FE0;
+    border-radius: 10px;
+    margin: 10px 0;
+}
+
+.command-label-container {
+    line-height: 15px;
+    padding: 0 5px;
+    border-style: solid;
+    border-radius: 10px;
+}
+
+.command-label {
+    padding: 5px 5px;
+    font-size: 30px;
+    vertical-align: middle;
+    color: white;
+}
+
+.command-description-container {
+    display: none;
+    padding: 10px;
+}
+
+.command-description {
+    margin: 0;
+}
+
+.arrow {
+    width: 50px;
+    height: 50px;
+    padding: 8px 10px;
+    float: right;
+}
