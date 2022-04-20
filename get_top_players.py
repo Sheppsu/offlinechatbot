@@ -4,6 +4,9 @@ import json
 from dotenv import load_dotenv
 
 
+load_dotenv()
+
+
 class Client(osu.Client):
     client_secret = os.getenv("OSU_CLIENT_SECRET")
     client_id = int(os.getenv("OSU_CLIENT_ID"))
@@ -28,6 +31,5 @@ class Client(osu.Client):
             json.dump(output, f)
 
 
-load_dotenv()
 client = Client()
 client.run()

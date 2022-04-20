@@ -427,12 +427,14 @@ class Bot:
                         self.running = False
 
             except KeyboardInterrupt:
-                self.running = False
+                pass
             except websockets.exceptions.ConnectionClosedError as e:
                 # Restart the bot
                 print(e) 
-                await asyncio.sleep(2)
-                await self.start()
+            except:
+                print(traceback.format_exc())
+            finally:
+                self.running = False
 
     async def run(self):
         # await self.register_cap("tags")
