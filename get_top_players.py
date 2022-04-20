@@ -1,11 +1,12 @@
 import osu
 import os
 import json
+from dotenv import load_dotenv
 
 
 class Client(osu.Client):
-    client_secret = "fda6YO71ZlXxDaCARECjCBl4qusOi5DtjV5Wgb7f"
-    client_id = 6833
+    client_secret = os.getenv("OSU_CLIENT_SECRET")
+    client_id = int(os.getenv("OSU_CLIENT_ID"))
     redirect_uri = "http://127.0.0.1:8080"
 
     user = 14895608
@@ -23,9 +24,10 @@ class Client(osu.Client):
             all_rankings += rankings.ranking
 
         output = [ranking.user.username for ranking in all_rankings]
-        with open(f"top players ({len(output)}).json", "w") as f:
+        with open(f"data/top players ({len(output)}).json", "w") as f:
             json.dump(output, f)
 
 
+load_dotenv()
 client = Client()
 client.run()

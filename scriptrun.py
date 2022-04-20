@@ -18,9 +18,11 @@ for script in scripts:
     runner.manage_script(script)
 runner.start()
 
+
 def stop(runner):
     runner.stop()
     subprocess.run(['sudo', 'reboot'])
+
 
 timer = Timer(604800, stop)
 try:
