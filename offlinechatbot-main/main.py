@@ -90,6 +90,8 @@ class Bot:
     username = "sheepposubot"
     oauth = os.getenv("OAUTH")
     uri = "ws://irc-ws.chat.twitch.tv:80"
+
+    # I should probably put this stuff in a file lol
     pull_options = {3: ['Slingshot', "Sharpshooter's Oath", 'Raven Bow', 'Emerald Orb', 'Thrilling Tales of Dragon Slayers', 'Magic Guide', 'Black Tassel', 'Debate Club', 'Bloodtainted Greatsword', 'Ferrous Shadow', 'Skyrider Sword ', 'Harbinger of Dawn', 'Cool Steel'], 4: ['Amber', 'Kaeya', 'Lisa', 'Barbara', 'Razor', 'Xiangling', 'Beidou', 'Xingqiu', 'Ningguang', 'Fischl', 'Bennett', 'Noelle', 'Chongyun', 'Sucrose', 'Diona', 'Xinyan', 'Rosaria', 'Yanfei', 'Sayu', 'Kujou Sara', 'Thoma', 'Gorou', 'Yun Jin', 'Favonius Sword', 'The Flute', 'Sacrificial Sword', "Lion's Roar", 'The Alley Flash', 'Favonius Greatsword', 'The Bell', 'Sacrificial Greatsword', 'Rainslasher', 'Lithic Blade', 'Akuoumaru', "Dragon's Bane", 'Favonius Lance', 'Lithic Spear', "Wavebreaker's Fin", 'Favonius Codex', 'The Widsith', 'Sacrificial Fragments', 'Eye of Perception', 'Favonius Warbow', 'The Stringless', 'Sacrificial Bow', 'Rust', 'Alley Hunter', 'Mitternachts Waltz', "Mouun's Moon", 'Wine and Song'], 5: ['Kamisato Ayato', 'Yae Miko', 'Shenhe', 'Arataki Itto', 'Sangonomiya Kokomi', 'Raiden Shogun', 'Yoimiya', 'Kamisato Ayaka', 'Kaedehara Kazuha', 'Eula', 'Hu Tao', 'Xiao', 'Ganyu', 'Albedo', 'Zhongli', 'Tartaglia', 'Klee', 'Venti', 'Keqing', 'Mona', 'Qiqi', 'Diluc', 'Jean', 'Aquila Favonia', 'Skyward Blade', 'Summit Shaper', 'Primordial Jade Cutter', 'Freedom-Sworn', 'Mistsplitter Reforged', 'Skyward Pride', "Wolf's Gravestone", 'The Unforged', 'Song of Broken Pines', 'Redhorn Stonethresher', 'Primordial Jade Winged-Spear', 'Skyward Spine', 'Vortex Vanquisher', 'Staff of Homa', 'Engulfing Lightning', 'Calamity Queller', 'Skyward Atlas', 'Lost Prayer to the Sacred Winds', 'Memory of Dust', 'Everlasting Moonglow', "Kagura's Verity", 'Skyward Harp', "Amos' Bow", 'Elegy for the End', 'Thundering Pulse', 'Polar Star']}
     banned_words = [  # Was originally used to stop this word from being posted for scramble, but since there's a new list with non-tos words it doesn't really do anything
         "kike"
@@ -373,7 +375,7 @@ class Bot:
             try:
                 await self.connect()  # Connect to the irc server
                 poll = asyncio.run_coroutine_threadsafe(self.poll(), self.loop)  # Begin polling for events sent by the server
-                await asyncio.sleep(5)  # Leave time for reply from server before beginning to join channels are stuff
+                await asyncio.sleep(5)  # Leave time for reply from server before beginning to join channels and stuff
                 await self.run()  # Join channels + whatever else is in the function
 
                 last_check = perf_counter() - 20
