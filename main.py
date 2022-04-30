@@ -513,7 +513,6 @@ class Bot:
     # Events
 
     async def on_message(self, user, channel, message, tags):
-        print("Offline: "+str(self.offline))
         if not self.offline:
             return
 
@@ -547,7 +546,6 @@ class Bot:
             if command in self.commands:
                 if user == self.username:
                     await asyncio.sleep(1)
-                print(f"Executing {command} with {args}")
                 await self.commands[command](user, channel, args)
 
     # Commands
@@ -651,22 +649,16 @@ class Bot:
             self.save_gamba()
             await self.on_trivia_finish(channel, timeout=False)
         else:
-            print(f"wrong xD {user} {answer}")
             await self.send_message(channel, f"@{user} {answer} is wrong ❌. You lost {worth*self.trivia_info['penalty']} Becky Bucks 3Head Clap")
             self.gamba_data[user]['money'] -= worth*self.trivia_info['penalty']
             self.save_gamba()
-            print(f"Take the penalty grrrr {user} {answer}")
             if self.answer not in self.guessed_answers and len(self.guessed_answers) == 3:
-                print(f"u guys suck lole {user} {answer}")
                 self.trivia_diff = None  # make sure someone doesn't answer before it can say no one got it right
                 await self.send_message(channel, f"No one answered correctly! The answer was {self.answer}.")
                 await self.on_trivia_finish(channel, timeout=False)
-                print(f"ok the trivia ended {user} {answer}")
 
     async def on_trivia_finish(self, channel, timeout=True):
-        print("Cancelling trivia future")
         self.trivia_future.cancel()
-        print("Canceled trivia future")
         if timeout:
             await self.send_message(channel, f"Time has run out for the trivia! The answer was {self.answer}.")
         self.answer = None
