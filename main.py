@@ -513,7 +513,7 @@ class Bot:
     # Events
 
     async def on_message(self, user, channel, message, tags):
-        if not self.offline:
+        if not self.offline or user == self.username:
             return
 
         if message.lower().startswith("pogpega") and message.lower() != "pogpega":
