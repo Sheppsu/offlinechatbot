@@ -1,0 +1,3 @@
+python-dotenv>=0.20.0
+osu.py>=0.2.5
+websockets>=10.2

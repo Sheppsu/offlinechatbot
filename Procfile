@@ -1,0 +1,1 @@
+command: python main.py

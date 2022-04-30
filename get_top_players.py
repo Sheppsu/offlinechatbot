@@ -29,7 +29,3 @@ class Client(osu.Client):
         output = [ranking.user.username for ranking in all_rankings]
         with open(f"data/top players ({len(output)}).json", "w") as f:
             json.dump(output, f)
-
-
-client = Client()
-client.run()
