@@ -610,7 +610,7 @@ class Bot:
             "medium": "monkaS",
             "hard": "pepeMeltdown"
         }
-        resp = requests.get(f"https://opentdb.com/api.php?amount=1&type=multiple{f'&category={args[0]}' if len(args) > 0 else ''}").json()['results'][0]
+        resp = requests.get(f"https://opentdb.com/api.php?amount=1&type=multiple{f'&category={args[0]}' if len(args) > 0 and args[0].isdigit() else ''}").json()['results'][0]
 
         answers = [resp['correct_answer']] + resp['incorrect_answers']
         random.shuffle(answers)
