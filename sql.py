@@ -38,7 +38,7 @@ class Database:
 
     def get_pity(self):
         self.cursor.execute("SELECT * FROM pity")
-        return {pity[0]: {"4": pity[1], "5": pity[2]} for pity in self.cursor.fetchall()}
+        return {pity[0]: {4: pity[1], 5: pity[2]} for pity in self.cursor.fetchall()}
 
     def save_pity(self, user, four, five):
         self.cursor.execute(f"UPDATE pity SET four = {four}, five = {five} WHERE username = '{user}'")
