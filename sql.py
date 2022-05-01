@@ -8,7 +8,7 @@ class Database:
         self.name = os.getenv("MYSQLDATABASE")
         self.database = connector.connect(
             host=os.getenv("MYSQLHOST"),
-            port=os.getenv("MYSQLPORT"),
+            port=int(os.getenv("MYSQLPORT")),
             user=os.getenv("MYSQLUSER"),
             password=os.getenv("MYSQLPASSWORD"),
             database=self.name
