@@ -1,10 +1,6 @@
 import osu
 import os
 import json
-from dotenv import load_dotenv
-
-
-load_dotenv()
 
 
 class Client(osu.Client):

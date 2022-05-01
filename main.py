@@ -11,8 +11,9 @@ from datetime import datetime
 import traceback
 import sys
 import os
-from dotenv import load_dotenv
 from get_top_players import Client
+from dotenv import load_dotenv
+from sql import Database
 
 
 load_dotenv()
@@ -266,16 +267,19 @@ class Bot:
         self.current_player = None
 
         # Data
+        self.database = Database()
+
         genshin = list(self.pull_options.values())
         self.genshin = genshin[0] + genshin[1] + genshin[2]
+
         # File saved data
-        self.pity = {}
-        self.gamba_data = {}
+        self.pity = self.database.get_pity()
+        self.gamba_data = self.database.get_userdata()
         self.top_players = []
         self.top_maps = []
         self.word_list = []
         self.facts = []
-        self.afk = {}
+        self.afk = self.database.get_afk()
         self.all_words = []
         self.load_data()
 
@@ -321,22 +325,6 @@ class Bot:
 
     # File save/load
 
-    def save_pity(self):
-        with open("data/pity.json", "w") as f:
-            json.dump(self.pity, f)
-
-    def load_pity(self):
-        with open("data/pity.json", "r") as f:
-            self.pity = {user: {4: data["4"], 5: data["5"]} for user, data in json.load(f).items()}
-
-    def save_gamba(self):
-        with open("data/gamba.json", "w") as f:
-            json.dump(self.gamba_data, f)
-
-    def load_gamba(self):
-        with open("data/gamba.json", "r") as f:
-            self.gamba_data = json.load(f)
-
     def load_top_players(self):
         with open("data/top players (200).json", "r") as f:
             self.top_players = json.load(f)
@@ -353,26 +341,15 @@ class Bot:
         with open("data/facts.json", "r") as f:
             self.facts = json.load(f)
 
-    def save_afk(self):
-        with open("data/afk.json", "w") as f:
-            json.dump(self.afk, f)
-
-    def load_afk(self):
-        with open("data/afk.json", "r") as f:
-            self.afk = json.load(f)
-
     def load_all_words(self):
         with open("data/all_words.json", "r") as f:
             self.all_words = json.load(f)
 
     def load_data(self):
-        self.load_pity()
-        self.load_gamba()
         self.load_top_players()
         self.load_top_maps()
         self.load_words()
         self.load_facts()
-        self.load_afk()
         self.load_all_words()
 
     # Api request stuff
@@ -554,6 +531,7 @@ class Bot:
     async def pull(self, user, channel, args):
         if user not in self.pity:
             self.pity.update({user: {4: 0, 5: 0}})
+            self.database.new_pity(user, 0, 0)
 
         pity = False
         self.pity[user][4] += 1
@@ -583,7 +561,7 @@ class Bot:
             self.pity[user][4] = 0
         elif pull == 4:
             self.pity[user][4] = 0
-        self.save_pity()
+        self.database.save_pity(user, self.pity[user][4], self.pity[user][5])
 
     @cooldown()
     async def font(self, user, channel, args):
@@ -646,24 +624,27 @@ class Bot:
         if answer == self.answer:
             await self.send_message(channel, f"@{user} {answer} is the correct answer ✅. You gained {worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))} Becky Bucks 5Head Clap")
             self.gamba_data[user]['money'] += worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))
-            self.save_gamba()
+            self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
             await self.on_trivia_finish(channel, timeout=False)
         else:
             await self.send_message(channel, f"@{user} {answer} is wrong ❌. You lost {worth*self.trivia_info['penalty']} Becky Bucks 3Head Clap")
             self.gamba_data[user]['money'] -= worth*self.trivia_info['penalty']
-            self.save_gamba()
+            self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
             if self.answer not in self.guessed_answers and len(self.guessed_answers) == 3:
                 self.trivia_diff = None  # make sure someone doesn't answer before it can say no one got it right
                 await self.send_message(channel, f"No one answered correctly! The answer was {self.answer}.")
                 await self.on_trivia_finish(channel, timeout=False)
 
     async def on_trivia_finish(self, channel, timeout=True):
-        self.trivia_future.cancel()
         if timeout:
             await self.send_message(channel, f"Time has run out for the trivia! The answer was {self.answer}.")
+        else:
+            self.trivia_future.cancel()
         self.answer = None
         self.guessed_answers = []
         self.trivia_diff = None
+        self.trivia_future = None
+
 
     @cooldown()
     async def slap(self, user, channel, args):
@@ -714,7 +695,7 @@ class Bot:
             if user not in self.gamba_data:
                 self.add_new_user(user)
             self.gamba_data[user]["money"] += money
-            self.save_gamba()
+            self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
 
     @cooldown(cmd_cd=5)
     async def hint(self, user, channel, args, scramble_type):
@@ -759,7 +740,7 @@ class Bot:
                 'receive': True
             }
         }})
-        self.save_gamba()
+        self.database.new_user(user)
 
     @cooldown(user_cd=60)
     @requires_gamba_data
@@ -767,7 +748,7 @@ class Bot:
         money = random.randint(10, 100)
         self.gamba_data[user]["money"] += money
         await self.send_message(channel, f"@{user} You collected {money} Becky Bucks!")
-        self.save_gamba()
+        self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
 
     @cooldown(cmd_cd=2, user_cd=3)
     @requires_gamba_data
@@ -806,7 +787,7 @@ class Bot:
             await self.send_message(channel, f"@{user} You gained {payout} Becky Bucks! ✅ [WIN]")
             self.gamba_data[user]["money"] += payout
         self.gamba_data[user]["money"] = round(self.gamba_data[user]["money"], 2)
-        self.save_gamba()
+        self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
 
     @cooldown()
     async def risk_factor(self, user, channel, args):
@@ -872,7 +853,7 @@ class Bot:
     async def toggle(self, user, channel, args):
         if len(args) < 2:
             return await self.send_message(channel, f"@{user} You must provide a setting name and either on or off")
-        setting = args[0]
+        setting = args[0].lower()
         if setting not in self.gamba_data[user]['settings']:
             return await self.send_message(channel,
                                            f"@{user} That's not a valid setting name. The settings consist of the following: " + ", ".join(
@@ -883,6 +864,7 @@ class Bot:
             return await self.send_message(channel, "You must specify on or off.")
 
         self.gamba_data[user]['settings'][setting] = value
+        self.database.update_userdata(user, setting, value)
         await self.send_message(channel, f"@{user} The {setting} setting has been turned {args[1]}.")
 
     @cooldown()
@@ -923,11 +905,11 @@ class Bot:
             await self.send_message(channel,
                                     f"@{user} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
             self.gamba_data[user]['money'] -= 10
-            return self.save_gamba()
+            return self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
         await self.send_message(channel,
                                 f"@{user} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
         self.gamba_data[user]['money'] += 10
-        self.save_gamba()
+        self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
         
     @requires_dev
     async def new_name(self, user, channel, args):
@@ -962,7 +944,7 @@ class Bot:
         await self.send_message(channel, f"@{user} Your afk has been set.")
         message = " ".join(args)
         self.afk[user] = {"message": message, "time": datetime.now().isoformat()}
-        self.save_afk()
+        self.database.save_afk(user, message)
 
     @cooldown()
     async def help_command(self, user, channel, args):
@@ -979,7 +961,7 @@ class Bot:
         elif (datetime.now() - datetime.fromisoformat(self.afk[user]['time'])).seconds > 60:
             await self.send_message(channel, f"@{user} Your afk has been removed.")
             del self.afk[user]
-            self.save_afk()
+            self.database.delete_afk(user)
 
     @cooldown()
     async def trivia_category(self, user, channel, args):
