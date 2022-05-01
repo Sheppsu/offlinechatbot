@@ -986,10 +986,10 @@ class Bot:
         self.party.update({user: 3})
 
         await self.send_message(channel, f"{user} has started a Bomb Party game! Anyone else who wants to play should type !join. When enough players have joined, the host should type !start to start the game, otherwise the game will automatically start or close after 2 minutes.")
-        self.bomb_party_future = self.set_timed_event(10, self.close_or_start_game, channel)
+        self.bomb_party_future = self.set_timed_event(120, self.close_or_start_game, channel)
 
     async def close_or_start_game(self, channel):
-        if len(self.party) < 1:
+        if len(self.party) < 2:
             self.close_bomb_party()
             return await self.send_message(channel, "The bomb party game has closed since there is only one player in the party.")
         await self.start_bomb_party(None, channel, None, False)
@@ -998,7 +998,7 @@ class Bot:
     async def start_bomb_party(self, user, channel, args, cancel=True):
         if len(self.party) == 0 or self.turn_order:
             return
-        if len(self.party) < 1:
+        if len(self.party) < 2:
             return await self.send_message(channel, f"@{user} You need at least 2 players to start the bomb party game.")
         if cancel:
             self.bomb_party_future.cancel()
