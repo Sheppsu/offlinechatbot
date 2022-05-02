@@ -1081,6 +1081,7 @@ class Bot:
             if value not in self.valid_bomb_settings[setting]:
                 return await self.send_message(channel, "That's not a valid value for this setting.")
             self.bomb_settings[setting] = value
+            await self.send_message(channel, f"@{user} That {setting} setting has been changed to {value}")
         except ValueError:
             return await self.send_message(channel, "There was a problem processing the value you gave for the specific setting.")
 
