@@ -275,6 +275,18 @@ class Bot:
         self.turn_order = []
         self.timer = self.bomb_time
         self.bomb_party_difficulty = "medium"
+        self.bomb_settings = {
+            "difficulty": "medium",
+            "timer": 30,
+            "minimum_time": 5,
+            "lives": 3,
+        }
+        self.valid_bomb_settings = {
+            "difficulty": ("easy", "medium", "hard", "nightmare", "impossible"),
+            "timer": range(5, 60+1),
+            "minimum_time": range(0, 10+1),
+            "lives": range(1, 5+1),
+        }
 
         # Data
         self.database = Database()
@@ -1065,12 +1077,32 @@ class Bot:
         if self.turn_order and await self.check_win(channel):
             self.bomb_party_future.cancel()
 
+    @cooldown(user_cd=0, cmd_cd=0)
+    async def bomb_settings(self, user, channel, args):
+        if len(args) < 2:
+            return await self.send_message(channel, f"@{user} You must provide a setting name and the value: !settings <setting> <value>. Valid settings: {', '.join(list(self.bomb_settings.keys()))}")
+        setting = args[0].lower()
+        value = args[1].lower()
+        if setting not in self.bomb_settings:
+            return await self.send_message(channel, f"@{user} That's not a valid setting. Valid settings: {', '.join(list(self.bomb_settings.keys()))}")
+        try:
+            value = type(self.bomb_settings[setting])(value)
+            if value not in self.valid_bomb_settings[setting]:
+                return await self.send_message(channel, "That's not a valid value for this setting.")
+            self.bomb_settings[setting] = value
+        except ValueError:
+            return await self.send_message(channel, "There was a problem processing the value you gave for the specific setting.")
+
+    @cooldown()
+    async def player_list(self, user, channel, args):
+        await self.send_message(channel, f"@{user} Current players playing bomb party: ")
+
     async def bomb_party_timer(self, channel):
         self.timer = self.bomb_time
         self.bomb_start_time = 0
         player = self.turn_order[self.current_player]
         self.party[player] -= 1
-        message = "You now have {self.party[player]} {'♥'*self.party[player]} heart(s) left" if self.party[player] != 0 else "You lost all your lives! YouDied"
+        message = f"You now have {self.party[player]} {'♥'*self.party[player]} heart(s) left" if self.party[player] != 0 else "You lost all your lives! YouDied"
         await self.send_message(channel, f"@{player} you ran out of time! {message}")
         if await self.check_win(channel):
             return
