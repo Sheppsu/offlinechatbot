@@ -1,8 +1,6 @@
 from mysql import connector
 from datetime import datetime
 import os
-# from dotenv import load_dotenv
-# load_dotenv()
 
 
 class Database:
@@ -55,7 +53,7 @@ class Database:
         return {data[0]: {"money": data[1], "settings": {"receive": bool(data[2])}} for data in self.cursor.fetchall()}
 
     def update_userdata(self, user, column, value):
-        self.cursor.execute("UPDATE userdata SET %s = %s" % (column, "'%s'" % value if type(value) == str else value))
+        self.cursor.execute("UPDATE userdata SET %s = %s WHERE username = '%s'" % (column, "'%s'" % value if type(value) == str else value, user))
         self.database.commit()
 
     def new_user(self, user, money=0, receive=False):
