@@ -1054,11 +1054,11 @@ class Bot:
 
     @cooldown(cmd_cd=0)
     async def leave_bomb_party(self, user, channel, args):
-        if len(self.party) == 0 or self.turn_order or user not in self.party:
+        if len(self.party) == 0 or user not in self.party:
             return
         del self.party[user]
         await self.send_message(channel, f"@{user} You have left the game of bomb party.")
-        if await self.check_win(channel):
+        if self.turn_order and await self.check_win(channel):
             self.bomb_party_future.cancel()
 
     async def bomb_party_timer(self, channel):
