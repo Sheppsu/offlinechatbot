@@ -196,7 +196,7 @@ class Bot:
             "start": self.start_bomb_party,
             "join": self.join_bomb_party,
             "leave": self.leave_bomb_party,
-            "difficulty": self.change_bomb_party_difficulty,
+            "settings": self.change_bomb_settings,
             "players": self.player_list,
         }  # Update pastebins when adding new commands
         self.cooldown = {}
@@ -472,8 +472,8 @@ class Bot:
 
     async def run(self):
         # await self.register_cap("tags")
-        await self.join("sheepposubot")
-        await self.join("btmc")
+        await self.join("sheepposu")
+        # await self.join("btmc")
 
     async def connect(self):
         await self.ws.send(f"PASS {self.oauth}")
@@ -1039,6 +1039,9 @@ class Bot:
         if cancel:
             self.bomb_party_future.cancel()
 
+        for player in self.party:
+            self.party[player] = self.bomb_settings['lives']
+
         self.turn_order = list(self.party.keys())
         random.shuffle(self.turn_order)
         player = self.turn_order[self.current_player]
@@ -1056,7 +1059,7 @@ class Bot:
         if user in self.party:
             return await self.send_message(channel, f"@{user} You have already joined the game")
 
-        self.party.update({user: self.bomb_settings['lives']})
+        self.party.update({user: 0})
         await self.send_message(channel, f"@{user} You have joined the game of bomb party!")
 
     @cooldown(cmd_cd=0)
@@ -1069,7 +1072,9 @@ class Bot:
             self.bomb_party_future.cancel()
 
     @cooldown(user_cd=0, cmd_cd=0)
-    async def bomb_settings(self, user, channel, args):
+    async def change_bomb_settings(self, user, channel, args):
+        if len(self.party) == 0 or self.turn_order or list(self.party.keys())[0] != user:
+            return
         if len(args) < 2:
             return await self.send_message(channel, f"@{user} You must provide a setting name and the value: !settings <setting> <value>. Valid settings: {', '.join(list(self.bomb_settings.keys()))}")
         setting = args[0].lower()
@@ -1081,7 +1086,7 @@ class Bot:
             if value not in self.valid_bomb_settings[setting]:
                 return await self.send_message(channel, "That's not a valid value for this setting.")
             self.bomb_settings[setting] = value
-            await self.send_message(channel, f"@{user} That {setting} setting has been changed to {value}")
+            await self.send_message(channel, f"@{user} The {setting} setting has been changed to {value}")
         except ValueError:
             return await self.send_message(channel, "There was a problem processing the value you gave for the specific setting.")
 
@@ -1096,8 +1101,8 @@ class Bot:
         self.bomb_start_time = 0
         player = self.turn_order[self.current_player]
         self.party[player] -= 1
-        message = f"You now have {self.party[player]} {'♥'*self.party[player]} heart(s) left" if self.party[player] != 0 else "You lost all your lives! YouDied"
-        await self.send_message(channel, f"@{player} you ran out of time! {message}")
+        message = f"You ran out of time and now have {self.party[player]} {'♥'*self.party[player]} heart(s) left" if self.party[player] != 0 else "You ran out of time and lost all your lives! YouDied"
+        await self.send_message(channel, f"@{player} {message}")
         if await self.check_win(channel):
             return
         await self.next_player(channel)
