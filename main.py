@@ -343,9 +343,9 @@ class Bot:
                 letters.update(json.load(f3))
 
             self.bomb_party_letters = {
-                "easy": [let for let, amount in letters.items() if amount >= 10000],
-                "medium": [let for let, amount in letters.items() if 10000 > amount >= 5000],
-                "hard": [let for let, amount in letters.items() if 5000 > amount >= 1000],
+                "easy": [let for let, amount in letters.items() if amount >= 10000 and '-' not in let],
+                "medium": [let for let, amount in letters.items() if 10000 > amount >= 5000 and '-' not in let],
+                "hard": [let for let, amount in letters.items() if 5000 > amount >= 1000 or (amount >= 5000 and '-' in let)],
                 "nightmare": [let for let, amount in letters.items() if 1000 > amount >= 500],
                 "impossible": [let for let, amount in letters.items() if 500 > amount],
             }
@@ -377,6 +377,9 @@ class Bot:
         self.load_facts()
         self.load_all_words()
         self.construct_bomb_party_letters()
+
+    def save_money(self, user):
+        self.database.update_userdata(user, 'money', round(self.gamba_data[user]['money']))
 
     # Api request stuff
 
@@ -652,12 +655,12 @@ class Bot:
         if answer == self.answer:
             await self.send_message(channel, f"@{user} {answer} is the correct answer ✅. You gained {worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))} Becky Bucks 5Head Clap")
             self.gamba_data[user]['money'] += worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))
-            self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
+            self.save_money(user)
             await self.on_trivia_finish(channel, timeout=False)
         else:
             await self.send_message(channel, f"@{user} {answer} is wrong ❌. You lost {worth*self.trivia_info['penalty']} Becky Bucks 3Head Clap")
             self.gamba_data[user]['money'] -= worth*self.trivia_info['penalty']
-            self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
+            self.save_money(user)
             if self.answer not in self.guessed_answers and len(self.guessed_answers) == 3:
                 self.trivia_diff = None  # make sure someone doesn't answer before it can say no one got it right
                 await self.send_message(channel, f"No one answered correctly! The answer was {self.answer}.")
@@ -723,7 +726,7 @@ class Bot:
             if user not in self.gamba_data:
                 self.add_new_user(user)
             self.gamba_data[user]["money"] += money
-            self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
+            self.save_money(user)
 
     @cooldown(cmd_cd=5)
     async def hint(self, user, channel, args, scramble_type):
@@ -776,7 +779,7 @@ class Bot:
         money = random.randint(10, 100)
         self.gamba_data[user]["money"] += money
         await self.send_message(channel, f"@{user} You collected {money} Becky Bucks!")
-        self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
+        self.save_money(user)
 
     @cooldown(cmd_cd=2, user_cd=3)
     @requires_gamba_data
@@ -815,7 +818,7 @@ class Bot:
             await self.send_message(channel, f"@{user} You gained {payout} Becky Bucks! ✅ [WIN]")
             self.gamba_data[user]["money"] += payout
         self.gamba_data[user]["money"] = round(self.gamba_data[user]["money"], 2)
-        self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
+        self.save_money(user)
 
     @cooldown()
     async def risk_factor(self, user, channel, args):
@@ -933,11 +936,11 @@ class Bot:
             await self.send_message(channel,
                                     f"@{user} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
             self.gamba_data[user]['money'] -= 10
-            return self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
+            return self.save_money(user)
         await self.send_message(channel,
                                 f"@{user} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
         self.gamba_data[user]['money'] += 10
-        self.database.update_userdata(user, 'money', self.gamba_data[user]['money'])
+        self.save_money(user)
         
     @requires_dev
     async def new_name(self, user, channel, args):
@@ -1091,6 +1094,8 @@ class Bot:
             return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) That word has already been used this game.")
         if self.current_letters not in message:
             return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) That word does not contain your string of letters: {self.current_letters}")
+        if len(message) == len(self.current_letters):
+            return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) You cannot answer with the string of letters itself.")
         self.bomb_party_future.cancel()
         self.timer -= max((0, perf_counter() - self.bomb_start_time - 5))
         self.used_words.append(message)
