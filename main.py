@@ -136,7 +136,7 @@ class Bot:
               'VapeNation', 'VisLaud', 'WatChuSay', 'Wowee', 'WubTF', 'AndKnuckles', 'BeanieHipster', 'BORT', 'CatBag',
               'LaterSooner', 'LilZ', 'ManChicken', 'OBOY', 'OiMinna', 'YooHoo', 'ZliL', 'ZrehplaR', 'ZreknarF'
     ]
-    bomb_party_letters = ["at", "ch", "ae", "ou", "oe", "mo", "il", "ex", "xy", "ap", "hr", "ss", "gg", "ti", "ng", "sl", "ai", "nt", "ps", "ph", "gh", "ug", "ow", "mp", "ok", "os", "pi", "qu", "ox"]
+    bomb_time = 30
 
     def __init__(self):
         self.ws = None
@@ -195,6 +195,7 @@ class Bot:
             "bombparty": self.bomb_party,
             "start": self.start_bomb_party,
             "join": self.join_bomb_party,
+            "difficulty": self.change_bomb_party_difficulty,
         }  # Update pastebins when adding new commands
         self.cooldown = {}
         self.overall_cooldown = {}
@@ -271,7 +272,8 @@ class Bot:
         self.current_letters = None
         self.bomb_start_time = 0
         self.turn_order = []
-        self.timer = 60
+        self.timer = self.bomb_time
+        self.bomb_party_difficulty = "medium"
 
         # Data
         self.database = Database()
@@ -288,6 +290,7 @@ class Bot:
         self.facts = []
         self.afk = self.database.get_afk()
         self.all_words = []
+        self.bomb_party_letters = {}
         self.load_data()
 
     # Util
@@ -332,6 +335,20 @@ class Bot:
 
     # File save/load
 
+    def construct_bomb_party_letters(self):
+        with open("data/2strings.json", "r") as f:
+            letters = json.load(f)
+            with open("data/3strings.json", "r") as f3:
+                letters.update(json.load(f3))
+
+            self.bomb_party_letters = {
+                "easy": [let for let, amount in letters.items() if amount >= 10000],
+                "medium": [let for let, amount in letters.items() if 10000 > amount >= 5000],
+                "hard": [let for let, amount in letters.items() if 5000 > amount >= 1000],
+                "nightmare": [let for let, amount in letters.items() if 1000 > amount >= 500],
+                "impossible": [let for let, amount in letters.items() if 500 > amount],
+            }
+
     def load_top_players(self):
         with open("data/top players (200).json", "r") as f:
             self.top_players = json.load(f)
@@ -358,6 +375,7 @@ class Bot:
         self.load_words()
         self.load_facts()
         self.load_all_words()
+        self.construct_bomb_party_letters()
 
     # Api request stuff
 
@@ -488,6 +506,8 @@ class Bot:
         print(f"< CAP REQ :{caps}\r\n")
 
     async def send_message(self, channel, message):
+        if not self.offline:
+            return
         await self.message_lock.acquire()
         await self.ws.send(f"PRIVMSG #{channel} :/me {message}")
         print(f"> PRIVMSG #{channel} :{message}")
@@ -996,7 +1016,7 @@ class Bot:
 
     @cooldown()
     async def start_bomb_party(self, user, channel, args, cancel=True):
-        if len(self.party) == 0 or self.turn_order:
+        if len(self.party) == 0 or self.turn_order or list(self.party.keys())[0] != user:
             return
         if len(self.party) < 2:
             return await self.send_message(channel, f"@{user} You need at least 2 players to start the bomb party game.")
@@ -1006,7 +1026,7 @@ class Bot:
         self.turn_order = list(self.party.keys())
         random.shuffle(self.turn_order)
         player = self.turn_order[self.current_player]
-        self.current_letters = random.choice(self.bomb_party_letters)
+        self.current_letters = random.choice(self.bomb_party_letters[self.bomb_party_difficulty])
 
         await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) You're up first! Your string of letters is {self.current_letters}")
         self.bomb_party_future = self.set_timed_event(self.timer+5, self.bomb_party_timer, channel)
@@ -1022,8 +1042,27 @@ class Bot:
         self.party.update({user: 3})
         await self.send_message(channel, f"@{user} You have joined the game of bomb party!")
 
+    @cooldown()
+    async def change_bomb_party_difficulty(self, user, channel, args):
+        if len(self.party) == 0 or self.turn_order or list(self.party.keys())[0] != user:
+            return
+        difficulty = args[0] if len(args) > 0 else None
+        if difficulty is None or difficulty.lower() not in self.bomb_party_letters:
+            return await self.send_message(channel, f"@{user} To change the difficulty of the bomb party game, type !difficulty <difficulty>. Valid difficulties are easy, medium, hard, nightmare, and impossible.")
+        self.bomb_party_difficulty = difficulty.lower()
+        await self.send_message(channel, f"@{user} The difficulty has been changed to {difficulty.lower()}!")
+
+    @cooldown(cmd_cd=0)
+    async def leave_bomb_party(self, user, channel, args):
+        if len(self.party) == 0 or self.turn_order or user not in self.party:
+            return
+        del self.party[user]
+        await self.send_message(channel, f"@{user} You have left the game of bomb party.")
+        if await self.check_win(channel):
+            self.bomb_party_future.cancel()
+
     async def bomb_party_timer(self, channel):
-        self.timer = 60
+        self.timer = self.bomb_time
         self.bomb_start_time = 0
         player = self.turn_order[self.current_player]
         self.party[player] -= 1
@@ -1034,10 +1073,11 @@ class Bot:
 
     async def next_player(self, channel):
         player = self.turn_order[self.current_player]
-        while self.party[player] == 0 or self.turn_order[self.current_player] == player:
+        while self.party[self.turn_order[self.current_player]] == 0 or self.turn_order[self.current_player] == player:
             self.current_player = 1 + self.current_player if self.current_player != len(self.turn_order)-1 else 0
-        self.current_letters = random.choice(self.bomb_party_letters)
-        await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) Your string of letters is {self.current_letters}")
+        self.current_letters = random.choice(self.bomb_party_letters[self.bomb_party_difficulty])
+        player = self.turn_order[self.current_player]
+        await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) Your string of letters is {self.current_letters} - You have {round(self.timer+5)} seconds.")
         self.bomb_start_time = perf_counter()
         self.bomb_party_future = self.set_timed_event(self.timer+5, self.bomb_party_timer, channel)
 
@@ -1047,11 +1087,11 @@ class Bot:
         if message not in self.all_words:
             return
         if message in self.used_words:
-            await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) That word has already been used this game.")
+            return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) That word has already been used this game.")
         if self.current_letters not in message:
             return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) That word does not contain your string of letters: {self.current_letters}")
         self.bomb_party_future.cancel()
-        self.timer -= perf_counter() - self.bomb_start_time - 5
+        self.timer -= max((0, perf_counter() - self.bomb_start_time - 5))
         self.used_words.append(message)
         await self.next_player(channel)
 
@@ -1072,7 +1112,8 @@ class Bot:
         self.current_letters = None
         self.bomb_start_time = 0
         self.turn_order = []
-        self.timer = 60
+        self.timer = self.bomb_time
+        self.bomb_party_difficulty = "medium"
 
 
 bot = Bot()
