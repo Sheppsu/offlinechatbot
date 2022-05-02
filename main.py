@@ -197,6 +197,7 @@ class Bot:
             "join": self.join_bomb_party,
             "leave": self.leave_bomb_party,
             "difficulty": self.change_bomb_party_difficulty,
+            "players": self.player_list,
         }  # Update pastebins when adding new commands
         self.cooldown = {}
         self.overall_cooldown = {}
@@ -273,8 +274,7 @@ class Bot:
         self.current_letters = None
         self.bomb_start_time = 0
         self.turn_order = []
-        self.timer = self.bomb_time
-        self.bomb_party_difficulty = "medium"
+        self.timer = 30
         self.bomb_settings = {
             "difficulty": "medium",
             "timer": 30,
@@ -1019,7 +1019,7 @@ class Bot:
     async def bomb_party(self, user, channel, args):
         if len(self.party) > 0:
             return
-        self.party.update({user: 3})
+        self.party.update({user: self.bomb_settings['lives']})
 
         await self.send_message(channel, f"{user} has started a Bomb Party game! Anyone else who wants to play should type !join. When enough players have joined, the host should type !start to start the game, otherwise the game will automatically start or close after 2 minutes.")
         self.bomb_party_future = self.set_timed_event(120, self.close_or_start_game, channel)
@@ -1042,9 +1042,10 @@ class Bot:
         self.turn_order = list(self.party.keys())
         random.shuffle(self.turn_order)
         player = self.turn_order[self.current_player]
-        self.current_letters = random.choice(self.bomb_party_letters[self.bomb_party_difficulty])
+        self.current_letters = random.choice(self.bomb_party_letters[self.bomb_settings['difficulty']])
 
         await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) You're up first! Your string of letters is {self.current_letters}")
+        self.timer = self.bomb_settings['timer']
         self.bomb_party_future = self.set_timed_event(self.timer+5, self.bomb_party_timer, channel)
         self.bomb_start_time = perf_counter()
 
@@ -1055,18 +1056,8 @@ class Bot:
         if user in self.party:
             return await self.send_message(channel, f"@{user} You have already joined the game")
 
-        self.party.update({user: 3})
+        self.party.update({user: self.bomb_settings['lives']})
         await self.send_message(channel, f"@{user} You have joined the game of bomb party!")
-
-    @cooldown()
-    async def change_bomb_party_difficulty(self, user, channel, args):
-        if len(self.party) == 0 or self.turn_order or list(self.party.keys())[0] != user:
-            return
-        difficulty = args[0] if len(args) > 0 else None
-        if difficulty is None or difficulty.lower() not in self.bomb_party_letters:
-            return await self.send_message(channel, f"@{user} To change the difficulty of the bomb party game, type !difficulty <difficulty>. Valid difficulties are easy, medium, hard, nightmare, and impossible.")
-        self.bomb_party_difficulty = difficulty.lower()
-        await self.send_message(channel, f"@{user} The difficulty has been changed to {difficulty.lower()}!")
 
     @cooldown(cmd_cd=0)
     async def leave_bomb_party(self, user, channel, args):
@@ -1095,10 +1086,12 @@ class Bot:
 
     @cooldown()
     async def player_list(self, user, channel, args):
-        await self.send_message(channel, f"@{user} Current players playing bomb party: ")
+        if len(self.party) == 0:
+            return
+        await self.send_message(channel, f"@{user} Current players playing bomb party: {', '.join(['%s (%s)' %(player, '♥'*lives) for player, lives in self.party.items()])}")
 
     async def bomb_party_timer(self, channel):
-        self.timer = self.bomb_time
+        self.timer = self.bomb_settings['timer']
         self.bomb_start_time = 0
         player = self.turn_order[self.current_player]
         self.party[player] -= 1
@@ -1112,11 +1105,11 @@ class Bot:
         player = self.turn_order[self.current_player]
         while self.party[self.turn_order[self.current_player]] == 0 or self.turn_order[self.current_player] == player:
             self.current_player = 1 + self.current_player if self.current_player != len(self.turn_order)-1 else 0
-        self.current_letters = random.choice(self.bomb_party_letters[self.bomb_party_difficulty])
+        self.current_letters = random.choice(self.bomb_party_letters[self.bomb_settings['difficulty']])
         player = self.turn_order[self.current_player]
-        await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) Your string of letters is {self.current_letters} - You have {round(self.timer+5)} seconds.")
+        await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) Your string of letters is {self.current_letters} - You have {round(self.timer+self.bomb_settings['minimum_time'])} seconds.")
         self.bomb_start_time = perf_counter()
-        self.bomb_party_future = self.set_timed_event(self.timer+5, self.bomb_party_timer, channel)
+        self.bomb_party_future = self.set_timed_event(self.timer+self.bomb_settings['minimum_time'], self.bomb_party_timer, channel)
 
     async def on_bomb_party(self, channel, message):
         player = self.turn_order[self.current_player]
@@ -1130,7 +1123,7 @@ class Bot:
         if len(message) == len(self.current_letters):
             return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) You cannot answer with the string of letters itself.")
         self.bomb_party_future.cancel()
-        self.timer -= max((0, perf_counter() - self.bomb_start_time - 5))
+        self.timer -= max((0, perf_counter() - self.bomb_start_time - self.bomb_settings['minimum_time']))
         self.used_words.append(message)
         await self.next_player(channel)
 
@@ -1152,7 +1145,12 @@ class Bot:
         self.bomb_start_time = 0
         self.turn_order = []
         self.timer = self.bomb_time
-        self.bomb_party_difficulty = "medium"
+        self.bomb_settings = {
+            "difficulty": "medium",
+            "timer": 30,
+            "minimum_time": 5,
+            "lives": 3,
+        }
 
 
 bot = Bot()
