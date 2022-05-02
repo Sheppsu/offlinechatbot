@@ -472,8 +472,8 @@ class Bot:
 
     async def run(self):
         # await self.register_cap("tags")
-        await self.join("sheepposu")
-        # await self.join("btmc")
+        await self.join("sheepposubot")
+        await self.join("btmc")
 
     async def connect(self):
         await self.ws.send(f"PASS {self.oauth}")
