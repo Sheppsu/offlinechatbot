@@ -1070,7 +1070,8 @@ class Bot:
         self.bomb_start_time = 0
         player = self.turn_order[self.current_player]
         self.party[player] -= 1
-        await self.send_message(channel, f"@{player} you ran out of time! You now have {self.party[player]} {'♥'*self.party[player]} hearts left")
+        message = "You now have {self.party[player]} {'♥'*self.party[player]} heart(s) left" if self.party[player] != 0 else "You lost all your lives! YouDied"
+        await self.send_message(channel, f"@{player} you ran out of time! {message}")
         if await self.check_win(channel):
             return
         await self.next_player(channel)
