@@ -195,6 +195,7 @@ class Bot:
             "bombparty": self.bomb_party,
             "start": self.start_bomb_party,
             "join": self.join_bomb_party,
+            "leave": self.leave_bomb_party,
             "difficulty": self.change_bomb_party_difficulty,
         }  # Update pastebins when adding new commands
         self.cooldown = {}
