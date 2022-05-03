@@ -163,7 +163,7 @@ class Bot:
             "guess": self.guess,
             "font": self.font,
             "fonts": self.fonts,
-            "trivia": self.trivia,
+            # "trivia": self.trivia,
             'slap': self.slap,
             "pity": self.pity,
             "scramble": lambda channel, user, args: self.scramble(channel, user, args, "word"),
