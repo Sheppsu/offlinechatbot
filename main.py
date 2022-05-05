@@ -991,7 +991,7 @@ class Bot:
 
     @cooldown()
     async def help_command(self, user, channel, args):
-        await self.send_message(channel, f"@{user} https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
+        await self.send_message(channel, f"@{user} sheepposubot help (do !commands for StreamElements): https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
 
     async def on_afk(self, user, channel, message):
         pings = [word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in message.lower().split() if word.startswith("@")]
