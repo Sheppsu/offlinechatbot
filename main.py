@@ -570,7 +570,7 @@ class Bot:
 
     # Commands
 
-    @cooldown(cmd_cd=3)
+    @cooldown(cmd_cd=1, user_cd=2)
     async def pull(self, user, channel, args):
         if user not in self.pity:
             self.pity.update({user: {4: 0, 5: 0}})
