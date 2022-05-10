@@ -465,7 +465,7 @@ class Bot:
                 pass
             except websockets.exceptions.ConnectionClosedError as e:
                 # Restart the bot
-                print(e) 
+                print(e)
             except:
                 print(traceback.format_exc())
             finally:
@@ -1164,4 +1164,6 @@ class Bot:
 
 
 bot = Bot()
-bot.loop.run_until_complete(bot.start())
+bot.running = True
+while bot.running:
+    bot.loop.run_until_complete(bot.start())
