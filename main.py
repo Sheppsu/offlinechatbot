@@ -1142,8 +1142,11 @@ class Bot:
         if len(players_left) != 1:
             return False
         winner = players_left[0]
+        money = len(self.party)*100
+        self.gamba_data[winner]['money'] += money
+        self.database.update_userdata(winner, 'money', self.gamba_data[winner]['money'])
         self.close_bomb_party()
-        await self.send_message(channel, f"@{winner} Congratulations on winning the bomb party game!")
+        await self.send_message(channel, f"@{winner} Congratulations on winning the bomb party game! You've won {money} Becky Bucks!")
         return True
 
     def close_bomb_party(self):
