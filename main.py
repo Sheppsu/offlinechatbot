@@ -1074,6 +1074,11 @@ class Bot:
         elif self.turn_order and self.turn_order[self.current_player] == user:
             self.bomb_party_future.cancel()
             await self.next_player(channel)
+        elif not self.turn_order:
+            del self.party[user]
+            if len(self.party) == 0:
+                self.close_bomb_party()
+                await self.send_message(channel, "The game of bomb party has closed.")
 
     @cooldown(user_cd=0, cmd_cd=0)
     async def change_bomb_settings(self, user, channel, args):
