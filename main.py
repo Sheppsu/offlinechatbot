@@ -333,7 +333,7 @@ class Bot:
 
     @staticmethod
     def format_date(date):
-        minutes = (datetime.now() - date).seconds // 60
+        minutes = (datetime.now() - date).total_seconds() // 60
         hours = 0
         days = 0
         if minutes >= 60:
@@ -344,8 +344,8 @@ class Bot:
                 hours = hours % 24
         elif minutes == 0:
             return f"{(datetime.now() - date).seconds} seconds"
-        return ((f"{days} day(s) " if days != 0 else "") + (f" {hours} hour(s) " if hours != 0 else "") + (
-            f" {minutes} minute(s)" if minutes != 0 else "")).strip()
+        return ((f"{int(days)} day(s) " if days != 0 else "") + (f" {int(hours)} hour(s) " if hours != 0 else "") + (
+            f" {int(minutes)} minute(s)" if minutes != 0 else "")).strip()
 
     # File save/load
 
@@ -933,12 +933,10 @@ class Bot:
     @requires_gamba_data
     async def rps(self, user, channel, args):
         if not args:
-            return await self.send_message(channel,
-                                           f"@{user} You must say either rock, paper, or scissors. (You can also use the first letter for short)")
+            return await self.send_message(channel, f"@{user} You must say either rock, paper, or scissors. (You can also use the first letter for short)")
         choice = args[0][0].lower()
         if choice not in ('r', 'p', 's'):
-            return await self.send_message(channel,
-                                           f"@{user} That's not a valid move. You must say either rock, paper, or scissors. (You can also use the first letter for short)")
+            return await self.send_message(channel, f"@{user} That's not a valid move. You must say either rock, paper, or scissors. (You can also use the first letter for short)")
 
         com_choice = random.choice(('r', 'p', 's'))
         win = {"r": "s", "s": "p", "p": "r"}
@@ -946,12 +944,10 @@ class Bot:
         if com_choice == choice:
             return await self.send_message(channel, f"@{user} I also chose {abbr[com_choice]}! bruh")
         if win[com_choice] == choice:
-            await self.send_message(channel,
-                                    f"@{user} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
+            await self.send_message(channel, f"@{user} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
             self.gamba_data[user]['money'] -= 10
             return self.save_money(user)
-        await self.send_message(channel,
-                                f"@{user} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
+        await self.send_message(channel, f"@{user} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
         self.gamba_data[user]['money'] += 10
         self.save_money(user)
         
