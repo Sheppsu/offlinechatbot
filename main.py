@@ -1171,7 +1171,7 @@ class Bot:
     async def random_fact(self, user, channel, args):
         fact = requests.get("https://uselessfacts.jsph.pl/random.json?language=en")
         fact.raise_for_status()
-        self.send_message(channel, f"Fun fact: {fact.json()['text']}")
+        await self.send_message(channel, f"Fun fact: {fact.json()['text']}")
 
 
 bot = Bot()
