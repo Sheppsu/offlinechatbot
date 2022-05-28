@@ -199,6 +199,7 @@ class Bot:
             "leave": self.leave_bomb_party,
             "settings": self.change_bomb_settings,
             "players": self.player_list,
+            "funfact": self.random_fact,
         }  # Update pastebins when adding new commands
         self.cooldown = {}
         self.overall_cooldown = {}
@@ -1165,6 +1166,12 @@ class Bot:
             "minimum_time": 5,
             "lives": 3,
         }
+
+    @cooldown(cmd_cd=2, user_cd=0)
+    async def random_fact(self, user, channel, args):
+        fact = requests.get("https://uselessfacts.jsph.pl/random.json?language=en")
+        fact.raise_for_status()
+        self.send_message(channel, f"Fun fact: {fact.json()['text']}")
 
 
 bot = Bot()
