@@ -200,6 +200,7 @@ class Bot:
             "settings": self.change_bomb_settings,
             "players": self.player_list,
             "funfact": self.random_fact,
+            "reload_db": self.reload_from_db,
         }  # Update pastebins when adding new commands
         self.cooldown = {}
         self.overall_cooldown = {}
@@ -296,14 +297,14 @@ class Bot:
         genshin = list(self.pull_options.values())
         self.genshin = genshin[0] + genshin[1] + genshin[2]
 
-        # File saved data
-        self.pity = self.database.get_pity()
-        self.gamba_data = self.database.get_userdata()
+        # Load save data
+        self.pity = {}
+        self.gamba_data = {}
         self.top_players = []
         self.top_maps = []
         self.word_list = []
         self.facts = []
-        self.afk = self.database.get_afk()
+        self.afk = {}
         self.all_words = []
         self.bomb_party_letters = {}
         self.load_data()
@@ -384,12 +385,18 @@ class Bot:
         with open("data/all_words.json", "r") as f:
             self.all_words = [word.lower() for word in json.load(f)]
 
+    def load_db_data(self):
+        self.pity = self.database.get_pity()
+        self.gamba_data = self.database.get_userdata()
+        self.afk = self.database.get_afk()
+
     def load_data(self):
         self.load_top_players()
         self.load_top_maps()
         self.load_words()
         self.load_facts()
         self.load_all_words()
+        self.load_db_data()
         self.construct_bomb_party_letters()
 
     def save_money(self, user):
@@ -1177,6 +1184,11 @@ class Bot:
         fact = requests.get("https://uselessfacts.jsph.pl/random.json?language=en")
         fact.raise_for_status()
         await self.send_message(channel, f"Fun fact: {fact.json()['text']}")
+
+    @requires_dev
+    async def reload_from_db(self, user, channel, args):
+        self.load_db_data()
+        await self.send_message(channel, f"@{user} Local data has been reloaded from database.")
 
 
 bot = Bot()
