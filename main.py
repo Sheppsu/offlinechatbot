@@ -858,8 +858,8 @@ class Bot:
         if args:
             user_to_check = args[0]
         if user_to_check not in self.gamba_data:
-            return await self.send_message(channel, f"@{user} This user does not exist in the database.")
-        await self.send_message(channel, f"@{user} You currently have {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
+            user_to_check = user
+        await self.send_message(channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
 
     @cooldown()
     async def leaderboard(self, user, channel, args):
@@ -981,7 +981,11 @@ class Bot:
         self.gamba_data[old_name]['money'] += self.gamba_data[new_name]['money']
         self.gamba_data[new_name] = dict(self.gamba_data[old_name])
         del self.gamba_data[old_name]
-        await self.send_message(channel, "The data has been updated for the new name!")
+        await self.send_message(channel, f"@{user} The data has been updated for the new name!")
+        self.database.delete_user(old_name)
+        self.save_money(new_name)
+        for setting, val in self.gamba_data[new_name]["settings"].items():
+            self.database.update_userdata(new_name, setting, val)
 
     @cooldown()
     async def scramble_difficulties(self, user, channel, args):

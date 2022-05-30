@@ -29,6 +29,9 @@ class Database:
         except connector.Error as err:
             self.database = self.create_connection()
 
+    def close(self):
+        self.database.close()
+
     @property
     def cursor(self):
         self.ping()
@@ -79,9 +82,12 @@ class Database:
         self.cursor.execute("UPDATE userdata SET %s = %s WHERE username = '%s'" % (column, "'%s'" % value if type(value) == str else value, user))
         self.database.commit()
 
-    def new_user(self, user, money=0, receive=False):
+    def new_user(self, user, money=0, receive=True):
         self.cursor.execute(f"INSERT INTO userdata (username, money, receive) VALUES ('{user}', {money}, {receive})")
         self.database.commit()
+
+    def delete_user(self, user):
+        self.cursor.execute(f"DELETE FROM userdata WHERE username = '{user}'")
 
     @property
     def current_time(self):
