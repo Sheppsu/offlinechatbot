@@ -432,6 +432,7 @@ class Bot:
                 await self.run()  # Join channels + whatever else is in the function
 
                 last_check = perf_counter() - 20
+                last_ping = perf_counter() - 60*60  # 1 hour
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other threads to run
 
@@ -444,6 +445,10 @@ class Bot:
                     if perf_counter() >= self.expire_time:
                         self.access_token, self.expire_time = self.get_access_token()
                         self.expire_time += perf_counter()
+
+                    # Ping database once an hour for keepalive
+                    if perf_counter() - last_ping >= 60*60:
+                        self.database.ping()
 
                     # Check all future objects and if they're done: print the result and remove them from the list
                     for future in self.future_objects:

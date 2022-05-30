@@ -4,24 +4,45 @@ import os
 
 
 class Database:
+    name = os.getenv("MYSQLDATABASE")
+    host = os.getenv("MYSQLHOST")
+    port = int(os.getenv("MYSQLPORT"))
+    user = os.getenv("MYSQLUSER")
+    password = os.getenv("MYSQLPASSWORD")
+
     def __init__(self):
         self.name = os.getenv("MYSQLDATABASE")
-        self.database = connector.connect(
-            host=os.getenv("MYSQLHOST"),
-            port=int(os.getenv("MYSQLPORT")),
-            user=os.getenv("MYSQLUSER"),
-            password=os.getenv("MYSQLPASSWORD"),
+        self.database = self.create_connection()
+
+    def create_connection(self):
+        return connector.connect(
+            host=self.host,
+            port=self.port,
+            user=self.user,
+            password=self.password,
             database=self.name
         )
-        self.cursor = self.database.cursor()
+
+    def ping(self):
+        try:
+            self.database.ping(reconnect=True, attempts=3, delay=5)
+        except connector.Error as err:
+            self.database = self.create_connection()
+
+    @property
+    def cursor(self):
+        self.ping()
+        return self.database.cursor()
 
     def does_user_entry_exist(self, table, user):
-        self.cursor.execute(f"SELECT * FROM {table} WHERE username = '{user}'")
-        return not not self.cursor.fetchall()
+        cursor = self.cursor
+        cursor.execute(f"SELECT * FROM {table} WHERE username = '{user}'")
+        return not not cursor.fetchall()
 
     def get_afk(self):
-        self.cursor.execute("SELECT * FROM afk")
-        return {afk[2]: {"message": afk[0], "time": afk[1]} for afk in self.cursor.fetchall()}
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM afk")
+        return {afk[2]: {"message": afk[0], "time": afk[1]} for afk in cursor.fetchall()}
 
     def save_afk(self, user, message, time=None):
         if time is None:
@@ -37,8 +58,9 @@ class Database:
         self.database.commit()
 
     def get_pity(self):
-        self.cursor.execute("SELECT * FROM pity")
-        return {pity[0]: {4: pity[1], 5: pity[2]} for pity in self.cursor.fetchall()}
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM pity")
+        return {pity[0]: {4: pity[1], 5: pity[2]} for pity in cursor.fetchall()}
 
     def save_pity(self, user, four, five):
         self.cursor.execute(f"UPDATE pity SET four = {four}, five = {five} WHERE username = '{user}'")
@@ -49,8 +71,9 @@ class Database:
         self.database.commit()
 
     def get_userdata(self):
-        self.cursor.execute("SELECT * FROM userdata")
-        return {data[0]: {"money": data[1], "settings": {"receive": bool(data[2])}} for data in self.cursor.fetchall()}
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM userdata")
+        return {data[0]: {"money": data[1], "settings": {"receive": bool(data[2])}} for data in cursor.fetchall()}
 
     def update_userdata(self, user, column, value):
         self.cursor.execute("UPDATE userdata SET %s = %s WHERE username = '%s'" % (column, "'%s'" % value if type(value) == str else value, user))
