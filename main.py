@@ -854,8 +854,12 @@ class Bot:
     @cooldown(user_cd=10)
     @requires_gamba_data
     async def balance(self, user, channel, args):
-        await self.send_message(channel,
-                                f"@{user} You currently have {round(self.gamba_data[user]['money'], 2)} Becky Bucks.")
+        user_to_check = user
+        if args:
+            user_to_check = args[0]
+        if user_to_check not in self.gamba_data:
+            return await self.send_message(channel, f"@{user} This user does not exist in the database.")
+        await self.send_message(channel, f"@{user} You currently have {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
 
     @cooldown()
     async def leaderboard(self, user, channel, args):
@@ -904,6 +908,8 @@ class Bot:
         self.gamba_data[user]['money'] -= amount
         self.gamba_data[user_to_give]['money'] += amount
         await self.send_message(channel, f"@{user} You have given {user_to_give} {amount} Becky Bucks!")
+        self.save_money(user)
+        self.save_money(user_to_give)
 
     @cooldown()
     @requires_gamba_data
@@ -924,7 +930,6 @@ class Bot:
         self.database.update_userdata(user, setting, value)
         await self.send_message(channel, f"@{user} The {setting} setting has been turned {args[1]}.")
 
-    @cooldown()
     @requires_dev
     async def market_balance(self, user, channel, args):
         lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
@@ -932,8 +937,10 @@ class Bot:
         pool = self.gamba_data[top_user]['money']
         giveaway = round(pool / len(self.gamba_data), 2)
         self.gamba_data[top_user]['money'] = 0
+        self.save_money(top_user)
         for user in self.gamba_data:
             self.gamba_data[user]['money'] += giveaway
+            self.save_money(user)
 
         await self.send_message(channel,
                                 f"I have given away {giveaway} Becky Bucks to each player provided by {top_user} without their consent PogU")
@@ -966,6 +973,7 @@ class Bot:
         
     @requires_dev
     async def new_name(self, user, channel, args):
+        # TODO: save to db
         old_name = args[0]
         new_name = args[1]
         if old_name not in self.gamba_data or new_name not in self.gamba_data:
@@ -1158,7 +1166,7 @@ class Bot:
         winner = players_left[0]
         money = len(self.party)*100
         self.gamba_data[winner]['money'] += money
-        self.database.update_userdata(winner, 'money', self.gamba_data[winner]['money'])
+        self.save_money(winner)
         self.close_bomb_party()
         await self.send_message(channel, f"@{winner} Congratulations on winning the bomb party game! You've won {money} Becky Bucks!")
         return True
