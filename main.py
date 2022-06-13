@@ -15,11 +15,12 @@ import sys
 import os
 from get_top_players import Client
 from sql import Database
+from emotes import EmoteRequester
 
 
-Client().run()
+Client().run()  # Update top player json file
 
-fonts = {
+fonts = {  # TODO: looks ugly here
     "bold": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙_𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
     "double-struck": '!"$\\\'(),-./𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡:;?@𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ_𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
     "bold-fraktur": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅_𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
@@ -43,6 +44,7 @@ fonts = {
 layout = '!"$\\\'(),-./0123456789:;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€'
 
 # Decorators
+# TODO: put in its own file
 
 
 def cooldown(user_cd=10, cmd_cd=5):
@@ -75,6 +77,7 @@ def requires_dev(func):
     return check
 
 # Util ig
+# TODO: put in its own file
 
 
 async def do_timed_event(wait, callback, *args, **kwargs):
@@ -99,45 +102,8 @@ class Bot:
     pull_options = {3: ['Slingshot', "Sharpshooter's Oath", 'Raven Bow', 'Emerald Orb', 'Thrilling Tales of Dragon Slayers', 'Magic Guide', 'Black Tassel', 'Debate Club', 'Bloodtainted Greatsword', 'Ferrous Shadow', 'Skyrider Sword ', 'Harbinger of Dawn', 'Cool Steel'], 4: ['Amber', 'Kaeya', 'Lisa', 'Barbara', 'Razor', 'Xiangling', 'Beidou', 'Xingqiu', 'Ningguang', 'Fischl', 'Bennett', 'Noelle', 'Chongyun', 'Sucrose', 'Diona', 'Xinyan', 'Rosaria', 'Yanfei', 'Sayu', 'Kujou Sara', 'Thoma', 'Gorou', 'Yun Jin', 'Favonius Sword', 'The Flute', 'Sacrificial Sword', "Lion's Roar", 'The Alley Flash', 'Favonius Greatsword', 'The Bell', 'Sacrificial Greatsword', 'Rainslasher', 'Lithic Blade', 'Akuoumaru', "Dragon's Bane", 'Favonius Lance', 'Lithic Spear', "Wavebreaker's Fin", 'Favonius Codex', 'The Widsith', 'Sacrificial Fragments', 'Eye of Perception', 'Favonius Warbow', 'The Stringless', 'Sacrificial Bow', 'Rust', 'Alley Hunter', 'Mitternachts Waltz', "Mouun's Moon", 'Wine and Song'], 5: ['Kamisato Ayato', 'Yae Miko', 'Shenhe', 'Arataki Itto', 'Sangonomiya Kokomi', 'Raiden Shogun', 'Yoimiya', 'Kamisato Ayaka', 'Kaedehara Kazuha', 'Eula', 'Hu Tao', 'Xiao', 'Ganyu', 'Albedo', 'Zhongli', 'Tartaglia', 'Klee', 'Venti', 'Keqing', 'Mona', 'Qiqi', 'Diluc', 'Jean', 'Aquila Favonia', 'Skyward Blade', 'Summit Shaper', 'Primordial Jade Cutter', 'Freedom-Sworn', 'Mistsplitter Reforged', 'Skyward Pride', "Wolf's Gravestone", 'The Unforged', 'Song of Broken Pines', 'Redhorn Stonethresher', 'Primordial Jade Winged-Spear', 'Skyward Spine', 'Vortex Vanquisher', 'Staff of Homa', 'Engulfing Lightning', 'Calamity Queller', 'Skyward Atlas', 'Lost Prayer to the Sacred Winds', 'Memory of Dust', 'Everlasting Moonglow', "Kagura's Verity", 'Skyward Harp', "Amos' Bow", 'Elegy for the End', 'Thundering Pulse', 'Polar Star']}
     banned_words = [  # Was originally used to stop this word from being posted for scramble, but since there's a new list with non-tos words it doesn't really do anything
         "kike"
-    ]
-    emotes = ['ALBERTSCOOKING', 'ANIKICHAD', 'AYAKA', 'billyOkay', 'bruh', 'Champ', 'Clueless', 'Drake', 'enyoters',
-              'FRICK', 'Groucho', 'GunL', 'hackingCD', 'KoroneFukireta', 'LETSGO', 'MetalTime', 'monkaSpeed', 'nekoNc',
-              'NOOO', 'NotAllowed', 'Offline', 'peepoBye', 'peepoHey', 'pepeW', 'PogTasty', 'PointYou', 'ppParty',
-              'SEASONING', 'SmartPhone', 'SteerL', 'SUSSY', 'ThinkL', 'ThinkR', 'TrollDespair', 'Baby', 'bambooPls',
-              'billyReady', 'BLANKIES', 'BlobWobble', 'BoatW', 'Boolin', 'BoolinJAM', 'BoolinS', 'BoolLaugh', 'btmcAcc',
-              'btmcDitch', 'btmcFly', 'btmcGa', 'btmcPls', 'btmcRainbowPls', 'btmcSMD', 'CartW', 'CATBEDOINGTHELAUNDRY',
-              'catJAM', 'catKISS', 'Chatting', 'COGGERS', 'COGW', 'CoolChamp', 'CrabPls', 'DIANO', 'DinkDonk',
-              'DOGGERS', 'DonoWall', 'DrumTime', 'FeelsLagMan', 'FeelsRainMan', 'FOGGERS', 'funnyChamp', 'gachiBOP',
-              'gachiHYPER', 'GachiPls', 'gachiW', 'GIGACHAD', 'Goose', 'HACKERMANS', 'HYPERCLAP', 'iLOVEyou',
-              'IMDONEMAN', 'LATE', 'miyanoHype', 'modCheck', 'monkaDMCA', 'monkaEXTREME', 'monkaSoap', 'monkaSTEER',
-              'monkaTOS', 'NODDERS', 'noelDab', 'NOPERS', 'NOTED', 'nouCHEER', 'OkayChamp', 'OMEGALULiguess',
-              'OMEGAROLL', 'osuWHO', 'OuttaPocket', 'PagChomp', 'PainsChamp', 'PauseChamp', 'PauseU', 'peepoArrive',
-              'peepoClap', 'peepoLeave', 'PeepoSHAKE', 'peepoShy', 'pepeDS', 'pepeFASTJAM', 'PepegaAim', 'PepegaCredit',
-              'PepegaPls', 'pepeJAM', 'pepeJAMJAM', 'pepeLaughing', 'pepeMeltdown', 'PepoCheer', 'peppyPls',
-              'PETTHEPEEPO', 'PogChomp', 'PoggersFish', 'PogMe', 'PogO', 'Pogpega', 'PogU', 'PogYou', 'PorkChop',
-              'ppCircle', 'ppCrazy', 'ppHop', 'ppHopper', 'ppOverheat', 'ppPoof', 'RainbowPls', 'RainbowPlsFAST',
-              'rareBeast', 'ratJAM', 'reeferSad', 'SadChamp', 'SEEYOUNEXTTIME', 'SillyChamp', 'SOLVED', 'Stab',
-              'StareChamp', 'sumSmash', 'THISSHOULDNOTBEPOSSIBLE', 'TriDance', 'TriFi', 'Tssk', 'veryPog', 'ViolinTime',
-              'WeirdChamp', 'widepeepoHappyRightHeart', 'WorthIt', 'WYSI', 'YEPJAM', '3Head', '4HEader', '4Real',
-              '5Head', 'AYAYAWeird', 'Bedge', 'BOGGED', 'colonD', 'COPIUM', 'forsenCD', 'HandsUp', 'HYPERAYAYA',
-              'HYPERDANSGAMEW', 'Kapp', 'KEKW', 'KEKWait', 'KKomrade', 'KKonaW', 'LULW', 'Madge', 'MaN', 'MEGALUL',
-              'monkaHmm', 'monkaLaugh', 'monkaW', 'OMEGALUL', 'osuHOW', 'PagMan', 'Pepega', 'PepegaHands', 'PepeHands',
-              'PepeLaugh', 'PepePoint', 'PepoG', 'Pog', 'POGGERS', 'Prayge', 'REEEE', 'Sadge', 'SmileW', 'VaN',
-              'WaitWhat', 'WICKED', 'Widega', 'WideHard', 'widepeepoHappy', 'widepeepoSad', 'Wokege', 'YEP', 'ZULUL',
-              '7tvM', 'AlienDance', 'AYAYA', 'BasedGod', 'BillyApprove', 'Clap', 'Clap2', 'CrayonTime', 'EZ',
-              'FeelsDankMan', 'FeelsOkayMan', 'FeelsStrongMan', 'FeelsWeirdMan', 'forsenPls', 'gachiBASS', 'gachiGASM',
-              'GuitarTime', 'knaDyppaHopeep', 'nymnCorn', 'PartyParrot', 'peepoHappy', 'peepoSad', 'PepePls', 'PETPET',
-              'PianoTime', 'ppL', 'RainTime', 'RareParrot', 'RebeccaBlack', 'reckH', 'Stare', 'SteerR', 'TeaTime',
-              'WAYTOODANK', 'WineTime', 'YEAHBUT7TV', ':tf:', 'AngelThump', 'ariW', 'BroBalt', 'bttvNice', 'bUrself',
-              'CandianRage', 'CiGrip', 'ConcernDoge', 'CruW', 'cvHazmat', 'cvL', 'cvMask', 'cvR', 'D:', 'DatSauce',
-              'DogChamp', 'DuckerZ', 'FeelsAmazingMan', 'FeelsBadMan', 'FeelsBirthdayMan', 'FeelsGoodMan',
-              'FireSpeed', 'FishMoley', 'ForeverAlone', 'GabeN', 'haHAA', 'HailHelix', 'Hhhehehe',
-              'KappaCool', 'KaRappa', 'KKona', 'LuL', 'M&Mjc', 'monkaS', 'NaM', 'notsquishY', 'PoleDoge', 'RarePepe',
-              'RonSmug', 'SaltyCorn', 'ShoopDaWhoop', 'sosGame', 'SourPls', 'SqShy', 'TaxiBro', 'tehPoleCat', 'TwaT',
-              'VapeNation', 'VisLaud', 'WatChuSay', 'Wowee', 'WubTF', 'AndKnuckles', 'BeanieHipster', 'BORT', 'CatBag',
-              'LaterSooner', 'LilZ', 'ManChicken', 'OBOY', 'OiMinna', 'YooHoo', 'ZliL', 'ZrehplaR', 'ZreknarF'
-    ]
-    bomb_time = 30
+    ]  # TODO: move to a json
+    bomb_time = 30  # TODO: move with bomb party stuff
 
     def __init__(self):
         self.ws = None
@@ -201,6 +167,7 @@ class Bot:
             "players": self.player_list,
             "funfact": self.random_fact,
             "reload_db": self.reload_from_db,
+            "reload_emotes": self.refresh_emotes,
         }  # Update pastebins when adding new commands
         self.cooldown = {}
         self.overall_cooldown = {}
@@ -209,6 +176,7 @@ class Bot:
         self.number = random.randint(1, 1000)
 
         # Trivia
+        # TODO: move to a class
         self.answer = None
         self.guessed_answers = []
         self.trivia_future = None
@@ -261,7 +229,7 @@ class Bot:
             },
             "emote": {
                 **default_scramble_info,
-                "get_answer": lambda: random.choice(self.emotes),
+                "get_answer": lambda: random.choice(self.emotes).name,
                 "name": "emote",
                 "hint_type": "every_other",
                 "case_sensitive": True,
@@ -269,7 +237,11 @@ class Bot:
             }
         }
 
+        # Load emotes
+        self.emotes = self.load_emotes()
+
         # Bomb party
+        # TODO: move to a class
         self.used_words = []
         self.party = {}
         self.bomb_party_future = None
@@ -333,6 +305,7 @@ class Bot:
     def set_timed_event(self, wait, callback, *args, **kwargs):
         return asyncio.run_coroutine_threadsafe(do_timed_event(wait, callback, *args, **kwargs), self.loop)
 
+    # TODO: this can go with utils
     @staticmethod
     def format_date(date):
         minutes = (datetime.now() - date).total_seconds() // 60
@@ -351,6 +324,7 @@ class Bot:
 
     # File save/load
 
+    # TODO: this can go with bomb party class or something
     def construct_bomb_party_letters(self):
         with open("data/2strings.json", "r") as f:
             letters = json.load(f)
@@ -390,6 +364,10 @@ class Bot:
         self.gamba_data = self.database.get_userdata()
         self.afk = self.database.get_afk()
 
+    def load_emotes(self):
+        emote_requester = EmoteRequester(self.client_id, self.client_secret)
+        return sum(emote_requester.get_channel_emotes(self.channel_to_run_in), [])
+
     def load_data(self):
         self.load_top_players()
         self.load_top_maps()
@@ -403,6 +381,7 @@ class Bot:
         self.database.update_userdata(user, 'money', round(self.gamba_data[user]['money']))
 
     # Api request stuff
+    # TODO: consider moving api stuff to its own class
 
     def load_top_plays(self):  # To be used in the future maybe
         resp = requests.get('https://osutrack-api.ameo.dev/bestplay?mode=0')
@@ -566,10 +545,12 @@ class Bot:
         for scramble_type, info in self.scramble_info.items():
             if info['answer'] is not None:
                 await self.on_scramble(user, channel, message, scramble_type)
-            if info['future'] is not None and info['future'].done() and info['future'].result():
-                print(info['future'].result())
+            if info['future'] is not None and info['future'].done():
+                result = info['future'].result()
+                if result:
+                    print(info['future'].result())
 
-        if self.bomb_start_time != 0 and self.turn_order[self.current_player] == user:
+        if self.bomb_start_time != 0 and self.turn_order[self.current_player] == user:  # Check that bomb party is in progress
             await self.on_bomb_party(channel, message)
 
         await self.on_afk(user, channel, message)
@@ -586,6 +567,7 @@ class Bot:
 
     @cooldown(cmd_cd=1, user_cd=2)
     async def pull(self, user, channel, args):
+        # TODO: Try and make this look more clean
         if user not in self.pity:
             self.pity.update({user: {4: 0, 5: 0}})
             self.database.new_pity(user, 0, 0)
@@ -640,10 +622,10 @@ class Bot:
         if len(args) < 1:
             return await self.send_message(channel, f"@{user} You must provide a number 1-1000 to guess with")
 
-        try:
-            guess = int(args[0])
-        except ValueError:
+        if not args[0].isdigit():
             return await self.send_message(channel, f"@{user} That's not a valid number OuttaPocket Tssk")
+
+        guess = int(args[0])
 
         if self.number == guess:
             await self.send_message(channel, f"@{user} You got it PogYou")
@@ -652,8 +634,11 @@ class Bot:
             await self.send_message(channel, f"@{user} It's not {guess}. Try guessing " + (
                 "higher" if guess < self.number else "lower") + ". veryPog")
 
+    # TODO: consider putting trivia stuff in its own class
+
     @cooldown()
     async def trivia(self, user, channel, args):
+        # TODO: get this working again
         if self.answer is not None:
             return
         self.answer = "temp"
@@ -701,7 +686,6 @@ class Bot:
         self.guessed_answers = []
         self.trivia_diff = None
         self.trivia_future = None
-
 
     @cooldown()
     async def slap(self, user, channel, args):
@@ -1201,6 +1185,11 @@ class Bot:
     async def reload_from_db(self, user, channel, args):
         self.load_db_data()
         await self.send_message(channel, f"@{user} Local data has been reloaded from database.")
+
+    @requires_dev
+    async def refresh_emotes(self, user, channel, args):
+        self.load_emotes()
+        await self.send_message(channel, f"@{user} Emotes have been reloaded.")
 
 
 bot = Bot()
