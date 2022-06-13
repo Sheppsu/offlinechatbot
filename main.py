@@ -16,6 +16,7 @@ import os
 from get_top_players import Client
 from sql import Database
 from emotes import EmoteRequester
+from helper_objects import *
 
 
 Client().run()  # Update top player json file
@@ -43,9 +44,14 @@ fonts = {  # TODO: looks ugly here
 }
 layout = '!"$\\\'(),-./0123456789:;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€'
 
+
+def print(message):
+    sys.stdout.write(f"[{datetime.now().isoformat()}]{message}\n")
+    sys.stdout.flush()
+
+
 # Decorators
 # TODO: put in its own file
-
 
 def cooldown(user_cd=10, cmd_cd=5):
     def _cooldown(func):
@@ -85,9 +91,15 @@ async def do_timed_event(wait, callback, *args, **kwargs):
     await callback(*args, **kwargs)
 
 
-def print(message):
-    sys.stdout.write(f"[{datetime.now().isoformat()}]{message}\n")
-    sys.stdout.flush()
+def future_callback(future):
+    if future.cancelled():
+        return
+    try:
+        result = future.result()
+        if result:
+            print(result)
+    except:
+        traceback.print_exc()
 
 
 class Bot:
@@ -96,7 +108,7 @@ class Bot:
     username = "sheepposubot"
     oauth = os.getenv("OAUTH")
     uri = "ws://irc-ws.chat.twitch.tv:80"
-    channel_to_run_in = "btmc"
+    channel_to_run_in = "sheepposu"
 
     # I should probably put this stuff in a file lol
     pull_options = {3: ['Slingshot', "Sharpshooter's Oath", 'Raven Bow', 'Emerald Orb', 'Thrilling Tales of Dragon Slayers', 'Magic Guide', 'Black Tassel', 'Debate Club', 'Bloodtainted Greatsword', 'Ferrous Shadow', 'Skyrider Sword ', 'Harbinger of Dawn', 'Cool Steel'], 4: ['Amber', 'Kaeya', 'Lisa', 'Barbara', 'Razor', 'Xiangling', 'Beidou', 'Xingqiu', 'Ningguang', 'Fischl', 'Bennett', 'Noelle', 'Chongyun', 'Sucrose', 'Diona', 'Xinyan', 'Rosaria', 'Yanfei', 'Sayu', 'Kujou Sara', 'Thoma', 'Gorou', 'Yun Jin', 'Favonius Sword', 'The Flute', 'Sacrificial Sword', "Lion's Roar", 'The Alley Flash', 'Favonius Greatsword', 'The Bell', 'Sacrificial Greatsword', 'Rainslasher', 'Lithic Blade', 'Akuoumaru', "Dragon's Bane", 'Favonius Lance', 'Lithic Spear', "Wavebreaker's Fin", 'Favonius Codex', 'The Widsith', 'Sacrificial Fragments', 'Eye of Perception', 'Favonius Warbow', 'The Stringless', 'Sacrificial Bow', 'Rust', 'Alley Hunter', 'Mitternachts Waltz', "Mouun's Moon", 'Wine and Song'], 5: ['Kamisato Ayato', 'Yae Miko', 'Shenhe', 'Arataki Itto', 'Sangonomiya Kokomi', 'Raiden Shogun', 'Yoimiya', 'Kamisato Ayaka', 'Kaedehara Kazuha', 'Eula', 'Hu Tao', 'Xiao', 'Ganyu', 'Albedo', 'Zhongli', 'Tartaglia', 'Klee', 'Venti', 'Keqing', 'Mona', 'Qiqi', 'Diluc', 'Jean', 'Aquila Favonia', 'Skyward Blade', 'Summit Shaper', 'Primordial Jade Cutter', 'Freedom-Sworn', 'Mistsplitter Reforged', 'Skyward Pride', "Wolf's Gravestone", 'The Unforged', 'Song of Broken Pines', 'Redhorn Stonethresher', 'Primordial Jade Winged-Spear', 'Skyward Spine', 'Vortex Vanquisher', 'Staff of Homa', 'Engulfing Lightning', 'Calamity Queller', 'Skyward Atlas', 'Lost Prayer to the Sacred Winds', 'Memory of Dust', 'Everlasting Moonglow', "Kagura's Verity", 'Skyward Harp', "Amos' Bow", 'Elegy for the End', 'Thundering Pulse', 'Polar Star']}
@@ -241,27 +253,8 @@ class Bot:
         self.emotes = self.load_emotes()
 
         # Bomb party
-        # TODO: move to a class
-        self.used_words = []
-        self.party = {}
+        self.bomb_party_helper = BombParty()
         self.bomb_party_future = None
-        self.current_player = 0
-        self.current_letters = None
-        self.bomb_start_time = 0
-        self.turn_order = []
-        self.timer = 30
-        self.bomb_settings = {
-            "difficulty": "medium",
-            "timer": 30,
-            "minimum_time": 5,
-            "lives": 3,
-        }
-        self.valid_bomb_settings = {
-            "difficulty": ("easy", "medium", "hard", "nightmare", "impossible"),
-            "timer": range(5, 60+1),
-            "minimum_time": range(0, 10+1),
-            "lives": range(1, 5+1),
-        }
 
         # Data
         self.database = Database()
@@ -278,7 +271,6 @@ class Bot:
         self.facts = []
         self.afk = {}
         self.all_words = []
-        self.bomb_party_letters = {}
         self.load_data()
 
     # Util
@@ -324,21 +316,6 @@ class Bot:
 
     # File save/load
 
-    # TODO: this can go with bomb party class or something
-    def construct_bomb_party_letters(self):
-        with open("data/2strings.json", "r") as f:
-            letters = json.load(f)
-            with open("data/3strings.json", "r") as f3:
-                letters.update(json.load(f3))
-
-            self.bomb_party_letters = {
-                "easy": [let for let, amount in letters.items() if amount >= 10000 and '-' not in let],
-                "medium": [let for let, amount in letters.items() if 10000 > amount >= 5000 and '-' not in let],
-                "hard": [let for let, amount in letters.items() if 5000 > amount >= 1000 or (amount >= 5000 and '-' in let)],
-                "nightmare": [let for let, amount in letters.items() if 1000 > amount >= 500],
-                "impossible": [let for let, amount in letters.items() if 500 > amount],
-            }
-
     def load_top_players(self):
         with open("data/top players (200).json", "r") as f:
             self.top_players = json.load(f)
@@ -375,7 +352,6 @@ class Bot:
         self.load_facts()
         self.load_all_words()
         self.load_db_data()
-        self.construct_bomb_party_letters()
 
     def save_money(self, user):
         self.database.update_userdata(user, 'money', round(self.gamba_data[user]['money']))
@@ -465,7 +441,7 @@ class Bot:
 
     async def run(self):
         # await self.register_cap("tags")
-        await self.join(self.username)
+        # await self.join(self.username)
         await self.join(self.channel_to_run_in)
 
     async def connect(self):
@@ -545,13 +521,9 @@ class Bot:
         for scramble_type, info in self.scramble_info.items():
             if info['answer'] is not None:
                 await self.on_scramble(user, channel, message, scramble_type)
-            if info['future'] is not None and info['future'].done():
-                result = info['future'].result()
-                if result:
-                    print(info['future'].result())
 
-        if self.bomb_start_time != 0 and self.turn_order[self.current_player] == user:  # Check that bomb party is in progress
-            await self.on_bomb_party(channel, message)
+        if self.bomb_party_helper.started:
+            await self.on_bomb_party(user, channel, message)
 
         await self.on_afk(user, channel, message)
 
@@ -658,6 +630,7 @@ class Bot:
         await self.send_message(channel,
                                 f"Difficulty: {resp['difficulty']} {difficulty[resp['difficulty']]} Category: {resp['category']} veryPog Question: {html.unescape(resp['question'])} monkaHmm Answers: {answer_string}")
         self.trivia_future = self.set_timed_event(20, self.on_trivia_finish, channel)
+        self.trivia_future.add_done_callback(future_callback)
 
     @requires_gamba_data
     async def on_answer(self, user, channel, answer):
@@ -719,6 +692,7 @@ class Bot:
                                 f"Unscramble this {self.scramble_info[scramble_type]['name']}: {scrambled_word.lower()}")
         self.scramble_info[scramble_type]['future'] = self.set_timed_event(120, self.on_scramble_finish, channel,
                                                                            scramble_type)
+        self.scramble_info[scramble_type]['future'].add_done_callback(future_callback)
 
     async def on_scramble(self, user, channel, guess, scramble_type):
         word = self.scramble_info[scramble_type]['answer']
@@ -1023,136 +997,124 @@ class Bot:
     # Bomb party functions
     @cooldown()
     async def bomb_party(self, user, channel, args):
-        if len(self.party) > 0:
+        if self.bomb_party_helper.in_progress:
             return
-        self.party.update({user: self.bomb_settings['lives']})
+        self.bomb_party_helper.add_player(user)
+        self.bomb_party_helper.on_in_progress()
 
         await self.send_message(channel, f"{user} has started a Bomb Party game! Anyone else who wants to play should type !join. When enough players have joined, the host should type !start to start the game, otherwise the game will automatically start or close after 2 minutes.")
         self.bomb_party_future = self.set_timed_event(120, self.close_or_start_game, channel)
+        self.bomb_party_future.add_done_callback(future_callback)
 
     async def close_or_start_game(self, channel):
-        if len(self.party) < 2:
+        if not self.bomb_party_helper.can_start:
             self.close_bomb_party()
             return await self.send_message(channel, "The bomb party game has closed since there is only one player in the party.")
         await self.start_bomb_party(None, channel, None, False)
 
     @cooldown()
     async def start_bomb_party(self, user, channel, args, cancel=True):
-        if len(self.party) == 0 or self.turn_order or list(self.party.keys())[0] != user:
+        if not self.bomb_party_helper.in_progress or \
+                self.bomb_party_helper.started or \
+                user != self.bomb_party_helper.host:
             return
-        if len(self.party) < 2:
+        if not self.bomb_party_helper.can_start:
             return await self.send_message(channel, f"@{user} You need at least 2 players to start the bomb party game.")
         if cancel:
             self.bomb_party_future.cancel()
 
-        for player in self.party:
-            self.party[player] = self.bomb_settings['lives']
+        self.bomb_party_helper.on_start()
+        self.bomb_party_helper.set_letters()
 
-        self.turn_order = list(self.party.keys())
-        random.shuffle(self.turn_order)
-        player = self.turn_order[self.current_player]
-        self.current_letters = random.choice(self.bomb_party_letters[self.bomb_settings['difficulty']])
-
-        await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) You're up first! Your string of letters is {self.current_letters}")
-        self.timer = self.bomb_settings['timer']
-        self.bomb_party_future = self.set_timed_event(self.timer+5, self.bomb_party_timer, channel)
-        self.bomb_start_time = perf_counter()
+        await self.send_message(channel, f"@{self.bomb_party_helper.current_player} You're up first! Your string of letters is {self.bomb_party_helper.current_letters}")
+        self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.starting_time, self.bomb_party_timer, channel)
+        self.bomb_party_future.add_done_callback(future_callback)
 
     @cooldown(user_cd=10, cmd_cd=0)
     async def join_bomb_party(self, user, channel, args):
-        if len(self.party) == 0 or self.turn_order:
+        if not self.bomb_party_helper.in_progress or self.bomb_party_helper.started:
             return
-        if user in self.party:
+        if user in self.bomb_party_helper.party:
             return await self.send_message(channel, f"@{user} You have already joined the game")
 
-        self.party.update({user: 0})
+        self.bomb_party_helper.add_player(user)
         await self.send_message(channel, f"@{user} You have joined the game of bomb party!")
 
     @cooldown(cmd_cd=0)
     async def leave_bomb_party(self, user, channel, args):
-        if len(self.party) == 0 or user not in self.party:
+        # TODO: bug
+        if user not in self.bomb_party_helper.party:
             return
-        self.party[user] = 0
+        self.bomb_party_helper.remove_player(user)
         await self.send_message(channel, f"@{user} You have left the game of bomb party.")
-        if self.turn_order and await self.check_win(channel):
-            self.bomb_party_future.cancel()
-        elif self.turn_order and self.turn_order[self.current_player] == user:
-            self.bomb_party_future.cancel()
+        if self.bomb_party_helper.started and await self.check_win(channel):
+            if self.bomb_party_future is not None:
+                self.bomb_party_future.cancel()
+        elif self.bomb_party_helper.current_player == user:
+            if self.bomb_party_future is not None:
+                self.bomb_party_future.cancel()
             await self.next_player(channel)
-        elif not self.turn_order:
-            del self.party[user]
-            if len(self.party) == 0:
+        elif self.bomb_party_helper.in_progress and not self.bomb_party_helper.started:
+            if len(self.bomb_party_helper.party) == 0:
                 self.close_bomb_party()
                 await self.send_message(channel, "The game of bomb party has closed.")
 
     @cooldown(user_cd=0, cmd_cd=0)
     async def change_bomb_settings(self, user, channel, args):
-        if len(self.party) == 0 or self.turn_order or list(self.party.keys())[0] != user:
+        if not self.bomb_party_helper.in_progress or \
+                self.bomb_party_helper.started or \
+                self.bomb_party_helper.host != user:
             return
         if len(args) < 2:
-            return await self.send_message(channel, f"@{user} You must provide a setting name and the value: !settings <setting> <value>. Valid settings: {', '.join(list(self.bomb_settings.keys()))}")
+            return await self.send_message(channel, f"@{user} You must provide a setting name and the value: !settings <setting> <value>. Valid settings: {self.bomb_party_helper.valid_settings_string}")
         setting = args[0].lower()
         value = args[1].lower()
-        if setting not in self.bomb_settings:
-            return await self.send_message(channel, f"@{user} That's not a valid setting. Valid settings: {', '.join(list(self.bomb_settings.keys()))}")
-        try:
-            value = type(self.bomb_settings[setting])(value)
-            if value not in self.valid_bomb_settings[setting]:
-                return await self.send_message(channel, "That's not a valid value for this setting.")
-            self.bomb_settings[setting] = value
-            await self.send_message(channel, f"@{user} The {setting} setting has been changed to {value}")
-        except ValueError:
-            return await self.send_message(channel, "There was a problem processing the value you gave for the specific setting.")
+        return_msg = self.bomb_party_helper.set_setting(setting, value)
+        await self.send_message(channel, f"@{user} {return_msg}")
 
     @cooldown()
     async def player_list(self, user, channel, args):
-        if len(self.party) == 0:
+        if not self.bomb_party_helper.in_progress:
             return
-        await self.send_message(channel, f"@{user} Current players playing bomb party: {', '.join(['%s (%s)' %(player, '♥'*lives) for player, lives in self.party.items()])}")
+        await self.send_message(channel, f"@{user} Current players playing bomb party: {', '.join(self.bomb_party_helper.player_list)}")
 
     async def bomb_party_timer(self, channel):
-        self.timer = self.bomb_settings['timer']
-        self.bomb_start_time = 0
-        player = self.turn_order[self.current_player]
-        self.party[player] -= 1
-        message = f"You ran out of time and now have {self.party[player]} {'♥'*self.party[player]} heart(s) left" if self.party[player] != 0 else "You ran out of time and lost all your lives! YouDied"
-        await self.send_message(channel, f"@{player} {message}")
+        msg = self.bomb_party_helper.on_explode()
+        await self.send_message(channel, msg)
         if await self.check_win(channel):
             return
         await self.next_player(channel)
 
     async def next_player(self, channel):
-        player = self.turn_order[self.current_player]
-        while self.party[self.turn_order[self.current_player]] == 0 or self.turn_order[self.current_player] == player:
-            self.current_player = 1 + self.current_player if self.current_player != len(self.turn_order)-1 else 0
-        self.current_letters = random.choice(self.bomb_party_letters[self.bomb_settings['difficulty']])
-        player = self.turn_order[self.current_player]
-        await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) Your string of letters is {self.current_letters} - You have {round(self.timer+self.bomb_settings['minimum_time'])} seconds.")
-        self.bomb_start_time = perf_counter()
-        self.bomb_party_future = self.set_timed_event(self.timer+self.bomb_settings['minimum_time'], self.bomb_party_timer, channel)
+        self.bomb_party_helper.next_player()
+        self.bomb_party_helper.set_letters()
+        player = self.bomb_party_helper.current_player
+        await self.send_message(channel, f"@{player} Your string of letters is {self.bomb_party_helper.current_letters} - "
+                                         f"You have {round(self.bomb_party_helper.seconds_left)} seconds.")
+        self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.seconds_left, self.bomb_party_timer, channel)
+        self.bomb_party_future.add_done_callback(future_callback)
 
-    async def on_bomb_party(self, channel, message):
-        player = self.turn_order[self.current_player]
-        message = message.lower()
+    async def on_bomb_party(self, user, channel, message):
+        if user != self.bomb_party_helper.current_player.user:
+            return
         if message not in self.all_words:
             return
-        if message in self.used_words:
-            return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) That word has already been used this game.")
-        if self.current_letters not in message:
-            return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) That word does not contain your string of letters: {self.current_letters}")
-        if len(message) == len(self.current_letters):
-            return await self.send_message(channel, f"@{player} ({'♥'*self.party[player]}) You cannot answer with the string of letters itself.")
+        return_msg = self.bomb_party_helper.check_message(message)
+        if return_msg is not None:
+            return await self.send_message(channel, f"@{self.bomb_party_helper.current_player} {return_msg}")
         self.bomb_party_future.cancel()
-        self.timer -= max((0, perf_counter() - self.bomb_start_time - self.bomb_settings['minimum_time']))
-        self.used_words.append(message)
+        self.bomb_party_helper.on_word_used(message)
         await self.next_player(channel)
 
     async def check_win(self, channel):
-        players_left = [player for player, lives in self.party.items() if lives != 0]
-        if len(players_left) != 1:
+        winner = self.bomb_party_helper.get_winner()
+        print(winner)
+        if winner is None:
             return False
-        winner = players_left[0]
-        money = len(self.party)*100
+        winner = winner.user
+        if winner not in self.gamba_data:
+            self.add_new_user(winner)
+        money = self.bomb_party_helper.winning_money
         self.gamba_data[winner]['money'] += money
         self.save_money(winner)
         self.close_bomb_party()
@@ -1160,20 +1122,9 @@ class Bot:
         return True
 
     def close_bomb_party(self):
-        self.used_words = []
-        self.party = {}
+        self.bomb_party_future.cancel()
         self.bomb_party_future = None
-        self.current_player = 0
-        self.current_letters = None
-        self.bomb_start_time = 0
-        self.turn_order = []
-        self.timer = self.bomb_time
-        self.bomb_settings = {
-            "difficulty": "medium",
-            "timer": 30,
-            "minimum_time": 5,
-            "lives": 3,
-        }
+        self.bomb_party_helper.on_close()
 
     @cooldown(cmd_cd=2, user_cd=0)
     async def random_fact(self, user, channel, args):
