@@ -428,7 +428,7 @@ class Bot:
             elif num <= 57:
                 pull = 4
         await self.send_message(ctx.channel,
-                                f"@{user} You pulled {random.choice(self.pull_options[pull])} " +
+                                f"@{user} You pulled {random.choice(self.pull_options[str(pull)])} " +
                                 ("\u2B50\u2B50\u2B50" if pull == 3 else '🌟' * pull) +
                                 {3: ". 😔", 4: "! Pog", 5: "! PogYou"}[pull] +
                                 ((" Rolls in: " + str(
