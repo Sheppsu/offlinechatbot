@@ -1,105 +1,26 @@
 # coding=utf-8
+
+# TODO: channel specific commands
+#       clean up code in general
+#       utilize DMs
+#       convert to using a context object when passing data to functions
+
 from dotenv import load_dotenv
 load_dotenv()
 
-import random
 import websockets
-import asyncio
 import requests
-from time import perf_counter
 import html
-import json
-from datetime import datetime
-import traceback
-import sys
 import os
 from get_top_players import Client
 from sql import Database
 from emotes import EmoteRequester
 from helper_objects import *
+from util import *
+from constants import *
 
 
 Client().run()  # Update top player json file
-
-fonts = {  # TODO: looks ugly here
-    "bold": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙_𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "double-struck": '!"$\\\'(),-./𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡:;?@𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ_𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "bold-fraktur": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@𝕬𝕭𝕮𝕯𝕰𝕱𝕲𝕳𝕴𝕵𝕶𝕷𝕸𝕹𝕺𝕻𝕼𝕽𝕾𝕿𝖀𝖁𝖂𝖃𝖄𝖅_𝖆𝖇𝖈𝖉𝖊𝖋𝖌𝖍𝖎𝖏𝖐𝖑𝖒𝖓𝖔𝖕𝖖𝖗𝖘𝖙𝖚𝖛𝖜𝖝𝖞𝖟ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "bold-italic": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁_𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "squared": '!"$\\\'(),-./0123456789:;?@🄰🄱🄲🄳🄴🄵🄶🄷🄸🄹🄺🄻🄼🄽🄾🄿🅀🅁🅂🅃🅄🅅🅆🅇🅈🅉_🄰🄱🄲🄳🄴🄵🄶🄷🄸🄹🄺🄻🄼🄽🄾🄿🅀🅁🅂🅃🅄🅅🅆🅇🅈🅉ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "dark-squares": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@🅰🅱🅲🅳🅴🅵🅶🅷🅸🅹🅺🅻🅼🅽🅾🅿🆀🆁🆂🆃🆄🆅🆆🆇🆈🆉_🅰🅱🅲🅳🅴🅵🅶🅷🅸🅹🅺🅻🅼🅽🅾🅿🆀🆁🆂🆃🆄🆅🆆🆇🆈🆉ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "circled": '!"$\\\'(),⊖.⦸0①②③④⑤⑥⑦⑧⑨:;?@ⒶⒷⒸⒹⒺⒻⒼⒽⒾⒿⓀⓁⓂⓃⓄⓅⓆⓇⓈⓉⓊⓋⓌⓍⓎⓏ_ⓐⓑⓒⓓⓔⓕⓖⓗⓘⓙⓚⓛⓜⓝⓞⓟⓠⓡⓢⓣⓤⓥⓦⓧⓨⓩ',
-    "black-circles": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@🅐🅑🅒🅓🅔🅕🅖🅗🅘🅙🅚🅛🅜🅝🅞🅟🅠🅡🅢🅣🅤🅥🅦🅧🅨🅩_🅐🅑🅒🅓🅔🅕🅖🅗🅘🅙🅚🅛🅜🅝🅞🅟🅠🅡🅢🅣🅤🅥🅦🅧🅨🅩ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "emoji-text": '‼"$\\\'()🔽-◾/0123456789:;❓@🅰🅱🌜🐬𝓔🔩🐋♓🕴🎷🎉👢Ⓜ🥄😀🅿🍳🌱💲🍄⛎✌🔱❎🏋💤_🅰🅱🌜🐬𝓔🔩🐋♓🕴🎷🎉👢Ⓜ🥄😀🅿🍳🌱💲🍄⛎✌🔱❎🏋💤ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "upside-down": '¡"$\\\'(),-.\\0⇂ᄅƐގㄣ9ㄥ86:;?@∀ᙠƆᗡƎℲ⅁HIſ⋊˥WNOԀΌᴚS⊥∩ΛMX⅄Z¯ɐqɔpǝɟɓɥıɾʞlɯuodbɹsʇnʌʍxʎz',
-    "mirrored": '!"$\\\'(),-./0123456789:;?@AdↃbƎꟻGHIJK⅃MᴎOꟼpᴙꙄTUVWXYZ_AdↄbɘꟻgHijklmᴎoqpᴙꙅTUvwxYz',
-    "greek": '!"$\\\'(),-.\\0123456789:;?@ΛBᑕDΣFGΉIJKᒪMПӨPQЯƧƬЦVЩXYZ_ΛBᑕDΣFGΉIJKᒪMПӨPQЯƧƬЦVЩXYZ',
-    "rounded": '!"$\\\'(),-.\\0123456789:;?@ᗩᗷᑕᗪEᖴGᕼIᒍKᒪᗰᑎOᑭᑫᖇᔕTᑌᐯᗯ᙭Yᘔ_ᗩᗷᑕᗪEᖴGᕼIᒍKᒪᗰᑎOᑭᑫᖇᔕTᑌᐯᗯ᙭Yᘔ',
-    "gothic": '!"$\\\'(),-./0123456789:;?@𝔄𝔅ℭ𝔇𝔈𝔉𝔊ℌℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ_𝔞𝔟𝔠𝔡𝔢𝔣𝔤𝔥𝔦𝔧𝔨𝔩𝔪𝔫𝔬𝔭𝔮𝔯𝔰𝔱𝔲𝔳𝔴𝔵𝔶𝔷ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "math-bold-script": '!"$\\\'(),-./0123456789:;?@𝓐𝓑𝓒𝓓𝓔𝓕𝓖𝓗𝓘𝓙𝓚𝓛𝓜𝓝𝓞𝓟𝓠𝓡𝓢𝓣𝓤𝓥𝓦𝓧𝓨𝓩_𝓪𝓫𝓬𝓭𝓮𝓯𝓰𝓱𝓲𝓳𝓴𝓵𝓶𝓷𝓸𝓹𝓺𝓻𝓼𝓽𝓾𝓿𝔀𝔁𝔂𝔃ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "sans-serif-bold": '!"$\\\'(),-./𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵:;?@𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭_𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "bold-italic-sans-serif": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@𝘼𝘽𝘾𝘿𝙀𝙁𝙂𝙃𝙄𝙅𝙆𝙇𝙈𝙉𝙊𝙋𝙌𝙍𝙎𝙏𝙐𝙑𝙒𝙓𝙔𝙕_𝙖𝙗𝙘𝙙𝙚𝙛𝙜𝙝𝙞𝙟𝙠𝙡𝙢𝙣𝙤𝙥𝙦𝙧𝙨𝙩𝙪𝙫𝙬𝙭𝙮𝙯ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-    "sans-italic": '!"$\\\'(),-./0123456789:;?@𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡_𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
-
-}
-layout = '!"$\\\'(),-./0123456789:;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€'
-
-
-def print(message):
-    sys.stdout.write(f"[{datetime.now().isoformat()}]{message}\n")
-    sys.stdout.flush()
-
-
-# Decorators
-# TODO: put in its own file
-
-def cooldown(user_cd=10, cmd_cd=5):
-    def _cooldown(func):
-        async def check(self, user, channel, args, *eargs, **kwargs):
-            if user is not None and self.is_on_cooldown(func.__name__, user, user_cd, cmd_cd):
-                return
-            return await func(self, user, channel, args, *eargs, **kwargs)
-
-        return check
-
-    return _cooldown
-
-
-def requires_gamba_data(func):
-    async def check(self, user, channel, args, *eargs, **kwargs):
-        if user not in self.gamba_data:
-            self.add_new_user(user)
-        return await func(self, user, channel, args, *eargs, **kwargs)
-
-    return check
-
-
-def requires_dev(func):
-    async def check(self, user, channel, args, *eargs, **kwargs):
-        if user != "sheepposu":
-            return await self.send_message(channel, f"@{user} This is a dev only command")
-        return await func(self, user, channel, args, *eargs, **kwargs)
-
-    return check
-
-# Util ig
-# TODO: put in its own file
-
-
-async def do_timed_event(wait, callback, *args, **kwargs):
-    await asyncio.sleep(wait)
-    await callback(*args, **kwargs)
-
-
-def future_callback(future):
-    if future.cancelled():
-        return
-    try:
-        result = future.result()
-        if result:
-            print(result)
-    except:
-        traceback.print_exc()
 
 
 class Bot:
@@ -112,10 +33,6 @@ class Bot:
 
     # I should probably put this stuff in a file lol
     pull_options = {3: ['Slingshot', "Sharpshooter's Oath", 'Raven Bow', 'Emerald Orb', 'Thrilling Tales of Dragon Slayers', 'Magic Guide', 'Black Tassel', 'Debate Club', 'Bloodtainted Greatsword', 'Ferrous Shadow', 'Skyrider Sword ', 'Harbinger of Dawn', 'Cool Steel'], 4: ['Amber', 'Kaeya', 'Lisa', 'Barbara', 'Razor', 'Xiangling', 'Beidou', 'Xingqiu', 'Ningguang', 'Fischl', 'Bennett', 'Noelle', 'Chongyun', 'Sucrose', 'Diona', 'Xinyan', 'Rosaria', 'Yanfei', 'Sayu', 'Kujou Sara', 'Thoma', 'Gorou', 'Yun Jin', 'Favonius Sword', 'The Flute', 'Sacrificial Sword', "Lion's Roar", 'The Alley Flash', 'Favonius Greatsword', 'The Bell', 'Sacrificial Greatsword', 'Rainslasher', 'Lithic Blade', 'Akuoumaru', "Dragon's Bane", 'Favonius Lance', 'Lithic Spear', "Wavebreaker's Fin", 'Favonius Codex', 'The Widsith', 'Sacrificial Fragments', 'Eye of Perception', 'Favonius Warbow', 'The Stringless', 'Sacrificial Bow', 'Rust', 'Alley Hunter', 'Mitternachts Waltz', "Mouun's Moon", 'Wine and Song'], 5: ['Kamisato Ayato', 'Yae Miko', 'Shenhe', 'Arataki Itto', 'Sangonomiya Kokomi', 'Raiden Shogun', 'Yoimiya', 'Kamisato Ayaka', 'Kaedehara Kazuha', 'Eula', 'Hu Tao', 'Xiao', 'Ganyu', 'Albedo', 'Zhongli', 'Tartaglia', 'Klee', 'Venti', 'Keqing', 'Mona', 'Qiqi', 'Diluc', 'Jean', 'Aquila Favonia', 'Skyward Blade', 'Summit Shaper', 'Primordial Jade Cutter', 'Freedom-Sworn', 'Mistsplitter Reforged', 'Skyward Pride', "Wolf's Gravestone", 'The Unforged', 'Song of Broken Pines', 'Redhorn Stonethresher', 'Primordial Jade Winged-Spear', 'Skyward Spine', 'Vortex Vanquisher', 'Staff of Homa', 'Engulfing Lightning', 'Calamity Queller', 'Skyward Atlas', 'Lost Prayer to the Sacred Winds', 'Memory of Dust', 'Everlasting Moonglow', "Kagura's Verity", 'Skyward Harp', "Amos' Bow", 'Elegy for the End', 'Thundering Pulse', 'Polar Star']}
-    banned_words = [  # Was originally used to stop this word from being posted for scramble, but since there's a new list with non-tos words it doesn't really do anything
-        "kike"
-    ]  # TODO: move to a json
-    bomb_time = 30  # TODO: move with bomb party stuff
 
     def __init__(self):
         self.ws = None
@@ -201,53 +118,14 @@ class Bot:
             "decrease": 0.5,
         }
 
-        default_scramble_info = {
-            "answer": None,
-            "hint": "",
-            "future": None,
+        self.scrambles = {
+            "word": Scramble("word", lambda: random.choice(self.word_list), 1),
+            "osu": Scramble("player name", lambda: random.choice(self.top_players), 0.8),
+            "map": Scramble("map name", lambda: random.choice(self.top_maps), 1.3),
+            "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
+            "emote": Scramble("emotes", lambda channel: random.choice(self.emotes[channel]).name, 0.6, ScrambleHintType.EVERY_OTHER, True),
         }
-        self.scramble_info = {
-            "word": {
-                **default_scramble_info,
-                "get_answer": lambda: random.choice(self.word_list),
-                "name": "word",
-                "hint_type": "default",
-                "case_sensitive": False,
-                "difficulty_multiplier": 1,
-            },
-            "osu": {
-                **default_scramble_info,
-                "get_answer": lambda: random.choice(self.top_players),
-                "name": "player name",
-                "hint_type": "default",
-                "case_sensitive": False,
-                "difficulty_multiplier": 0.8,
-            },
-            "map": {
-                **default_scramble_info,
-                "get_answer": lambda: random.choice(self.top_maps),
-                "name": "map name",
-                "hint_type": "default",
-                "case_sensitive": False,
-                "difficulty_multiplier": 1.3,
-            },
-            "genshin": {
-                **default_scramble_info,
-                "get_answer": lambda: random.choice(self.genshin),
-                "name": "genshin weap/char",
-                "hint_type": "default",
-                "case_sensitive": False,
-                "difficulty_multiplier": 0.7,
-            },
-            "emote": {
-                **default_scramble_info,
-                "get_answer": lambda: random.choice(self.emotes).name,
-                "name": "emote",
-                "hint_type": "every_other",
-                "case_sensitive": True,
-                "difficulty_multiplier": 0.6,
-            }
-        }
+        self.scramble_manager = ScrambleManager(self.scrambles)
 
         # Load emotes
         self.emotes = self.load_emotes()
@@ -297,23 +175,6 @@ class Bot:
     def set_timed_event(self, wait, callback, *args, **kwargs):
         return asyncio.run_coroutine_threadsafe(do_timed_event(wait, callback, *args, **kwargs), self.loop)
 
-    # TODO: this can go with utils
-    @staticmethod
-    def format_date(date):
-        minutes = (datetime.now() - date).total_seconds() // 60
-        hours = 0
-        days = 0
-        if minutes >= 60:
-            hours = minutes // 60
-            minutes = minutes % 60
-            if hours >= 24:
-                days = hours // 24
-                hours = hours % 24
-        elif minutes == 0:
-            return f"{(datetime.now() - date).seconds} seconds"
-        return ((f"{int(days)} day(s) " if days != 0 else "") + (f" {int(hours)} hour(s) " if hours != 0 else "") + (
-            f" {int(minutes)} minute(s)" if minutes != 0 else "")).strip()
-
     # File save/load
 
     def load_top_players(self):
@@ -343,7 +204,10 @@ class Bot:
 
     def load_emotes(self):
         emote_requester = EmoteRequester(self.client_id, self.client_secret)
-        return sum(emote_requester.get_channel_emotes(self.channel_to_run_in), [])
+        return {
+            self.channel_to_run_in: sum(emote_requester.get_channel_emotes(self.channel_to_run_in), []),
+            self.username: sum(emote_requester.get_channel_emotes(self.username), [])
+        }
 
     def load_data(self):
         self.load_top_players()
@@ -518,8 +382,8 @@ class Bot:
             await self.on_answer(user, channel, message)
             return
 
-        for scramble_type, info in self.scramble_info.items():
-            if info['answer'] is not None:
+        for scramble_type, scramble in self.scrambles.items():
+            if scramble.in_progress:
                 await self.on_scramble(user, channel, message, scramble_type)
 
         if self.bomb_party_helper.started:
@@ -678,75 +542,47 @@ class Bot:
 
     @cooldown()
     async def scramble(self, user, channel, args, scramble_type):
-        if self.scramble_info[scramble_type]['answer'] is not None:
+        if self.scramble_manager.in_progress(scramble_type):
             return
 
-        self.scramble_info[scramble_type]['answer'] = self.scramble_info[scramble_type]['get_answer']()
-        while self.scramble_info[scramble_type]['answer'].lower() in self.banned_words:
-            self.scramble_info[scramble_type]['answer'] = self.scramble_info[scramble_type]['get_answer']()
-        self.scramble_info[scramble_type]['hint'] = "?" * len(self.scramble_info[scramble_type]['answer'])
-        scrambled_word = [char for char in self.scramble_info[scramble_type]['answer']]
-        random.shuffle(scrambled_word)
-        scrambled_word = "".join(scrambled_word)
-        await self.send_message(channel,
-                                f"Unscramble this {self.scramble_info[scramble_type]['name']}: {scrambled_word.lower()}")
-        self.scramble_info[scramble_type]['future'] = self.set_timed_event(120, self.on_scramble_finish, channel,
-                                                                           scramble_type)
-        self.scramble_info[scramble_type]['future'].add_done_callback(future_callback)
+        scrambled_word = self.scramble_manager.get_scramble(scramble_type, channel)
+        await self.send_message(channel, f"Unscramble this "
+                                         f"{self.scramble_manager.get_scramble_name(scramble_type)}: "
+                                         f"{scrambled_word.lower()}")
+        future = self.set_timed_event(120, self.on_scramble_finish, channel, scramble_type)
+        future.add_done_callback(future_callback)
+        self.scramble_manager.pass_future(scramble_type, future)
 
     async def on_scramble(self, user, channel, guess, scramble_type):
-        word = self.scramble_info[scramble_type]['answer']
-        hint = self.scramble_info[scramble_type]['hint']
-        if not word:
+        money = self.scramble_manager.check_answer(scramble_type, guess)
+        if money is None:
             return
-        if (guess.lower() == word.lower() and not self.scramble_info[scramble_type]["case_sensitive"]) or guess == word:
-            self.scramble_info[scramble_type]['answer'] = None
-            self.scramble_info[scramble_type]['hint'] = ""
-            self.scramble_info[scramble_type]['future'].cancel()
-            self.scramble_info[scramble_type]['future'] = None
-            money = round(random.randint(5, 10) * len(word.replace(" ", "")) * hint.count("?")/len(word) * self.scramble_info[scramble_type]['difficulty_multiplier'])
-            await self.send_message(channel,
-                                    f"@{user} You got it right! {word} was the {self.scramble_info[scramble_type]['name']}. Drake You've won {money} Becky Bucks!")
-            if user not in self.gamba_data:
-                self.add_new_user(user)
-            self.gamba_data[user]["money"] += money
-            self.save_money(user)
+        await self.send_message(channel,
+                                f"@{user} You got it right! "
+                                f"{self.scramble_manager.get_answer(scramble_type)} was the "
+                                f"{self.scramble_manager.get_scramble_name(scramble_type)}. "
+                                f"Drake You've won {money} Becky Bucks!")
+        self.scramble_manager.reset(scramble_type)
+        if user not in self.gamba_data:
+            self.add_new_user(user)
+        self.gamba_data[user]["money"] += money
+        self.save_money(user)
 
-    @cooldown(cmd_cd=5)
+    # @cooldown(cmd_cd=5)
     async def hint(self, user, channel, args, scramble_type):
-        word = self.scramble_info[scramble_type]['answer']
-        hint = self.scramble_info[scramble_type]['hint']
-        if word is None or "?" not in hint:
-            return
-        {
-            "default": self.default_hint,
-            "every_other": self.every_other_hint,
-        }[self.scramble_info[scramble_type]['hint_type']](scramble_type)
-
-        await self.send_message(channel, f"Here's a hint ({self.scramble_info[scramble_type]['name']}): " +
-                                self.scramble_info[scramble_type]['hint'].lower())
-
-    def default_hint(self, scramble_type):
-        word = self.scramble_info[scramble_type]['answer']
-        hint = self.scramble_info[scramble_type]['hint']
-        i = hint.index("?")
-        self.scramble_info[scramble_type]['hint'] = hint[:i] + word[i] + (len(word) - i - 1) * "?"
-
-    def every_other_hint(self, scramble_type):
-        word = self.scramble_info[scramble_type]['answer']
-        hint = self.scramble_info[scramble_type]['hint']
-        try:
-            i = hint.index("??") + 1
-            self.scramble_info[scramble_type]['hint'] = hint[:i] + word[i] + (len(word) - i - 1) * "?"
-        except ValueError:
-            self.default_hint(scramble_type)
+        if not self.scramble_manager.hints_left(scramble_type):
+            return await self.send_message(channel, f"@{user} There are no hints left bruh")
+        await self.send_message(channel,
+                                f"Here's a hint "
+                                f"({self.scramble_manager.get_scramble_name(scramble_type)}): "
+                                f"{self.scramble_manager.get_hint(scramble_type).lower()}")
 
     async def on_scramble_finish(self, channel, scramble_type):
         await self.send_message(channel,
-                                f"Time is up! The {self.scramble_info[scramble_type]['name']} was {self.scramble_info[scramble_type]['answer']}")
-        self.scramble_info[scramble_type]['answer'] = None
-        self.scramble_info[scramble_type]['hint'] = ""
-        self.scramble_info[scramble_type]['future'] = None
+                                f"Time is up! "
+                                f"The {self.scramble_manager.get_scramble_name(scramble_type)} "
+                                f"was {self.scramble_manager.get_answer(scramble_type)}")
+        self.scramble_manager.reset(scramble_type)
 
     def add_new_user(self, user):
         self.gamba_data.update({user: {
@@ -947,7 +783,12 @@ class Bot:
 
     @cooldown()
     async def scramble_difficulties(self, user, channel, args):
-        await self.send_message(channel, f"@{user} Difficulty multiplier for each scramble: {', '.join(['%s-%s' %(scramble, info['difficulty_multiplier']) for scramble, info in self.scramble_info.items()])}")
+        await self.send_message(channel,
+                                f"@{user} Difficulty multiplier for each scramble: "
+                                "%s" % ', '.join(
+                                    ['%s-%s' % (identifier, scramble.difficulty_multiplier)
+                                     for identifier, scramble in self.scrambles.items()])
+                                )
 
     @cooldown()
     async def scramble_calc(self, user, channel, args):
@@ -977,7 +818,7 @@ class Bot:
         pings = [word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in message.lower().split() if word.startswith("@")]
         for ping in pings:
             if ping in self.afk:
-                await self.send_message(channel,  f"@{user} {ping} is afk ({self.format_date(datetime.fromisoformat(self.afk[ping]['time']))} ago): {self.afk[ping]['message']}")
+                await self.send_message(channel,  f"@{user} {ping} is afk ({format_date(datetime.fromisoformat(self.afk[ping]['time']))} ago): {self.afk[ping]['message']}")
 
         if user not in self.afk:
             return
@@ -1010,9 +851,8 @@ class Bot:
         if not self.bomb_party_helper.can_start:
             self.close_bomb_party()
             return await self.send_message(channel, "The bomb party game has closed since there is only one player in the party.")
-        await self.start_bomb_party(None, channel, None, False)
+        await self.start_bomb_party("", channel, None, False)
 
-    @cooldown()
     async def start_bomb_party(self, user, channel, args, cancel=True):
         if not self.bomb_party_helper.in_progress or \
                 self.bomb_party_helper.started or \
