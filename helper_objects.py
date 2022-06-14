@@ -1,6 +1,7 @@
 import json
 import random
 from time import perf_counter
+from enum import IntEnum
 
 
 class BombPartyPlayer:
@@ -193,9 +194,113 @@ class BombParty:
         return ", ".join(list(self.valid_bomb_settings.keys()))
 
 
+class ScrambleHintType(IntEnum):
+    DEFAULT = 0
+    EVERY_OTHER = 1
+
+
 class Scramble:
-    def __init__(self):
-        pass
+    banned_words = [
+        # Was originally used to stop this word from being posted for scramble, but since there's a new list with non-tos words it doesn't really do anything
+        "kike"
+    ]
+
+    def __init__(self, name, answer_generator, difficulty_multiplier=1, hint_type=ScrambleHintType.DEFAULT, case_sensitive=False):
+        self.name = name
+        self.difficulty_multiplier = difficulty_multiplier
+        self.hint_type = hint_type
+        self.case_sensitive = case_sensitive
+
+        self.answer = None
+        self.hint = ""
+        self.future = None
+
+        setattr(self, "generate_answer", answer_generator)
+
+    def reset(self):
+        self.answer = None
+        self.hint = ""
+        if self.future is not None and not self.future.cancelled() and not self.future.done():
+            self.future.cancel()
+        self.future = None
+
+    def new_answer(self, channel):
+        args = []
+        if self.generate_answer.__code__.co_argcount > 0:  # Check whether it takes the channel arg
+            args.append(channel)
+        self.answer = self.generate_answer(*args)
+        count = 0
+        while self.answer in self.banned_words:
+            self.answer = self.generate_answer(*args)
+            count += 1
+            if count > 100:  # Just in case ig
+                raise Exception("Could not generate an unbanned answer")
+        self.hint = "?" * len(self.answer)
+
+    def update_hint(self):
+        getattr(self, f"{self.hint_type.name.lower()}_hint")()
+        return self.hint
+
+    def default_hint(self):
+        i = self.hint.index("?")
+        self.hint = self.hint[:i] + self.answer[i] + (len(self.answer) - i - 1) * "?"
+
+    def every_other_hint(self):
+        try:
+            i = self.hint.index("??") + 1
+            self.hint = self.hint[:i] + self.answer[i] + (len(self.answer) - i - 1) * "?"
+        except ValueError:  # ValueError thrown when no "??" in hint, so use default hint.
+            self.default_hint()
+
+    @property
+    def hints_left(self):
+        return "?" in self.hint
+
+    @property
+    def in_progress(self):
+        return self.answer is not None
+
+
+class ScrambleManager:
+    def __init__(self, scrambles):
+        self.scrambles = scrambles
+
+    def in_progress(self, identifier):
+        return self.scrambles[identifier].in_progress
+
+    def hints_left(self, identifier):
+        return self.scrambles[identifier].hints_left
+
+    def get_scramble(self, identifier, channel):
+        self.scrambles[identifier].new_answer(channel)
+        scrambled_word = [char for char in self.scrambles[identifier].answer]
+        random.shuffle(scrambled_word)
+        return "".join(scrambled_word)
+
+    def get_hint(self, identifier):
+        return self.scrambles[identifier].update_hint()
+
+    def get_scramble_name(self, identifier):
+        return self.scrambles[identifier].name
+
+    def get_answer(self, identifier):
+        return self.scrambles[identifier].answer
+
+    def check_answer(self, identifier, guess):
+        scramble = self.scrambles[identifier]
+        if (guess.lower() == scramble.answer.lower() and not scramble.case_sensitive) or guess == scramble.answer:
+            return round(
+                random.randint(5, 10) *
+                len(scramble.answer.replace(" ", "")) *
+                scramble.hint.count("?")/len(scramble.answer) *
+                scramble.difficulty_multiplier
+            )
+
+    def reset(self, identifier):
+        self.scrambles[identifier].reset()
+
+    def pass_future(self, identifier, future):
+        self.scrambles[identifier].future = future
 
 
 class Trivia:
