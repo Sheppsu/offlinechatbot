@@ -3,8 +3,8 @@
 # TODO: channel specific commands
 #       clean up code in general
 #       utilize DMs
-#       convert to using a context object when passing data to functions
 #       different rate limits for mods and broadcaster
+#       stop trying to restart after a certain amount of failed attempts in a row
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -23,6 +23,8 @@ from constants import *
 
 Client().run()  # Update top player json file
 
+TESTING = True if len(sys.argv) > 1 and sys.argv[1] == "--test" else False
+
 
 class Bot:
     client_id = os.getenv("CLIENT_ID")
@@ -30,10 +32,20 @@ class Bot:
     username = "sheepposubot"
     oauth = os.getenv("OAUTH")
     uri = "ws://irc-ws.chat.twitch.tv:80"
-    channel_to_run_in = "btmc"
+    channel_to_run_in = "btmc" if not TESTING else "sheepposu"
 
     # I should probably put this stuff in a file lol
     pull_options = {3: ['Slingshot', "Sharpshooter's Oath", 'Raven Bow', 'Emerald Orb', 'Thrilling Tales of Dragon Slayers', 'Magic Guide', 'Black Tassel', 'Debate Club', 'Bloodtainted Greatsword', 'Ferrous Shadow', 'Skyrider Sword ', 'Harbinger of Dawn', 'Cool Steel'], 4: ['Amber', 'Kaeya', 'Lisa', 'Barbara', 'Razor', 'Xiangling', 'Beidou', 'Xingqiu', 'Ningguang', 'Fischl', 'Bennett', 'Noelle', 'Chongyun', 'Sucrose', 'Diona', 'Xinyan', 'Rosaria', 'Yanfei', 'Sayu', 'Kujou Sara', 'Thoma', 'Gorou', 'Yun Jin', 'Favonius Sword', 'The Flute', 'Sacrificial Sword', "Lion's Roar", 'The Alley Flash', 'Favonius Greatsword', 'The Bell', 'Sacrificial Greatsword', 'Rainslasher', 'Lithic Blade', 'Akuoumaru', "Dragon's Bane", 'Favonius Lance', 'Lithic Spear', "Wavebreaker's Fin", 'Favonius Codex', 'The Widsith', 'Sacrificial Fragments', 'Eye of Perception', 'Favonius Warbow', 'The Stringless', 'Sacrificial Bow', 'Rust', 'Alley Hunter', 'Mitternachts Waltz', "Mouun's Moon", 'Wine and Song'], 5: ['Kamisato Ayato', 'Yae Miko', 'Shenhe', 'Arataki Itto', 'Sangonomiya Kokomi', 'Raiden Shogun', 'Yoimiya', 'Kamisato Ayaka', 'Kaedehara Kazuha', 'Eula', 'Hu Tao', 'Xiao', 'Ganyu', 'Albedo', 'Zhongli', 'Tartaglia', 'Klee', 'Venti', 'Keqing', 'Mona', 'Qiqi', 'Diluc', 'Jean', 'Aquila Favonia', 'Skyward Blade', 'Summit Shaper', 'Primordial Jade Cutter', 'Freedom-Sworn', 'Mistsplitter Reforged', 'Skyward Pride', "Wolf's Gravestone", 'The Unforged', 'Song of Broken Pines', 'Redhorn Stonethresher', 'Primordial Jade Winged-Spear', 'Skyward Spine', 'Vortex Vanquisher', 'Staff of Homa', 'Engulfing Lightning', 'Calamity Queller', 'Skyward Atlas', 'Lost Prayer to the Sacred Winds', 'Memory of Dust', 'Everlasting Moonglow', "Kagura's Verity", 'Skyward Harp', "Amos' Bow", 'Elegy for the End', 'Thundering Pulse', 'Polar Star']}
+
+    # Save/load data from files or to/from database
+    pity: dict
+    gamba_data: dict
+    top_players: list
+    top_maps: list
+    word_list: list
+    facts: list
+    afk: dict
+    all_words: list
 
     def __init__(self):
         self.ws = None
@@ -63,16 +75,16 @@ class Bot:
             # "trivia": self.trivia,
             'slap': self.slap,
             "pity": self.pity,
-            "scramble": lambda channel, user, args: self.scramble(channel, user, args, "word"),
-            "hint": lambda channel, user, args: self.hint(channel, user, args, "word"),
-            "scramble_osu": lambda channel, user, args: self.scramble(channel, user, args, "osu"),
-            "hint_osu": lambda channel, user, args: self.hint(channel, user, args, "osu"),
-            "scramble_map": lambda channel, user, args: self.scramble(channel, user, args, "map"),
-            "hint_map": lambda channel, user, args: self.hint(channel, user, args, "map"),
-            "scramble_genshin": lambda channel, user, args: self.scramble(channel, user, args, "genshin"),
-            "hint_genshin": lambda channel, user, args: self.hint(channel, user, args, "genshin"),
-            "scramble_emote": lambda channel, user, args: self.scramble(channel, user, args, "emote"),
-            "hint_emote": lambda channel, user, args: self.hint(channel, user, args, "emote"),
+            "scramble": lambda ctx: self.scramble(ctx, "word"),
+            "hint": lambda ctx: self.hint(ctx, "word"),
+            "scramble_osu": lambda ctx: self.scramble(ctx, "osu"),
+            "hint_osu": lambda ctx: self.hint(ctx, "osu"),
+            "scramble_map": lambda ctx: self.scramble(ctx, "map"),
+            "hint_map": lambda ctx: self.hint(ctx, "map"),
+            "scramble_genshin": lambda ctx: self.scramble(ctx, "genshin"),
+            "hint_genshin": lambda ctx: self.hint(ctx, "genshin"),
+            "scramble_emote": lambda ctx: self.scramble(ctx, "emote"),
+            "hint_emote": lambda ctx: self.hint(ctx, "emote"),
             "bal": self.balance,
             "leaderboard": self.leaderboard,
             "sheepp_filter": self.filter,
@@ -144,14 +156,6 @@ class Bot:
         self.genshin = genshin[0] + genshin[1] + genshin[2]
 
         # Load save data
-        self.pity = {}
-        self.gamba_data = {}
-        self.top_players = []
-        self.top_maps = []
-        self.word_list = []
-        self.facts = []
-        self.afk = {}
-        self.all_words = []
         self.load_data()
 
     # Util
@@ -309,10 +313,10 @@ class Bot:
                 self.running = False
 
     async def run(self):
-        # await self.register_cap("tags")
-        # await self.join(self.username)
+        # await self.register_cap("tags")  # Not using atm
         await self.join(self.channel_to_run_in)
-        await self.join(self.username)
+        if not TESTING:
+            await self.join(self.username)
 
     async def connect(self):
         await self.ws.send(f"PASS {self.oauth}")
@@ -330,21 +334,11 @@ class Bot:
                 continue
 
             # Account for tags
-            data = data.split()
-            offset = 0
-            tags = None
-            if data[0].startswith("@"):
-                tags = {tag.split("=")[0]: tag.split("=")[1] for tag in data[0].split(";")}
-                offset = 1
-            source = data[0 + offset]
-            command = data[1 + offset]
-            channel = data[2 + offset][1:]
-            content = " ".join(data[3:])[1:]
+            ctx = Context.from_string(data)
 
-            if command == "PRIVMSG":
-                user = source.split("!")[0][1:]
+            if ctx.message_type == MessageType.PRIVMSG:
                 # Run in its own thread to avoid holding up the polling thread
-                future = asyncio.run_coroutine_threadsafe(self.on_message(user, channel, content, tags), self.loop)
+                future = asyncio.run_coroutine_threadsafe(self.on_message(ctx), self.loop)
                 self.future_objects.append(future)
 
     async def join(self, channel):
@@ -371,45 +365,45 @@ class Bot:
 
     # Events
 
-    async def on_message(self, user, channel, message, tags):
-        if (not self.offline and channel == self.channel_to_run_in) or user == self.username:
+    async def on_message(self, ctx):
+        if (not self.offline and ctx.channel == self.channel_to_run_in) or ctx.user == self.username:
             return
 
+        message = ctx.message
         if message.lower().startswith("pogpega") and message.lower() != "pogpega":
-            message = message[8:]
+            message = ctx.message[8:]
 
         if message.startswith("Use code"):
             await asyncio.sleep(1)
-            await self.send_message(channel, "PogU 👆 Use code \"BTMC\" !!!")
+            await self.send_message(ctx.channel, "PogU 👆 Use code \"BTMC\" !!!")
         elif message.strip() in [str(num) for num in range(1, 5)] and self.trivia_diff is not None:
             message = int(message)
             if message in self.guessed_answers:
                 return
-            await self.on_answer(user, channel, message)
+            await self.on_answer(ctx, message)
             return
 
         for scramble_type, scramble in self.scrambles.items():
             if scramble.in_progress:
-                await self.on_scramble(user, channel, message, scramble_type)
+                await self.on_scramble(ctx, scramble_type)
 
         if self.bomb_party_helper.started:
-            await self.on_bomb_party(user, channel, message)
+            await self.on_bomb_party(ctx)
 
-        await self.on_afk(user, channel, message)
+        await self.on_afk(ctx)
 
         if message.startswith("!"):
             command = message.split()[0].lower().replace("!", "")
             args = message.split()[1:]
             if command in self.commands:
-                if user == self.username:
-                    await asyncio.sleep(1)
-                await self.commands[command](user, channel, args)
+                await self.commands[command](ctx)
 
     # Commands
 
     @cooldown(cmd_cd=1, user_cd=2)
-    async def pull(self, user, channel, args):
+    async def pull(self, ctx):
         # TODO: Try and make this look more clean
+        user = ctx.user
         if user not in self.pity:
             self.pity.update({user: {4: 0, 5: 0}})
             self.database.new_pity(user, 0, 0)
@@ -430,7 +424,7 @@ class Bot:
                 pull = 5
             elif num <= 57:
                 pull = 4
-        await self.send_message(channel,
+        await self.send_message(ctx.channel,
                                 f"@{user} You pulled {random.choice(self.pull_options[pull])} " +
                                 ("\u2B50\u2B50\u2B50" if pull == 3 else '🌟' * pull) +
                                 {3: ". 😔", 4: "! Pog", 5: "! PogYou"}[pull] +
@@ -445,41 +439,43 @@ class Bot:
         self.database.save_pity(user, self.pity[user][4], self.pity[user][5])
 
     @cooldown()
-    async def font(self, user, channel, args):
+    async def font(self, ctx):
+        args = ctx.get_args()
         if len(args) < 2:
-            return await self.send_message(channel, "Must provide a font name and characters to convert. Do !fonts to see a list of valid fonts.")
+            return await self.send_message(ctx.channel, "Must provide a font name and characters to convert. Do !fonts to see a list of valid fonts.")
 
         font_name = args[0].lower()
         if font_name not in fonts:
-            return await self.send_message(channel, f"{font_name} is not a valid font name.")
+            return await self.send_message(ctx.channel, f"{font_name} is not a valid font name.")
 
-        await self.send_message(channel, "".join([fonts[font_name][layout.index(char)] if char in layout else char for char in " ".join(args[1:])]))
+        await self.send_message(ctx.channel, "".join([fonts[font_name][layout.index(char)] if char in layout else char for char in " ".join(args[1:])]))
 
     @cooldown()
-    async def fonts(self, user, channel, args):
-        await self.send_message(channel, f'Valid fonts: {", ".join(list(fonts.keys()))}.')
+    async def fonts(self, ctx):
+        await self.send_message(ctx.channel, f'Valid fonts: {", ".join(list(fonts.keys()))}.')
 
     @cooldown(user_cd=5, cmd_cd=3)
-    async def guess(self, user, channel, args):
+    async def guess(self, ctx):
+        args = ctx.get_args()
         if len(args) < 1:
-            return await self.send_message(channel, f"@{user} You must provide a number 1-1000 to guess with")
+            return await self.send_message(ctx.channel, f"@{ctx.user} You must provide a number 1-1000 to guess with")
 
         if not args[0].isdigit():
-            return await self.send_message(channel, f"@{user} That's not a valid number OuttaPocket Tssk")
+            return await self.send_message(ctx.channel, f"@{ctx.user} That's not a valid number OuttaPocket Tssk")
 
         guess = int(args[0])
 
         if self.number == guess:
-            await self.send_message(channel, f"@{user} You got it PogYou")
+            await self.send_message(ctx.channel, f"@{ctx.user} You got it PogYou")
             self.number = random.randint(1, 1000)
         else:
-            await self.send_message(channel, f"@{user} It's not {guess}. Try guessing " + (
+            await self.send_message(ctx.channel, f"@{ctx.user} It's not {guess}. Try guessing " + (
                 "higher" if guess < self.number else "lower") + ". veryPog")
 
     # TODO: consider putting trivia stuff in its own class
 
     @cooldown()
-    async def trivia(self, user, channel, args):
+    async def trivia(self, ctx):
         # TODO: get this working again
         if self.answer is not None:
             return
@@ -489,6 +485,7 @@ class Bot:
             "medium": "monkaS",
             "hard": "pepeMeltdown"
         }
+        args = ctx.get_args()
         resp = requests.get(f"https://opentdb.com/api.php?amount=1&type=multiple{f'&category={args[0]}' if len(args) > 0 else ''}").json()['results'][0]
 
         answers = [resp['correct_answer']] + resp['incorrect_answers']
@@ -497,28 +494,31 @@ class Bot:
         answer_string = " ".join([html.unescape(f"[{i + 1}] {answers[i]} ") for i in range(len(answers))])
         self.trivia_diff = resp['difficulty']
 
-        await self.send_message(channel,
-                                f"Difficulty: {resp['difficulty']} {difficulty[resp['difficulty']]} Category: {resp['category']} veryPog Question: {html.unescape(resp['question'])} monkaHmm Answers: {answer_string}")
-        self.trivia_future = self.set_timed_event(20, self.on_trivia_finish, channel)
+        await self.send_message(ctx.channel,
+                                f"Difficulty: {resp['difficulty']} {difficulty[resp['difficulty']]} "
+                                f"Category: {resp['category']} veryPog "
+                                f"Question: {html.unescape(resp['question'])} monkaHmm "
+                                f"Answers: {answer_string}")
+        self.trivia_future = self.set_timed_event(20, self.on_trivia_finish, ctx.channel)
         self.trivia_future.add_done_callback(future_callback)
 
     @requires_gamba_data
-    async def on_answer(self, user, channel, answer):
+    async def on_answer(self, ctx, answer):
         self.guessed_answers.append(answer)
         worth = self.trivia_info[self.trivia_diff]
         if answer == self.answer:
-            await self.send_message(channel, f"@{user} {answer} is the correct answer ✅. You gained {worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))} Becky Bucks 5Head Clap")
-            self.gamba_data[user]['money'] += worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))
-            self.save_money(user)
-            await self.on_trivia_finish(channel, timeout=False)
+            await self.send_message(ctx.channel, f"@{ctx.user} {answer} is the correct answer ✅. You gained {worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))} Becky Bucks 5Head Clap")
+            self.gamba_data[ctx.user]['money'] += worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))
+            self.save_money(ctx.user)
+            await self.on_trivia_finish(ctx.channel, timeout=False)
         else:
-            await self.send_message(channel, f"@{user} {answer} is wrong ❌. You lost {worth*self.trivia_info['penalty']} Becky Bucks 3Head Clap")
-            self.gamba_data[user]['money'] -= worth*self.trivia_info['penalty']
-            self.save_money(user)
+            await self.send_message(ctx.channel, f"@{ctx.user} {answer} is wrong ❌. You lost {worth*self.trivia_info['penalty']} Becky Bucks 3Head Clap")
+            self.gamba_data[ctx.user]['money'] -= worth*self.trivia_info['penalty']
+            self.save_money(ctx.user)
             if self.answer not in self.guessed_answers and len(self.guessed_answers) == 3:
                 self.trivia_diff = None  # make sure someone doesn't answer before it can say no one got it right
-                await self.send_message(channel, f"No one answered correctly! The answer was {self.answer}.")
-                await self.on_trivia_finish(channel, timeout=False)
+                await self.send_message(ctx.channel, f"No one answered correctly! The answer was {self.answer}.")
+                await self.on_trivia_finish(ctx.channel, timeout=False)
 
     async def on_trivia_finish(self, channel, timeout=True):
         if timeout:
@@ -531,56 +531,56 @@ class Bot:
         self.trivia_future = None
 
     @cooldown()
-    async def slap(self, user, channel, args):
+    async def slap(self, ctx):
+        args = ctx.get_args()
         if not args:
-            return await self.send_message(channel, "You must provide a user to slap.")
+            return await self.send_message(ctx.channel, "You must provide a user to slap.")
 
         hit = random.choice((True, False))
-        await self.send_message(channel,
-                                f"{user} slapped {args[0]}! D:" if hit else f"{user} tried to slap {args[0]}, but they caught it! pepePoint")
+        await self.send_message(ctx.channel,
+                                f"{ctx.user} slapped {args[0]}! D:" if hit else f"{ctx.user} tried to slap {args[0]}, but they caught it! pepePoint")
 
     @cooldown(cmd_cd=3)
-    async def pity(self, user, channel, args):
-        if user not in self.pity:
-            return await self.send_message(channel, "You haven't rolled yet (from the time the bot started up).")
-        await self.send_message(channel,
-                                f"@{user} 4* pity in {10 - self.pity[user][4]} rolls; 5* pity in {90 - self.pity[user][5]} rolls.")
+    async def pity(self, ctx):
+        if ctx.user not in self.pity:
+            return await self.send_message(ctx.channel, "You haven't rolled yet (from the time the bot started up).")
+        await self.send_message(ctx.channel, f"@{ctx.user} 4* pity in {10 - self.pity[ctx.user][4]} rolls; "
+                                             f"5* pity in {90 - self.pity[ctx.user][5]} rolls.")
 
-    @cooldown()
-    async def scramble(self, user, channel, args, scramble_type):
+    async def scramble(self, ctx, scramble_type):
         if self.scramble_manager.in_progress(scramble_type):
             return
 
-        scrambled_word = self.scramble_manager.get_scramble(scramble_type, channel)
-        await self.send_message(channel, f"Unscramble this "
-                                         f"{self.scramble_manager.get_scramble_name(scramble_type)}: "
-                                         f"{scrambled_word.lower()}")
-        future = self.set_timed_event(120, self.on_scramble_finish, channel, scramble_type)
+        scrambled_word = self.scramble_manager.get_scramble(scramble_type, ctx.channel)
+        await self.send_message(ctx.channel, f"Unscramble this "
+                                             f"{self.scramble_manager.get_scramble_name(scramble_type)}: "
+                                             f"{scrambled_word.lower()}")
+        future = self.set_timed_event(120, self.on_scramble_finish, ctx.channel, scramble_type)
         future.add_done_callback(future_callback)
         self.scramble_manager.pass_future(scramble_type, future)
 
-    async def on_scramble(self, user, channel, guess, scramble_type):
-        money = self.scramble_manager.check_answer(scramble_type, guess)
+    async def on_scramble(self, ctx, scramble_type):
+        money = self.scramble_manager.check_answer(scramble_type, ctx.message)
         if money is None:
             return
         answer = self.scramble_manager.get_answer(scramble_type)
         name = self.scramble_manager.get_scramble_name(scramble_type)
         self.scramble_manager.reset(scramble_type)
-        await self.send_message(channel,
-                                f"@{user} You got it right! "
+        await self.send_message(ctx.channel,
+                                f"@{ctx.user} You got it right! "
                                 f"{answer} was the "
                                 f"{name}. "
                                 f"Drake You've won {money} Becky Bucks!")
-        if user not in self.gamba_data:
-            self.add_new_user(user)
-        self.gamba_data[user]["money"] += money
-        self.save_money(user)
+        if ctx.user not in self.gamba_data:
+            self.add_new_user(ctx.user)
+        self.gamba_data[ctx.user]["money"] += money
+        self.save_money(ctx.user)
 
-    # @cooldown(cmd_cd=5)
-    async def hint(self, user, channel, args, scramble_type):
+    @cooldown(cmd_cd=5)
+    async def hint(self, ctx, scramble_type):
         if not self.scramble_manager.hints_left(scramble_type):
-            return await self.send_message(channel, f"@{user} There are no hints left bruh")
-        await self.send_message(channel,
+            return await self.send_message(ctx.channel, f"@{ctx.user} There are no hints left bruh")
+        await self.send_message(ctx.channel,
                                 f"Here's a hint "
                                 f"({self.scramble_manager.get_scramble_name(scramble_type)}): "
                                 f"{self.scramble_manager.get_hint(scramble_type).lower()}")
@@ -603,137 +603,143 @@ class Bot:
 
     @cooldown(user_cd=60)
     @requires_gamba_data
-    async def collect(self, user, channel, args):
+    async def collect(self, ctx):
         money = random.randint(10, 100)
-        self.gamba_data[user]["money"] += money
-        await self.send_message(channel, f"@{user} You collected {money} Becky Bucks!")
-        self.save_money(user)
+        self.gamba_data[ctx.user]["money"] += money
+        await self.send_message(ctx.channel, f"@{ctx.user} You collected {money} Becky Bucks!")
+        self.save_money(ctx.user)
 
     @cooldown(cmd_cd=2, user_cd=3)
     @requires_gamba_data
-    async def gamba(self, user, channel, args):
+    async def gamba(self, ctx):
+        args = ctx.get_args()
         if not args:
-            return await self.send_message(channel,
-                                           f"@{user} You must provide an amount to bet and a risk factor. Do !riskfactor to learn more")
+            return await self.send_message(ctx.channel,
+                                           f"@{ctx.user} You must provide an amount to bet and a risk factor. Do !riskfactor to learn more")
         if len(args) < 2:
-            return await self.send_message(channel,
-                                           f"@{user} You must also provide a risk factor. Do !riskfactor to learn more.")
-        amount = 0
-        risk_factor = 0
+            return await self.send_message(ctx.channel,
+                                           f"@{ctx.user} You must also provide a risk factor. Do !riskfactor to learn more.")
+
         if args[0].lower() == "all":
-            args[0] = self.gamba_data[user]['money']
+            args[0] = self.gamba_data[ctx.user]['money']
         try:
             amount = float(args[0])
             risk_factor = int(args[1])
         except ValueError:
-            return await self.send_message(channel,
-                                           f"@{user} You must provide a valid number (integer for risk factor) value.")
+            return await self.send_message(ctx.channel,
+                                           f"@{ctx.user} You must provide a valid number (integer for risk factor) value.")
         if risk_factor not in range(1, 100):
-            return await self.send_message(channel, f"@{user} The risk factor you provided is outside the range 1-99!")
-        if amount > self.gamba_data[user]["money"]:
-            return await self.send_message(channel, f"@{user} You don't have enough Becky Bucks to bet that much!")
+            return await self.send_message(ctx.channel, f"@{ctx.user} The risk factor you provided is outside the range 1-99!")
+        if amount > self.gamba_data[ctx.user]["money"]:
+            return await self.send_message(ctx.channel, f"@{ctx.user} You don't have enough Becky Bucks to bet that much!")
         if amount == 0:
-            return await self.send_message(channel, f"@{user} You can't bet nothing bruh")
+            return await self.send_message(ctx.channel, f"@{ctx.user} You can't bet nothing bruh")
         if amount < 0:
-            return await self.send_message(channel, f"@{user} Please specify a positive integer bruh")
+            return await self.send_message(ctx.channel, f"@{ctx.user} Please specify a positive integer bruh")
 
         loss = random.randint(1, 100) in range(risk_factor)
         if loss:
-            await self.send_message(channel, f"@{user} YIKES! You lost {amount} Becky Bucks ❌ [LOSE]")
-            self.gamba_data[user]["money"] -= amount
+            await self.send_message(ctx.channel, f"@{ctx.user} YIKES! You lost {amount} Becky Bucks ❌ [LOSE]")
+            self.gamba_data[ctx.user]["money"] -= amount
         else:
             payout = round((1 + risk_factor * 0.01) * amount - amount, 2)
-            await self.send_message(channel, f"@{user} You gained {payout} Becky Bucks! ✅ [WIN]")
-            self.gamba_data[user]["money"] += payout
-        self.gamba_data[user]["money"] = round(self.gamba_data[user]["money"], 2)
-        self.save_money(user)
+            await self.send_message(ctx.channel, f"@{ctx.user} You gained {payout} Becky Bucks! ✅ [WIN]")
+            self.gamba_data[ctx.user]["money"] += payout
+        self.gamba_data[ctx.user]["money"] = round(self.gamba_data[ctx.user]["money"], 2)
+        self.save_money(ctx.user)
 
     @cooldown()
-    async def risk_factor(self, user, channel, args):
-        await self.send_message(channel,
-                                f"@{user} The risk factor determines your chances of losing the bet and your payout. The chance of you winning the bet is 100 minus the risk factor. Your payout is (1 + riskfactor*0.01)) * amount bet (basically says more risk = better payout)")
+    async def risk_factor(self, ctx):
+        await self.send_message(ctx.channel,
+                                f"@{ctx.user} The risk factor determines your chances of losing the bet and your payout. "
+                                f"The chance of you winning the bet is 100 minus the risk factor. "
+                                f"Your payout is (1 + riskfactor*0.01)) * amount bet "
+                                f"(basically says more risk = better payout)")
 
     @cooldown(user_cd=10)
     @requires_gamba_data
-    async def balance(self, user, channel, args):
-        user_to_check = user
+    async def balance(self, ctx):
+        args = ctx.get_args()
+        user_to_check = ctx.user
         if args:
             user_to_check = args[0].replace("@", "").lower()
         if user_to_check not in self.gamba_data:
-            user_to_check = user
-        await self.send_message(channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
+            user_to_check = ctx.user
+        await self.send_message(ctx.channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
 
     @cooldown()
-    async def leaderboard(self, user, channel, args):
+    async def leaderboard(self, ctx):
         lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
         top_users = list(lead.keys())[-5:]
         top_money = list(lead.values())[-5:]
         output = "Top 5 richest users: "
         for i in range(5):
             output += f'{i + 1}. {top_users[4 - i]}_${round(top_money[4 - i]["money"], 2)} '
-        await self.send_message(channel, output)
+        await self.send_message(ctx.channel, output)
 
     @cooldown()
     @requires_gamba_data
-    async def get_ranking(self, user, channel, args):
+    async def get_ranking(self, ctx):
         lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
         users = list(lead.keys())
         users.reverse()
-        rank = users.index(user) + 1
-        await self.send_message(channel, f"@{user} You are currently rank {rank} in terms of Becky Bucks!")
+        rank = users.index(ctx.user) + 1
+        await self.send_message(ctx.channel, f"@{ctx.user} You are currently rank {rank} in terms of Becky Bucks!")
 
     @cooldown()
-    async def filter(self, user, channel, args):
-        await self.send_message(channel,
+    async def filter(self, ctx):
+        await self.send_message(ctx.channel,
                                 "Here's a filter that applies to me and any user that uses my commands: https://pastebin.com/nyBX5jbb")
 
     @cooldown()
     @requires_gamba_data
-    async def give(self, user, channel, args):
+    async def give(self, ctx):
+        args = ctx.get_args()
         user_to_give = args[0].lower()
         if user_to_give not in self.gamba_data:
-            return await self.send_message(channel, f"@{user} That's not a valid user to give money to.")
+            return await self.send_message(ctx.channel, f"@{ctx.user} That's not a valid user to give money to.")
         if not self.gamba_data[user_to_give]['settings']['receive']:
-            return await self.send_message(channel,
-                                           f"@{user} This user has their receive setting turned off and therefore cannot accept money.")
+            return await self.send_message(ctx.channel,
+                                           f"@{ctx.user} This user has their receive setting turned off and therefore cannot accept money.")
         amount = args[1]
         try:
             amount = round(float(amount), 2)
         except ValueError:
-            return await self.send_message(channel, f"@{user} That's not a valid number.")
-        if self.gamba_data[user]['money'] < amount:
-            return await self.send_message(channel, f"@{user} You don't have that much money to give.")
+            return await self.send_message(ctx.channel, f"@{ctx.user} That's not a valid number.")
+        if self.gamba_data[ctx.user]['money'] < amount:
+            return await self.send_message(ctx.channel, f"@{ctx.user} You don't have that much money to give.")
 
         if amount < 0:
-            return await self.send_message(channel, "You can't give someone a negative amount OuttaPocket Tssk")
+            return await self.send_message(ctx.channel, "You can't give someone a negative amount OuttaPocket Tssk")
 
-        self.gamba_data[user]['money'] -= amount
+        self.gamba_data[ctx.user]['money'] -= amount
         self.gamba_data[user_to_give]['money'] += amount
-        await self.send_message(channel, f"@{user} You have given {user_to_give} {amount} Becky Bucks!")
-        self.save_money(user)
+        await self.send_message(ctx.channel, f"@{ctx.user} You have given {user_to_give} {amount} Becky Bucks!")
+        self.save_money(ctx.user)
         self.save_money(user_to_give)
 
     @cooldown()
     @requires_gamba_data
-    async def toggle(self, user, channel, args):
+    async def toggle(self, ctx):
+        args = ctx.get_args()
         if len(args) < 2:
-            return await self.send_message(channel, f"@{user} You must provide a setting name and either on or off")
+            return await self.send_message(ctx.channel, f"@{ctx.user} You must provide a setting name and either on or off")
         setting = args[0].lower()
-        if setting not in self.gamba_data[user]['settings']:
-            return await self.send_message(channel,
-                                           f"@{user} That's not a valid setting name. The settings consist of the following: " + ", ".join(
-                                               list(self.gamba_data[user]['settings'].keys())))
+        if setting not in self.gamba_data[ctx.user]['settings']:
+            return await self.send_message(ctx.channel,
+                                           f"@{ctx.user} That's not a valid setting name. The settings consist of the following: " + ", ".join(
+                                               list(self.gamba_data[ctx.user]['settings'].keys())))
         try:
             value = {"on": True, "off": False}[args[1].lower()]
         except KeyError:
-            return await self.send_message(channel, "You must specify on or off.")
+            return await self.send_message(ctx.channel, "You must specify on or off.")
 
-        self.gamba_data[user]['settings'][setting] = value
-        self.database.update_userdata(user, setting, value)
-        await self.send_message(channel, f"@{user} The {setting} setting has been turned {args[1]}.")
+        self.gamba_data[ctx.user]['settings'][setting] = value
+        self.database.update_userdata(ctx.user, setting, value)
+        await self.send_message(ctx.channel, f"@{ctx.user} The {setting} setting has been turned {args[1]}.")
 
     @requires_dev
-    async def market_balance(self, user, channel, args):
+    async def market_balance(self, ctx):
         lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
         top_user = list(lead.keys())[-1]
         pool = self.gamba_data[top_user]['money']
@@ -744,183 +750,195 @@ class Bot:
             self.gamba_data[user]['money'] += giveaway
             self.save_money(user)
 
-        await self.send_message(channel,
+        await self.send_message(ctx.channel,
                                 f"I have given away {giveaway} Becky Bucks to each player provided by {top_user} without their consent PogU")
 
     @cooldown(user_cd=5, cmd_cd=3)
     @requires_gamba_data
-    async def rps(self, user, channel, args):
+    async def rps(self, ctx):
+        args = ctx.get_args()
         if not args:
-            return await self.send_message(channel, f"@{user} You must say either rock, paper, or scissors. (You can also use the first letter for short)")
+            return await self.send_message(ctx.channel, f"@{ctx.user} You must say either rock, paper, or scissors. "
+                                                        f"(You can also use the first letter for short)")
         choice = args[0][0].lower()
         if choice not in ('r', 'p', 's'):
-            return await self.send_message(channel, f"@{user} That's not a valid move. You must say either rock, paper, or scissors. (You can also use the first letter for short)")
+            return await self.send_message(ctx.channel, f"@{ctx.user} That's not a valid move. You must say either rock, paper, or scissors. "
+                                                        f"(You can also use the first letter for short)")
 
         com_choice = random.choice(('r', 'p', 's'))
         win = {"r": "s", "s": "p", "p": "r"}
         abbr = {"r": "rock", "s": "scissors", "p": "paper"}
         if com_choice == choice:
-            return await self.send_message(channel, f"@{user} I also chose {abbr[com_choice]}! bruh")
+            return await self.send_message(ctx.channel, f"@{ctx.user} I also chose {abbr[com_choice]}! bruh")
         if win[com_choice] == choice:
-            await self.send_message(channel, f"@{user} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
-            self.gamba_data[user]['money'] -= 10
-            return self.save_money(user)
-        await self.send_message(channel, f"@{user} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
-        self.gamba_data[user]['money'] += 10
-        self.save_money(user)
+            await self.send_message(ctx.channel, f"@{ctx.user} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
+            self.gamba_data[ctx.user]['money'] -= 10
+            return self.save_money(ctx.user)
+        await self.send_message(ctx.channel, f"@{ctx.user} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
+        self.gamba_data[ctx.user]['money'] += 10
+        self.save_money(ctx.user)
         
     @requires_dev
-    async def new_name(self, user, channel, args):
+    async def new_name(self, ctx):
         # TODO: save to db
+        args = ctx.get_args()
         old_name = args[0]
         new_name = args[1]
         if old_name not in self.gamba_data or new_name not in self.gamba_data:
-            return await self.send_message(channel, "One of the provided names is not valid.")
+            return await self.send_message(ctx.channel, "One of the provided names is not valid.")
         self.gamba_data[old_name]['money'] += self.gamba_data[new_name]['money']
         self.gamba_data[new_name] = dict(self.gamba_data[old_name])
         del self.gamba_data[old_name]
-        await self.send_message(channel, f"@{user} The data has been updated for the new name!")
+        await self.send_message(ctx.channel, f"@{ctx.user} The data has been updated for the new name!")
         self.database.delete_user(old_name)
         self.save_money(new_name)
         for setting, val in self.gamba_data[new_name]["settings"].items():
             self.database.update_userdata(new_name, setting, val)
 
     @cooldown()
-    async def scramble_difficulties(self, user, channel, args):
-        await self.send_message(channel,
-                                f"@{user} Difficulty multiplier for each scramble: "
+    async def scramble_difficulties(self, ctx):
+        await self.send_message(ctx.channel,
+                                f"@{ctx.user} Difficulty multiplier for each scramble: "
                                 "%s" % ', '.join(
                                     ['%s-%s' % (identifier, scramble.difficulty_multiplier)
                                      for identifier, scramble in self.scrambles.items()])
                                 )
 
     @cooldown()
-    async def scramble_calc(self, user, channel, args):
-        await self.send_message(channel, f"@{user} Scramble payout is calculated by picking a random number 5-10, "
-                                         f"multiplying that by the length of the word (excluding spaces), multiplying "
-                                         f"that by hint reduction, and multiplying that by the scramble difficulty "
-                                         f"multiplier for that specific scramble. To see the difficulty multipliers, "
-                                         f"do !scramble_multiplier. Hint reduction is the length of the word minus the "
-                                         f"amount of hints used divided by the length of the word.")
+    async def scramble_calc(self, ctx):
+        await self.send_message(ctx.channel, f"@{ctx.user} Scramble payout is calculated by picking a random number 5-10, "
+                                             f"multiplying that by the length of the word (excluding spaces), multiplying "
+                                             f"that by hint reduction, and multiplying that by the scramble difficulty "
+                                             f"multiplier for that specific scramble. To see the difficulty multipliers, "
+                                             f"do !scramble_multiplier. Hint reduction is the length of the word minus the "
+                                             f"amount of hints used divided by the length of the word.")
 
     @cooldown()
-    async def fact(self, user, channel, args):
-        await self.send_message(channel, f"@{user} {random.choice(self.facts)}")
+    async def fact(self, ctx):
+        await self.send_message(ctx.channel, f"@{ctx.user} {random.choice(self.facts)}")
 
     @cooldown()
-    async def afk(self, user, channel, args):
-        await self.send_message(channel, f"@{user} Your afk has been set.")
+    async def afk(self, ctx):
+        args = ctx.get_args()
+        await self.send_message(ctx.channel, f"@{ctx.user} Your afk has been set.")
         message = " ".join(args)
-        self.afk[user] = {"message": message, "time": datetime.now().isoformat()}
-        self.database.save_afk(user, message)
+        self.afk[ctx.user] = {"message": message, "time": datetime.now().isoformat()}
+        self.database.save_afk(ctx.user, message)
 
     @cooldown()
-    async def help_command(self, user, channel, args):
-        await self.send_message(channel, f"@{user} sheepposubot help (do !commands for StreamElements): https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
+    async def help_command(self, ctx):
+        await self.send_message(ctx.channel, f"@{ctx.user} sheepposubot help (do !commands for StreamElements): https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
 
-    async def on_afk(self, user, channel, message):
-        pings = [word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in message.lower().split() if word.startswith("@")]
+    async def on_afk(self, ctx):
+        pings = [word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in ctx.message.lower().split() if word.startswith("@")]
         for ping in pings:
             if ping in self.afk:
-                await self.send_message(channel,  f"@{user} {ping} is afk ({format_date(datetime.fromisoformat(self.afk[ping]['time']))} ago): {self.afk[ping]['message']}")
+                await self.send_message(ctx.channel,  f"@{ctx.user} {ping} is afk "
+                                                      f"({format_date(datetime.fromisoformat(self.afk[ping]['time']))} ago): "
+                                                      f"{self.afk[ping]['message']}")
 
-        if user not in self.afk:
+        if ctx.user not in self.afk:
             return
-        elif (datetime.now() - datetime.fromisoformat(self.afk[user]['time'])).seconds > 60:
-            await self.send_message(channel, f"@{user} Your afk has been removed.")
-            del self.afk[user]
-            self.database.delete_afk(user)
+        elif (datetime.now() - datetime.fromisoformat(self.afk[ctx.user]['time'])).seconds > 60:
+            await self.send_message(ctx.channel, f"@{ctx.user} Your afk has been removed.")
+            del self.afk[ctx.user]
+            self.database.delete_afk(ctx.user)
 
     @cooldown()
-    async def trivia_category(self, user, channel, args):
-        await self.send_message(channel, f"@{user} I'll make something more intuitive later but for now, if you want to know which number correlates to which category, go here https://opentdb.com/api_config.php, click a category, click generate url and then check the category specified in the url.")
+    async def trivia_category(self, ctx):
+        await self.send_message(ctx.channel, f"@{ctx.user} I'll make something more intuitive later but for now, "
+                                             f"if you want to know which number correlates to which category, "
+                                             f"go here https://opentdb.com/api_config.php, click a category, "
+                                             f"click generate url and then check the category specified in the url.")
 
     @cooldown()
-    async def sourcecode(self, user, channel, args):
-        await self.send_message(channel, f"@{user} https://github.com/Sheepposu/offlinechatbot")
+    async def sourcecode(self, ctx):
+        await self.send_message(ctx.channel, f"@{ctx.user} https://github.com/Sheepposu/offlinechatbot")
 
     # Bomb party functions
     @cooldown()
-    async def bomb_party(self, user, channel, args):
+    async def bomb_party(self, ctx):
         if self.bomb_party_helper.in_progress:
             return
-        self.bomb_party_helper.add_player(user)
+        self.bomb_party_helper.add_player(ctx.user)
         self.bomb_party_helper.on_in_progress()
 
-        await self.send_message(channel, f"{user} has started a Bomb Party game! Anyone else who wants to play should type !join. When enough players have joined, the host should type !start to start the game, otherwise the game will automatically start or close after 2 minutes.")
-        self.bomb_party_future = self.set_timed_event(120, self.close_or_start_game, channel)
+        await self.send_message(ctx.channel, f"{ctx.user} has started a Bomb Party game! Anyone else who wants to play should type !join. When enough players have joined, the host should type !start to start the game, otherwise the game will automatically start or close after 2 minutes.")
+        self.bomb_party_future = self.set_timed_event(120, self.close_or_start_game, ctx.channel)
         self.bomb_party_future.add_done_callback(future_callback)
 
     async def close_or_start_game(self, channel):
         if not self.bomb_party_helper.can_start:
             self.close_bomb_party()
             return await self.send_message(channel, "The bomb party game has closed since there is only one player in the party.")
-        await self.start_bomb_party("", channel, None, False)
+        await self.start_bomb_party(Context(user="", channel=channel), False)
 
-    async def start_bomb_party(self, user, channel, args, cancel=True):
+    async def start_bomb_party(self, ctx, cancel=True):
         if not self.bomb_party_helper.in_progress or \
                 self.bomb_party_helper.started or \
-                user != self.bomb_party_helper.host:
+                ctx.user != self.bomb_party_helper.host:
             return
         if not self.bomb_party_helper.can_start:
-            return await self.send_message(channel, f"@{user} You need at least 2 players to start the bomb party game.")
+            return await self.send_message(ctx.channel, f"@{ctx.user} You need at least 2 players to start the bomb party game.")
         if cancel:
             self.bomb_party_future.cancel()
 
         self.bomb_party_helper.on_start()
         self.bomb_party_helper.set_letters()
 
-        await self.send_message(channel, f"@{self.bomb_party_helper.current_player} You're up first! Your string of letters is {self.bomb_party_helper.current_letters}")
-        self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.starting_time, self.bomb_party_timer, channel)
+        await self.send_message(ctx.channel, f"@{self.bomb_party_helper.current_player} You're up first! Your string of letters is {self.bomb_party_helper.current_letters}")
+        self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.starting_time, self.bomb_party_timer, ctx.channel)
         self.bomb_party_future.add_done_callback(future_callback)
 
     @cooldown(user_cd=10, cmd_cd=0)
-    async def join_bomb_party(self, user, channel, args):
+    async def join_bomb_party(self, ctx):
         if not self.bomb_party_helper.in_progress or self.bomb_party_helper.started:
             return
-        if user in self.bomb_party_helper.party:
-            return await self.send_message(channel, f"@{user} You have already joined the game")
+        if ctx.user in self.bomb_party_helper.party:
+            return await self.send_message(ctx.channel, f"@{ctx.user} You have already joined the game")
 
-        self.bomb_party_helper.add_player(user)
-        await self.send_message(channel, f"@{user} You have joined the game of bomb party!")
+        self.bomb_party_helper.add_player(ctx.user)
+        await self.send_message(ctx.channel, f"@{ctx.user} You have joined the game of bomb party!")
 
     @cooldown(cmd_cd=0)
-    async def leave_bomb_party(self, user, channel, args):
-        # TODO: bug
-        if user not in self.bomb_party_helper.party:
+    async def leave_bomb_party(self, ctx):
+        if ctx.user not in self.bomb_party_helper.party:
             return
-        self.bomb_party_helper.remove_player(user)
-        await self.send_message(channel, f"@{user} You have left the game of bomb party.")
-        if self.bomb_party_helper.started and await self.check_win(channel):
+        self.bomb_party_helper.remove_player(ctx.user)
+        await self.send_message(ctx.channel, f"@{ctx.user} You have left the game of bomb party.")
+        if self.bomb_party_helper.started and await self.check_win(ctx.channel):
             if self.bomb_party_future is not None:
                 self.bomb_party_future.cancel()
-        elif self.bomb_party_helper.current_player == user:
+        elif self.bomb_party_helper.current_player == ctx.user:
             if self.bomb_party_future is not None:
                 self.bomb_party_future.cancel()
-            await self.next_player(channel)
+            await self.next_player(ctx.channel)
         elif self.bomb_party_helper.in_progress and not self.bomb_party_helper.started:
             if len(self.bomb_party_helper.party) == 0:
                 self.close_bomb_party()
-                await self.send_message(channel, "The game of bomb party has closed.")
+                await self.send_message(ctx.channel, "The game of bomb party has closed.")
 
     @cooldown(user_cd=0, cmd_cd=0)
-    async def change_bomb_settings(self, user, channel, args):
+    async def change_bomb_settings(self, ctx):
         if not self.bomb_party_helper.in_progress or \
                 self.bomb_party_helper.started or \
-                self.bomb_party_helper.host != user:
+                self.bomb_party_helper.host != ctx.user:
             return
+        args = ctx.message.content.split()
         if len(args) < 2:
-            return await self.send_message(channel, f"@{user} You must provide a setting name and the value: !settings <setting> <value>. Valid settings: {self.bomb_party_helper.valid_settings_string}")
+            return await self.send_message(ctx.channel, f"@{ctx.user} You must provide a setting name and the value: "
+                                                        f"!settings <setting> <value>. Valid settings: "
+                                                        f"{self.bomb_party_helper.valid_settings_string}")
         setting = args[0].lower()
         value = args[1].lower()
         return_msg = self.bomb_party_helper.set_setting(setting, value)
-        await self.send_message(channel, f"@{user} {return_msg}")
+        await self.send_message(ctx.channel, f"@{ctx.user} {return_msg}")
 
     @cooldown()
-    async def player_list(self, user, channel, args):
+    async def player_list(self, ctx):
         if not self.bomb_party_helper.in_progress:
             return
-        await self.send_message(channel, f"@{user} Current players playing bomb party: {', '.join(self.bomb_party_helper.player_list)}")
+        await self.send_message(ctx.channel, f"@{ctx.user} Current players playing bomb party: {', '.join(self.bomb_party_helper.player_list)}")
 
     async def bomb_party_timer(self, channel):
         msg = self.bomb_party_helper.on_explode()
@@ -938,17 +956,17 @@ class Bot:
         self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.seconds_left, self.bomb_party_timer, channel)
         self.bomb_party_future.add_done_callback(future_callback)
 
-    async def on_bomb_party(self, user, channel, message):
-        if user != self.bomb_party_helper.current_player.user:
+    async def on_bomb_party(self, ctx):
+        if ctx.user != self.bomb_party_helper.current_player.user:
             return
-        if message not in self.all_words:
+        if ctx.message not in self.all_words:
             return
-        return_msg = self.bomb_party_helper.check_message(message)
+        return_msg = self.bomb_party_helper.check_message(ctx.message)
         if return_msg is not None:
-            return await self.send_message(channel, f"@{self.bomb_party_helper.current_player} {return_msg}")
+            return await self.send_message(ctx.channel, f"@{self.bomb_party_helper.current_player} {return_msg}")
         self.bomb_party_future.cancel()
-        self.bomb_party_helper.on_word_used(message)
-        await self.next_player(channel)
+        self.bomb_party_helper.on_word_used(ctx.message)
+        await self.next_player(ctx.channel)
 
     async def check_win(self, channel):
         winner = self.bomb_party_helper.get_winner()
@@ -971,20 +989,20 @@ class Bot:
         self.bomb_party_helper.on_close()
 
     @cooldown(cmd_cd=2, user_cd=0)
-    async def random_fact(self, user, channel, args):
+    async def random_fact(self, ctx):
         fact = requests.get("https://uselessfacts.jsph.pl/random.json?language=en")
         fact.raise_for_status()
-        await self.send_message(channel, f"Fun fact: {fact.json()['text']}")
+        await self.send_message(ctx.channel, f"Fun fact: {fact.json()['text']}")
 
     @requires_dev
-    async def reload_from_db(self, user, channel, args):
+    async def reload_from_db(self, ctx):
         self.load_db_data()
-        await self.send_message(channel, f"@{user} Local data has been reloaded from database.")
+        await self.send_message(ctx.channel, f"@{ctx.user} Local data has been reloaded from database.")
 
     @requires_dev
-    async def refresh_emotes(self, user, channel, args):
+    async def refresh_emotes(self, ctx):
         self.load_emotes()
-        await self.send_message(channel, f"@{user} Emotes have been reloaded.")
+        await self.send_message(ctx.channel, f"@{ctx.user} Emotes have been reloaded.")
 
 
 bot = Bot()
