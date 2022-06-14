@@ -308,7 +308,7 @@ class Bot:
         # await self.register_cap("tags")
         # await self.join(self.username)
         await self.join(self.channel_to_run_in)
-        await self.join(self.username)
+        # await self.join(self.username)
 
     async def connect(self):
         await self.ws.send(f"PASS {self.oauth}")
