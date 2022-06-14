@@ -561,12 +561,14 @@ class Bot:
         money = self.scramble_manager.check_answer(scramble_type, guess)
         if money is None:
             return
+        answer = self.scramble_manager.get_answer(scramble_type)
+        name = self.scramble_manager.get_scramble_name(scramble_type)
+        self.scramble_manager.reset(scramble_type)
         await self.send_message(channel,
                                 f"@{user} You got it right! "
-                                f"{self.scramble_manager.get_answer(scramble_type)} was the "
-                                f"{self.scramble_manager.get_scramble_name(scramble_type)}. "
+                                f"{answer} was the "
+                                f"{name}. "
                                 f"Drake You've won {money} Becky Bucks!")
-        self.scramble_manager.reset(scramble_type)
         if user not in self.gamba_data:
             self.add_new_user(user)
         self.gamba_data[user]["money"] += money
