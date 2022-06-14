@@ -299,6 +299,8 @@ class Bot:
             except websockets.exceptions.ConnectionClosedError as e:
                 # Restart the bot
                 print(e)
+                print("Restarting bot...")
+                await self.start()
             except:
                 print(traceback.format_exc())
             finally:
@@ -652,7 +654,7 @@ class Bot:
     async def balance(self, user, channel, args):
         user_to_check = user
         if args:
-            user_to_check = args[0]
+            user_to_check = args[0].replace("@", "")
         if user_to_check not in self.gamba_data:
             user_to_check = user
         await self.send_message(channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
