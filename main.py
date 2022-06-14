@@ -152,9 +152,6 @@ class Bot:
         # Data
         self.database = Database()
 
-        genshin = list(self.pull_options.values())
-        self.genshin = genshin[0] + genshin[1] + genshin[2]
-
         # Load save data
         self.load_data()
 
@@ -1014,5 +1011,4 @@ class Bot:
 
 bot = Bot()
 bot.running = True
-while bot.running:
-    bot.loop.run_until_complete(bot.start())
+bot.loop.run_until_complete(bot.start())
