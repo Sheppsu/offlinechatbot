@@ -45,6 +45,8 @@ class Bot:
     afk: dict
     all_words: list
 
+    restarts = 0
+
     def __init__(self):
         self.ws = None
         self.running = False
@@ -308,8 +310,10 @@ class Bot:
             except websockets.exceptions.ConnectionClosedError as e:
                 # Restart the bot
                 print(e)
-                print("Restarting bot...")
-                await self.start()
+                if self.restarts < 5:
+                    self.restarts += 1
+                    print("Restarting bot...")
+                    await self.start()
             except:
                 print(traceback.format_exc())
             finally:
