@@ -2,6 +2,45 @@ import json
 import random
 from time import perf_counter
 from enum import IntEnum
+from collections import namedtuple
+
+
+class MessageType(IntEnum):
+    PRIVMSG = 0
+
+
+class Context:
+    __slots__ = (
+        "tags", "source", "message_type", "channel", "message", "user"
+    )
+
+    def __init__(self, user="", channel="", message="", message_type=None, tags=None, source=None):
+        self.user = user
+        self.channel = channel
+        self.message = message
+        self.message_type = message_type
+        self.tags = tags
+        self.source = source
+
+    @classmethod
+    def from_string(cls, string):
+        data = string.split()
+        tags = None
+        if data[0].startswith("@"):
+            tags = {tag.split("=")[0]: tag.split("=")[1] for tag in data[0].split(";")}
+        offset = 1 if tags is not None else 0
+        source = data[0 + offset]
+        user = source.split("!")[0][1:]
+        try:
+            message_type = MessageType[data[1 + offset]]
+        except KeyError:
+            message_type = data[1 + offset]
+        channel = data[2 + offset][1:]
+        message = " ".join(data[3:])[1:]
+        return cls(user, channel, message, message_type, tags, source)
+
+    def get_args(self):
+        return self.message.split()[1:]
 
 
 class BombPartyPlayer:
@@ -306,3 +345,37 @@ class ScrambleManager:
 class Trivia:
     def __init__(self):
         pass
+
+
+Cooldown = namedtuple("Cooldown", ["user_cd", "channel_cd"])
+
+
+class CommandPermission(IntEnum):
+    NONE = 0
+    ADMIN = 1
+
+
+class Command:
+    def __init__(self, func, name, cooldown=Cooldown(5, 3), permission=CommandPermission.NONE, aliases=None):
+        self.name = name.lower()
+        self.func = func
+        self.permission = permission
+        self.cooldown = cooldown
+        self.aliases = list(map(str.lower, aliases)) if aliases is not None else []
+
+    def __call__(self, ctx):
+        return self.func(ctx)
+
+
+class CommandHandler:
+    commands: list
+
+    def command(self, *args, **kwargs):
+        def decorator(func):
+            self.commands.append(Command(func, *args, **kwargs))
+        return decorator
+
+    def __call__(self, command, ctx):
+        for c in self.commands:
+            if c.name == command or command in c.aliases:
+                return c(ctx)
