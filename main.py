@@ -79,7 +79,6 @@ class Bot:
             "give": self.give,
             "toggle": self.toggle,
             "balance_market": self.market_balance,
-            "sheepp_commands": self.say_commands,
             "ranking": self.get_ranking,
             "rps": self.rps,
             "new_name": self.new_name,
@@ -87,6 +86,9 @@ class Bot:
             "scramble_calc": self.scramble_calc,
             "afk": self.afk,
             "help": self.help_command,
+            "sheeppcommands": self.help_command,
+            "sheepp_help": self.help_command,
+            "sheepp_commands": self.help_command,
             "trivia_category": self.trivia_category,
             "sourcecode": self.sourcecode,
             "bombparty": self.bomb_party,
@@ -656,7 +658,7 @@ class Bot:
     async def balance(self, user, channel, args):
         user_to_check = user
         if args:
-            user_to_check = args[0].replace("@", "")
+            user_to_check = args[0].replace("@", "").lower()
         if user_to_check not in self.gamba_data:
             user_to_check = user
         await self.send_message(channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
@@ -744,10 +746,6 @@ class Bot:
 
         await self.send_message(channel,
                                 f"I have given away {giveaway} Becky Bucks to each player provided by {top_user} without their consent PogU")
-
-    @cooldown(cmd_cd=10)
-    async def say_commands(self, user, channel, args):
-        await self.send_message(channel, f"@{user} Here is a list of my commands: https://pastebin.com/tK9f0EWK")
 
     @cooldown(user_cd=5, cmd_cd=3)
     @requires_gamba_data
