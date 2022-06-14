@@ -4,6 +4,7 @@
 #       clean up code in general
 #       utilize DMs
 #       convert to using a context object when passing data to functions
+#       different rate limits for mods and broadcaster
 
 from dotenv import load_dotenv
 load_dotenv()
