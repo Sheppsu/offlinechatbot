@@ -5,6 +5,7 @@ from datetime import datetime
 
 
 def print(message):
+    # TODO: timezone
     sys.stdout.write(f"[{datetime.now().isoformat()}]{message}\n")
     sys.stdout.flush()
 
@@ -37,9 +38,6 @@ def requires_dev(func):
         return await func(self, user, channel, args, *eargs, **kwargs)
 
     return check
-
-# Util ig
-# TODO: put in its own file
 
 
 async def do_timed_event(wait, callback, *args, **kwargs):
