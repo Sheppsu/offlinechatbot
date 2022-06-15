@@ -10,31 +10,10 @@ def print(message):
     sys.stdout.flush()
 
 
-def cooldown(user_cd=10, cmd_cd=5):
-    def _cooldown(func):
-        async def check(self, ctx, *args, **kwargs):
-            if ctx.user is not None and self.is_on_cooldown(func.__name__, ctx.user, user_cd, cmd_cd):
-                return
-            return await func(self, ctx, *args, **kwargs)
-
-        return check
-
-    return _cooldown
-
-
 def requires_gamba_data(func):
     async def check(self, ctx, *args, **kwargs):
         if ctx.user not in self.gamba_data:
             self.add_new_user(ctx.user)
-        return await func(self, ctx, *args, **kwargs)
-
-    return check
-
-
-def requires_dev(func):
-    async def check(self, ctx, *args, **kwargs):
-        if ctx.user != "sheepposu":
-            return await self.send_message(ctx.channel, f"@{ctx.user} This is a dev only command")
         return await func(self, ctx, *args, **kwargs)
 
     return check
