@@ -1,10 +1,8 @@
 # coding=utf-8
 
-# TODO: channel specific commands
-#       clean up code in general
+# TODO: clean up code in general
 #       utilize DMs
 #       different rate limits for mods and broadcaster
-#       stop trying to restart after a certain amount of failed attempts in a row
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -77,11 +75,16 @@ class Bot:
         self.message_lock = asyncio.Lock()
 
         # Command related variables
-        for scramble_type in ("word", "osu", "map", "genshin", "emote"):
-            self.cm.command(f"scramble{'_'+scramble_type if scramble_type != 'word' else ''}")(
-                lambda self, ctx: self.scramble(ctx, scramble_type))
-            self.cm.command(f"hint{'_'+scramble_type if scramble_type != 'word' else ''}")(
-                lambda self, ctx: self.hint(ctx, scramble_type))
+        self.cm.command(f"scramble")(lambda self, ctx: self.scramble(ctx, "word"))
+        self.cm.command(f"hint")(lambda self, ctx: self.hint(ctx, "word"))
+        self.cm.command(f"scramble_osu")(lambda self, ctx: self.scramble(ctx, "osu"))
+        self.cm.command(f"hint_osu")(lambda self, ctx: self.hint(ctx, "osu"))
+        self.cm.command(f"scramble_map")(lambda self, ctx: self.scramble(ctx, "map"))
+        self.cm.command(f"hint_map")(lambda self, ctx: self.hint(ctx, "map"))
+        self.cm.command(f"scramble_genshin")(lambda self, ctx: self.scramble(ctx, "genshin"))
+        self.cm.command(f"hint_genshin")(lambda self, ctx: self.hint(ctx, "genshin"))
+        self.cm.command(f"scramble_emote")(lambda self, ctx: self.scramble(ctx, "emote"))
+        self.cm.command(f"hint_emote")(lambda self, ctx: self.hint(ctx, "emote"))
 
         # Guess the number
         self.number = random.randint(1, 1000)
