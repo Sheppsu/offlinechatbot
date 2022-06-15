@@ -20,3 +20,6 @@ fonts = {
 
 }
 layout = '!"$\\\'(),-./0123456789:;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€'
+admins = [
+    "sheepposu"
+]
