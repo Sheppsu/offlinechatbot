@@ -741,6 +741,7 @@ class Bot:
                                              f"do !scramble_multiplier. Hint reduction is the length of the word minus the "
                                              f"amount of hints used divided by the length of the word.")
 
+    @command_manager.command("cumfact", aliases=["cum_fact"], blacklist=["btmc"])
     async def fact(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user} {random.choice(self.facts)}")
 
