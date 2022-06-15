@@ -22,6 +22,7 @@ from constants import *
 
 
 Client().run()  # Update top player json file
+command_manager = CommandManager()
 
 TESTING = True if len(sys.argv) > 1 and sys.argv[1] == "--test" else False
 
@@ -47,11 +48,21 @@ class Bot:
 
     restarts = 0
 
-    def __init__(self):
+    def __init__(self, command_manager):
+        self.cm = command_manager
+        self.cm.init(self)
+
         self.ws = None
         self.running = False
         self.loop = asyncio.get_event_loop()
         self.future_objects = []
+
+        # Data
+        self.database = Database()
+
+        # Load save data
+        self.load_data()
+        self.genshin = self.pull_options["3"] + self.pull_options["4"] + self.pull_options["5"]
 
         # Is ed offline or not
         self.offline = True
@@ -66,55 +77,11 @@ class Bot:
         self.message_lock = asyncio.Lock()
 
         # Command related variables
-        self.commands = {
-            "pull": self.pull,
-            "genshinpull": self.pull,
-            "guess": self.guess,
-            "font": self.font,
-            "fonts": self.fonts,
-            # "trivia": self.trivia,
-            'slap': self.slap,
-            "pity": self.pity,
-            "scramble": lambda ctx: self.scramble(ctx, "word"),
-            "hint": lambda ctx: self.hint(ctx, "word"),
-            "scramble_osu": lambda ctx: self.scramble(ctx, "osu"),
-            "hint_osu": lambda ctx: self.hint(ctx, "osu"),
-            "scramble_map": lambda ctx: self.scramble(ctx, "map"),
-            "hint_map": lambda ctx: self.hint(ctx, "map"),
-            "scramble_genshin": lambda ctx: self.scramble(ctx, "genshin"),
-            "hint_genshin": lambda ctx: self.hint(ctx, "genshin"),
-            "scramble_emote": lambda ctx: self.scramble(ctx, "emote"),
-            "hint_emote": lambda ctx: self.hint(ctx, "emote"),
-            "bal": self.balance,
-            "leaderboard": self.leaderboard,
-            "sheepp_filter": self.filter,
-            "give": self.give,
-            "toggle": self.toggle,
-            "balance_market": self.market_balance,
-            "ranking": self.get_ranking,
-            "rps": self.rps,
-            "new_name": self.new_name,
-            "scramble_multiplier": self.scramble_difficulties,
-            "scramble_calc": self.scramble_calc,
-            "afk": self.afk,
-            "help": self.help_command,
-            "sheeppcommands": self.help_command,
-            "sheepp_help": self.help_command,
-            "sheepp_commands": self.help_command,
-            "trivia_category": self.trivia_category,
-            "sourcecode": self.sourcecode,
-            "bombparty": self.bomb_party,
-            "start": self.start_bomb_party,
-            "join": self.join_bomb_party,
-            "leave": self.leave_bomb_party,
-            "settings": self.change_bomb_settings,
-            "players": self.player_list,
-            "funfact": self.random_fact,
-            "reload_db": self.reload_from_db,
-            "reload_emotes": self.refresh_emotes,
-        }  # Update pastebins when adding new commands
-        self.cooldown = {}
-        self.overall_cooldown = {}
+        for scramble_type in ("word", "osu", "map", "genshin", "emote"):
+            self.cm.command(f"scramble{'_'+scramble_type if scramble_type != 'word' else ''}")(
+                lambda self, ctx: self.scramble(ctx, scramble_type))
+            self.cm.command(f"hint{'_'+scramble_type if scramble_type != 'word' else ''}")(
+                lambda self, ctx: self.hint(ctx, scramble_type))
 
         # Guess the number
         self.number = random.randint(1, 1000)
@@ -149,32 +116,7 @@ class Bot:
         self.bomb_party_helper = BombParty()
         self.bomb_party_future = None
 
-        # Data
-        self.database = Database()
-
-        # Load save data
-        self.load_data()
-
     # Util
-
-    def is_on_cooldown(self, command, user, user_cd=10, cmd_cd=5):
-        if command not in self.overall_cooldown:
-            self.overall_cooldown.update({command: perf_counter()})
-            return False
-        if perf_counter() - self.overall_cooldown[command] < cmd_cd:
-            return True
-        if command not in self.cooldown:
-            self.cooldown.update({command: {user: perf_counter()}})
-            return False
-        if user not in self.cooldown[command]:
-            self.cooldown[command].update({user: perf_counter()})
-            self.overall_cooldown[command] = perf_counter()
-            return False
-        if perf_counter() - self.cooldown[command][user] < user_cd:
-            return True
-        self.cooldown[command][user] = perf_counter()
-        self.overall_cooldown[command] = perf_counter()
-        return False
 
     def set_timed_event(self, wait, callback, *args, **kwargs):
         return asyncio.run_coroutine_threadsafe(do_timed_event(wait, callback, *args, **kwargs), self.loop)
@@ -398,13 +340,11 @@ class Bot:
 
         if message.startswith("!"):
             command = message.split()[0].lower().replace("!", "")
-            args = message.split()[1:]
-            if command in self.commands:
-                await self.commands[command](ctx)
+            await self.cm(command, ctx)  # Automatically checks that the command exists
 
     # Commands
 
-    @cooldown(cmd_cd=1, user_cd=2)
+    @command_manager.command("pull", Cooldown(1, 2), aliases=["genshinpull"])
     async def pull(self, ctx):
         # TODO: Try and make this look more clean
         user = ctx.user
@@ -442,7 +382,7 @@ class Bot:
             self.pity[user][4] = 0
         self.database.save_pity(user, self.pity[user][4], self.pity[user][5])
 
-    @cooldown()
+    @command_manager.command("font")
     async def font(self, ctx):
         args = ctx.get_args()
         if len(args) < 2:
@@ -454,11 +394,11 @@ class Bot:
 
         await self.send_message(ctx.channel, "".join([fonts[font_name][layout.index(char)] if char in layout else char for char in " ".join(args[1:])]))
 
-    @cooldown()
+    @command_manager.command("fonts")
     async def fonts(self, ctx):
         await self.send_message(ctx.channel, f'Valid fonts: {", ".join(list(fonts.keys()))}.')
 
-    @cooldown(user_cd=5, cmd_cd=3)
+    @command_manager.command("guess", Cooldown(2, 3))
     async def guess(self, ctx):
         args = ctx.get_args()
         if len(args) < 1:
@@ -478,7 +418,7 @@ class Bot:
 
     # TODO: consider putting trivia stuff in its own class
 
-    @cooldown()
+    @command_manager.command("trivia")
     async def trivia(self, ctx):
         # TODO: get this working again
         if self.answer is not None:
@@ -534,7 +474,7 @@ class Bot:
         self.trivia_diff = None
         self.trivia_future = None
 
-    @cooldown()
+    @command_manager.command("slap")
     async def slap(self, ctx):
         args = ctx.get_args()
         if not args:
@@ -544,7 +484,7 @@ class Bot:
         await self.send_message(ctx.channel,
                                 f"{ctx.user} slapped {args[0]}! D:" if hit else f"{ctx.user} tried to slap {args[0]}, but they caught it! pepePoint")
 
-    @cooldown(cmd_cd=3)
+    @command_manager.command("pity")
     async def pity(self, ctx):
         if ctx.user not in self.pity:
             return await self.send_message(ctx.channel, "You haven't rolled yet (from the time the bot started up).")
@@ -580,7 +520,6 @@ class Bot:
         self.gamba_data[ctx.user]["money"] += money
         self.save_money(ctx.user)
 
-    @cooldown(cmd_cd=5)
     async def hint(self, ctx, scramble_type):
         if not self.scramble_manager.hints_left(scramble_type):
             return await self.send_message(ctx.channel, f"@{ctx.user} There are no hints left bruh")
@@ -605,7 +544,7 @@ class Bot:
         }})
         self.database.new_user(user)
 
-    @cooldown(user_cd=60)
+    @command_manager.command("collect")
     @requires_gamba_data
     async def collect(self, ctx):
         money = random.randint(10, 100)
@@ -613,7 +552,7 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user} You collected {money} Becky Bucks!")
         self.save_money(ctx.user)
 
-    @cooldown(cmd_cd=2, user_cd=3)
+    @command_manager.command("gamba")
     @requires_gamba_data
     async def gamba(self, ctx):
         args = ctx.get_args()
@@ -652,7 +591,7 @@ class Bot:
         self.gamba_data[ctx.user]["money"] = round(self.gamba_data[ctx.user]["money"], 2)
         self.save_money(ctx.user)
 
-    @cooldown()
+    @command_manager.command("riskfactor")
     async def risk_factor(self, ctx):
         await self.send_message(ctx.channel,
                                 f"@{ctx.user} The risk factor determines your chances of losing the bet and your payout. "
@@ -660,7 +599,7 @@ class Bot:
                                 f"Your payout is (1 + riskfactor*0.01)) * amount bet "
                                 f"(basically says more risk = better payout)")
 
-    @cooldown(user_cd=10)
+    @command_manager.command("bal", Cooldown(2, 10), aliases=["balance"])
     @requires_gamba_data
     async def balance(self, ctx):
         args = ctx.get_args()
@@ -671,7 +610,7 @@ class Bot:
             user_to_check = ctx.user
         await self.send_message(ctx.channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
 
-    @cooldown()
+    @command_manager.command("leaderboard")
     async def leaderboard(self, ctx):
         lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
         top_users = list(lead.keys())[-5:]
@@ -681,7 +620,7 @@ class Bot:
             output += f'{i + 1}. {top_users[4 - i]}_${round(top_money[4 - i]["money"], 2)} '
         await self.send_message(ctx.channel, output)
 
-    @cooldown()
+    @command_manager.command("ranking")
     @requires_gamba_data
     async def get_ranking(self, ctx):
         lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
@@ -690,12 +629,12 @@ class Bot:
         rank = users.index(ctx.user) + 1
         await self.send_message(ctx.channel, f"@{ctx.user} You are currently rank {rank} in terms of Becky Bucks!")
 
-    @cooldown()
+    @command_manager.command("sheepp_filter", aliases=["sheep_filter"])
     async def filter(self, ctx):
         await self.send_message(ctx.channel,
                                 "Here's a filter that applies to me and any user that uses my commands: https://pastebin.com/nyBX5jbb")
 
-    @cooldown()
+    @command_manager.command("give")
     @requires_gamba_data
     async def give(self, ctx):
         args = ctx.get_args()
@@ -722,7 +661,7 @@ class Bot:
         self.save_money(ctx.user)
         self.save_money(user_to_give)
 
-    @cooldown()
+    @command_manager.command("toggle")
     @requires_gamba_data
     async def toggle(self, ctx):
         args = ctx.get_args()
@@ -742,22 +681,7 @@ class Bot:
         self.database.update_userdata(ctx.user, setting, value)
         await self.send_message(ctx.channel, f"@{ctx.user} The {setting} setting has been turned {args[1]}.")
 
-    @requires_dev
-    async def market_balance(self, ctx):
-        lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
-        top_user = list(lead.keys())[-1]
-        pool = self.gamba_data[top_user]['money']
-        giveaway = round(pool / len(self.gamba_data), 2)
-        self.gamba_data[top_user]['money'] = 0
-        self.save_money(top_user)
-        for user in self.gamba_data:
-            self.gamba_data[user]['money'] += giveaway
-            self.save_money(user)
-
-        await self.send_message(ctx.channel,
-                                f"I have given away {giveaway} Becky Bucks to each player provided by {top_user} without their consent PogU")
-
-    @cooldown(user_cd=5, cmd_cd=3)
+    @command_manager.command("rps", Cooldown(2, 4))
     @requires_gamba_data
     async def rps(self, ctx):
         args = ctx.get_args()
@@ -782,7 +706,7 @@ class Bot:
         self.gamba_data[ctx.user]['money'] += 10
         self.save_money(ctx.user)
         
-    @requires_dev
+    @command_manager.command("new_name", permission=CommandPermission.ADMIN)
     async def new_name(self, ctx):
         # TODO: save to db
         args = ctx.get_args()
@@ -799,7 +723,7 @@ class Bot:
         for setting, val in self.gamba_data[new_name]["settings"].items():
             self.database.update_userdata(new_name, setting, val)
 
-    @cooldown()
+    @command_manager.command("scramble_multipliers", aliases=["scramblemultipliers", "scramble_multiplier", "scramblemultiplier"])
     async def scramble_difficulties(self, ctx):
         await self.send_message(ctx.channel,
                                 f"@{ctx.user} Difficulty multiplier for each scramble: "
@@ -808,7 +732,7 @@ class Bot:
                                      for identifier, scramble in self.scrambles.items()])
                                 )
 
-    @cooldown()
+    @command_manager.command("scramble_calc", aliases=["scramblecalc"])
     async def scramble_calc(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user} Scramble payout is calculated by picking a random number 5-10, "
                                              f"multiplying that by the length of the word (excluding spaces), multiplying "
@@ -817,11 +741,10 @@ class Bot:
                                              f"do !scramble_multiplier. Hint reduction is the length of the word minus the "
                                              f"amount of hints used divided by the length of the word.")
 
-    @cooldown()
     async def fact(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user} {random.choice(self.facts)}")
 
-    @cooldown()
+    @command_manager.command("afk")
     async def afk(self, ctx):
         args = ctx.get_args()
         await self.send_message(ctx.channel, f"@{ctx.user} Your afk has been set.")
@@ -829,7 +752,9 @@ class Bot:
         self.afk[ctx.user] = {"message": message, "time": datetime.now().isoformat()}
         self.database.save_afk(ctx.user, message)
 
-    @cooldown()
+    @command_manager.command("help", aliases=["sheepp_commands", "sheep_commands", "sheepcommands",
+                                              "sheeppcommands", "sheephelp", "sheepphelp",
+                                              "sheep_help", "sheep_help"])
     async def help_command(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user} sheepposubot help (do !commands for StreamElements): https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
 
@@ -848,19 +773,18 @@ class Bot:
             del self.afk[ctx.user]
             self.database.delete_afk(ctx.user)
 
-    @cooldown()
     async def trivia_category(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user} I'll make something more intuitive later but for now, "
                                              f"if you want to know which number correlates to which category, "
                                              f"go here https://opentdb.com/api_config.php, click a category, "
                                              f"click generate url and then check the category specified in the url.")
 
-    @cooldown()
+    @command_manager.command("sourcecode", aliases=["sheepcode", "sheeppcode", "sheep_code", "sheepp_code"])
     async def sourcecode(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user} https://github.com/Sheepposu/offlinechatbot")
 
     # Bomb party functions
-    @cooldown()
+    @command_manager.command("bombparty", aliases=["bomb_party"])
     async def bomb_party(self, ctx):
         if self.bomb_party_helper.in_progress:
             return
@@ -877,6 +801,7 @@ class Bot:
             return await self.send_message(channel, "The bomb party game has closed since there is only one player in the party.")
         await self.start_bomb_party(Context(user="", channel=channel), False)
 
+    @command_manager.command("start")
     async def start_bomb_party(self, ctx, cancel=True):
         if not self.bomb_party_helper.in_progress or \
                 self.bomb_party_helper.started or \
@@ -894,7 +819,7 @@ class Bot:
         self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.starting_time, self.bomb_party_timer, ctx.channel)
         self.bomb_party_future.add_done_callback(future_callback)
 
-    @cooldown(user_cd=10, cmd_cd=0)
+    @command_manager.command("join", Cooldown(0, 3))
     async def join_bomb_party(self, ctx):
         if not self.bomb_party_helper.in_progress or self.bomb_party_helper.started:
             return
@@ -904,7 +829,7 @@ class Bot:
         self.bomb_party_helper.add_player(ctx.user)
         await self.send_message(ctx.channel, f"@{ctx.user} You have joined the game of bomb party!")
 
-    @cooldown(cmd_cd=0)
+    @command_manager.command("leave", Cooldown(0, 3))
     async def leave_bomb_party(self, ctx):
         if ctx.user not in self.bomb_party_helper.party:
             return
@@ -922,7 +847,7 @@ class Bot:
                 self.close_bomb_party()
                 await self.send_message(ctx.channel, "The game of bomb party has closed.")
 
-    @cooldown(user_cd=0, cmd_cd=0)
+    @command_manager.command("settings", Cooldown(0, 0))
     async def change_bomb_settings(self, ctx):
         if not self.bomb_party_helper.in_progress or \
                 self.bomb_party_helper.started or \
@@ -938,7 +863,7 @@ class Bot:
         return_msg = self.bomb_party_helper.set_setting(setting, value)
         await self.send_message(ctx.channel, f"@{ctx.user} {return_msg}")
 
-    @cooldown()
+    @command_manager.command("players")
     async def player_list(self, ctx):
         if not self.bomb_party_helper.in_progress:
             return
@@ -992,23 +917,23 @@ class Bot:
         self.bomb_party_future = None
         self.bomb_party_helper.on_close()
 
-    @cooldown(cmd_cd=2, user_cd=0)
+    @command_manager.command("funfact")
     async def random_fact(self, ctx):
         fact = requests.get("https://uselessfacts.jsph.pl/random.json?language=en")
         fact.raise_for_status()
         await self.send_message(ctx.channel, f"Fun fact: {fact.json()['text']}")
 
-    @requires_dev
+    @command_manager.command("reload_db", permission=CommandPermission.ADMIN)
     async def reload_from_db(self, ctx):
         self.load_db_data()
         await self.send_message(ctx.channel, f"@{ctx.user} Local data has been reloaded from database.")
 
-    @requires_dev
+    @command_manager.command("reload_emotes", permission=CommandPermission.ADMIN)
     async def refresh_emotes(self, ctx):
         self.load_emotes()
         await self.send_message(ctx.channel, f"@{ctx.user} Emotes have been reloaded.")
 
 
-bot = Bot()
+bot = Bot(command_manager)
 bot.running = True
 bot.loop.run_until_complete(bot.start())
