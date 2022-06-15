@@ -318,15 +318,14 @@ class Bot:
         if (not self.offline and ctx.channel == self.channel_to_run_in) or ctx.user == self.username:
             return
 
-        message = ctx.message
-        if message.lower().startswith("pogpega") and message.lower() != "pogpega":
-            message = ctx.message[8:]
+        if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
+            ctx.message = ctx.message[8:]
 
-        if message.startswith("Use code"):
+        if ctx.message.startswith("Use code"):
             await asyncio.sleep(1)
             await self.send_message(ctx.channel, "PogU 👆 Use code \"BTMC\" !!!")
-        elif message.strip() in [str(num) for num in range(1, 5)] and self.trivia_diff is not None:
-            message = int(message)
+        elif ctx.message.strip() in [str(num) for num in range(1, 5)] and self.trivia_diff is not None:
+            message = int(ctx.message)
             if message in self.guessed_answers:
                 return
             await self.on_answer(ctx, message)
@@ -341,8 +340,8 @@ class Bot:
 
         await self.on_afk(ctx)
 
-        if message.startswith("!"):
-            command = message.split()[0].lower().replace("!", "")
+        if ctx.message.startswith("!"):
+            command = ctx.message.split()[0].lower().replace("!", "")
             await self.cm(command, ctx)  # Automatically checks that the command exists
 
     # Commands
