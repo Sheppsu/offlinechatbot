@@ -1,8 +1,9 @@
 import json
 import random
 from time import perf_counter
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from collections import namedtuple
+from constants import admins
 
 
 class MessageType(IntEnum):
@@ -347,7 +348,7 @@ class Trivia:
         pass
 
 
-Cooldown = namedtuple("Cooldown", ["user_cd", "channel_cd"])
+Cooldown = namedtuple("Cooldown", ["command_cd", "user_cd"])
 
 
 class CommandPermission(IntEnum):
@@ -355,27 +356,78 @@ class CommandPermission(IntEnum):
     ADMIN = 1
 
 
+class DeniedUsageReason(IntFlag):
+    NONE = 1 << 0
+    COOLDOWN = 1 << 1
+    PERMISSION = 1 << 2
+
+
 class Command:
-    def __init__(self, func, name, cooldown=Cooldown(5, 3), permission=CommandPermission.NONE, aliases=None):
+    usage = {}
+    permissions = {
+        CommandPermission.NONE: lambda ctx: True,
+        CommandPermission.ADMIN: lambda ctx: ctx.user in admins
+    }
+
+    def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None):
         self.name = name.lower()
         self.func = func
         self.permission = permission
         self.cooldown = cooldown
         self.aliases = list(map(str.lower, aliases)) if aliases is not None else []
 
-    def __call__(self, ctx):
-        return self.func(ctx)
+    def check_permission(self, ctx):
+        return DeniedUsageReason.NONE if self.permissions[self.permission](ctx) else DeniedUsageReason.PERMISSION
+
+    def update_usage(self, ctx):
+        if ctx.channel not in self.usage:
+            self.usage[ctx.channel] = {"global": -self.cooldown.command_cd, "user": {ctx.user: -self.cooldown.user_cd}}
+            return
+        if ctx.user not in self.usage[ctx.channel]["user"]:
+            self.usage[ctx.channel]["user"][ctx.user] = -self.cooldown.user_cd
+
+    def check_cooldown(self, ctx):
+        self.update_usage(ctx)
+        return DeniedUsageReason.NONE if perf_counter() - self.usage[ctx.channel]["global"] >= self.cooldown.command_cd and \
+               perf_counter() - self.usage[ctx.channel]["user"][ctx.user] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
+
+    def check_usage(self, ctx):
+        return self.check_permission(ctx) | self.check_cooldown(ctx)
+
+    def on_used(self, ctx):
+        self.usage[ctx.channel]["global"] = perf_counter()
+        self.usage[ctx.channel]["user"][ctx.user] = perf_counter()
+
+    def __contains__(self, item):
+        return item.lower() in self.aliases + [self.name]
+
+    async def __call__(self, bot, ctx):
+        usage = self.check_usage(ctx)
+        print(usage)
+        if usage == DeniedUsageReason.NONE:
+            self.on_used(ctx)
+            return await self.func(bot, ctx)
+        if DeniedUsageReason.PERMISSION in usage:
+            return await bot.send_message(ctx.channel, f"@{ctx.user} You do not have permission to use this command.")
 
 
-class CommandHandler:
-    commands: list
+class CommandManager:
+    commands = []
+    bot = None
+
+    def init(self, bot):
+        self.bot = bot
 
     def command(self, *args, **kwargs):
         def decorator(func):
             self.commands.append(Command(func, *args, **kwargs))
+            return func
         return decorator
 
-    def __call__(self, command, ctx):
+    async def __call__(self, command, ctx):
+        if self.bot is None:
+            raise Exception("CommandHandler must be initialized before being used to call commands.")
+
         for c in self.commands:
-            if c.name == command or command in c.aliases:
-                return c(ctx)
+            if command in c:
+                return await c(self.bot, ctx)
