@@ -360,6 +360,7 @@ class DeniedUsageReason(IntFlag):
     NONE = 1 << 0
     COOLDOWN = 1 << 1
     PERMISSION = 1 << 2
+    CHANNEL = 1 << 3
 
 
 class Command:
@@ -369,12 +370,23 @@ class Command:
         CommandPermission.ADMIN: lambda ctx: ctx.user in admins
     }
 
-    def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None):
+    def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None, blacklist=None, whitelist=None):
+        if blacklist is not None and whitelist is not None:
+            raise ValueError("Cannot specify both blacklist_channels and whitelist_channels")
         self.name = name.lower()
         self.func = func
         self.permission = permission
         self.cooldown = cooldown
         self.aliases = list(map(str.lower, aliases)) if aliases is not None else []
+        self.blacklist = blacklist
+        self.whitelist = whitelist
+
+    def check_channel(self, ctx):
+        if self.blacklist is None and self.whitelist is None:
+            return DeniedUsageReason.NONE
+        if self.blacklist is not None:
+            return DeniedUsageReason.NONE if ctx.channel not in self.blacklist else DeniedUsageReason.CHANNEL
+        return DeniedUsageReason.NONE if ctx.channel in self.whitelist else DeniedUsageReason.CHANNEL
 
     def check_permission(self, ctx):
         return DeniedUsageReason.NONE if self.permissions[self.permission](ctx) else DeniedUsageReason.PERMISSION
@@ -392,7 +404,7 @@ class Command:
                perf_counter() - self.usage[ctx.channel]["user"][ctx.user] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
 
     def check_usage(self, ctx):
-        return self.check_permission(ctx) | self.check_cooldown(ctx)
+        return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_channel(ctx)
 
     def on_used(self, ctx):
         self.usage[ctx.channel]["global"] = perf_counter()
@@ -403,7 +415,6 @@ class Command:
 
     async def __call__(self, bot, ctx):
         usage = self.check_usage(ctx)
-        print(usage)
         if usage == DeniedUsageReason.NONE:
             self.on_used(ctx)
             return await self.func(bot, ctx)
