@@ -108,7 +108,7 @@ class Bot:
             "osu": Scramble("player name", lambda: random.choice(self.top_players), 0.8),
             "map": Scramble("map name", lambda: random.choice(self.top_maps), 1.3),
             "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
-            "emote": Scramble("emotes", lambda channel: random.choice(self.emotes[channel]).name, 0.6, ScrambleHintType.EVERY_OTHER, True),
+            "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.6, ScrambleHintType.EVERY_OTHER, True),
         }
         self.scramble_manager = ScrambleManager(self.scrambles)
 
@@ -531,11 +531,12 @@ class Bot:
                                 f"{self.scramble_manager.get_hint(scramble_type).lower()}")
 
     async def on_scramble_finish(self, channel, scramble_type):
-        await self.send_message(channel,
-                                f"Time is up! "
-                                f"The {self.scramble_manager.get_scramble_name(scramble_type)} "
-                                f"was {self.scramble_manager.get_answer(scramble_type)}")
+        answer = self.scramble_manager.get_answer(scramble_type)
+        name = self.scramble_manager.get_scramble_name(scramble_type)
         self.scramble_manager.reset(scramble_type)
+        await self.send_message(channel,
+                                f"Time is up! The {answer} was {name}")
+
 
     def add_new_user(self, user):
         self.gamba_data.update({user: {
