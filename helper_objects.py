@@ -370,7 +370,7 @@ class Command:
         CommandPermission.ADMIN: lambda ctx: ctx.user in admins
     }
 
-    def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None, blacklist=None, whitelist=None):
+    def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None, blacklist=None, whitelist=None, fargs=None, fkwargs=None):
         if blacklist is not None and whitelist is not None:
             raise ValueError("Cannot specify both blacklist_channels and whitelist_channels")
         self.name = name.lower()
@@ -380,6 +380,8 @@ class Command:
         self.aliases = list(map(str.lower, aliases)) if aliases is not None else []
         self.blacklist = blacklist
         self.whitelist = whitelist
+        self.fargs = fargs if fargs is not None else []
+        self.fkwargs = fkwargs if fkwargs is not None else {}
 
     def check_channel(self, ctx):
         if self.blacklist is None and self.whitelist is None:
@@ -417,7 +419,7 @@ class Command:
         usage = self.check_usage(ctx)
         if usage == DeniedUsageReason.NONE:
             self.on_used(ctx)
-            return await self.func(bot, ctx)
+            return await self.func(bot, ctx, *self.fargs, **self.fkwargs)
         if DeniedUsageReason.PERMISSION in usage:
             return await bot.send_message(ctx.channel, f"@{ctx.user} You do not have permission to use this command.")
 
@@ -430,8 +432,13 @@ class CommandManager:
         self.bot = bot
 
     def command(self, *args, **kwargs):
-        def decorator(func):
-            self.commands.append(Command(func, *args, **kwargs))
+        def decorator(func, *fargs, **fkwargs):
+            func_args = {}
+            if "fargs" not in kwargs:
+                func_args.update({"fargs": fargs})
+            if "fkwargs" not in kwargs:
+                func_args.update({"fkwargs": fkwargs})
+            self.commands.append(Command(func, *args, **kwargs, **func_args))
             return func
         return decorator
 

@@ -74,18 +74,6 @@ class Bot:
         self.last_message = 0
         self.message_lock = asyncio.Lock()
 
-        # Command related variables
-        self.cm.command(f"scramble")(lambda self, ctx: self.scramble(ctx, "word"))
-        self.cm.command(f"hint")(lambda self, ctx: self.hint(ctx, "word"))
-        self.cm.command(f"scramble_osu")(lambda self, ctx: self.scramble(ctx, "osu"))
-        self.cm.command(f"hint_osu")(lambda self, ctx: self.hint(ctx, "osu"))
-        self.cm.command(f"scramble_map")(lambda self, ctx: self.scramble(ctx, "map"))
-        self.cm.command(f"hint_map")(lambda self, ctx: self.hint(ctx, "map"))
-        self.cm.command(f"scramble_genshin")(lambda self, ctx: self.scramble(ctx, "genshin"))
-        self.cm.command(f"hint_genshin")(lambda self, ctx: self.hint(ctx, "genshin"))
-        self.cm.command(f"scramble_emote")(lambda self, ctx: self.scramble(ctx, "emote"))
-        self.cm.command(f"hint_emote")(lambda self, ctx: self.hint(ctx, "emote"))
-
         # Guess the number
         self.number = random.randint(1, 1000)
 
@@ -493,6 +481,11 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user} 4* pity in {10 - self.pity[ctx.user][4]} rolls; "
                                              f"5* pity in {90 - self.pity[ctx.user][5]} rolls.")
 
+    @command_manager.command("scramble", fargs=["word"])
+    @command_manager.command("scramble_osu", fargs=["osu"])
+    @command_manager.command("scramble_map", fargs=["map"])
+    @command_manager.command("scramble_emote", fargs=["emote"])
+    @command_manager.command("scramble_genshin", fargs=["genshin"])
     async def scramble(self, ctx, scramble_type):
         if self.scramble_manager.in_progress(scramble_type):
             return
@@ -522,6 +515,11 @@ class Bot:
         self.gamba_data[ctx.user]["money"] += money
         self.save_money(ctx.user)
 
+    @command_manager.command("hint", fargs=["word"])
+    @command_manager.command("hint_osu", fargs=["osu"])
+    @command_manager.command("hint_map", fargs=["map"])
+    @command_manager.command("hint_emote", fargs=["emote"])
+    @command_manager.command("hint_genshin", fargs=["genshin"])
     async def hint(self, ctx, scramble_type):
         if not self.scramble_manager.hints_left(scramble_type):
             return await self.send_message(ctx.channel, f"@{ctx.user} There are no hints left bruh")
