@@ -364,7 +364,6 @@ class DeniedUsageReason(IntFlag):
 
 
 class Command:
-    usage = {}
     permissions = {
         CommandPermission.NONE: lambda ctx: True,
         CommandPermission.ADMIN: lambda ctx: ctx.user in admins
@@ -373,6 +372,7 @@ class Command:
     def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None, blacklist=None, whitelist=None, fargs=None, fkwargs=None):
         if blacklist is not None and whitelist is not None:
             raise ValueError("Cannot specify both blacklist_channels and whitelist_channels")
+        self.usage = {}
         self.name = name.lower()
         self.func = func
         self.permission = permission
@@ -382,6 +382,9 @@ class Command:
         self.whitelist = whitelist
         self.fargs = fargs if fargs is not None else []
         self.fkwargs = fkwargs if fkwargs is not None else {}
+
+    def print(self, out, *args, **kwargs):
+        print(f"<{self.name}>: {str(out)}", *args, **kwargs)
 
     def check_channel(self, ctx):
         if self.blacklist is None and self.whitelist is None:
@@ -405,7 +408,7 @@ class Command:
         return DeniedUsageReason.NONE if perf_counter() - self.usage[ctx.channel]["global"] >= self.cooldown.command_cd and \
                perf_counter() - self.usage[ctx.channel]["user"][ctx.user] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
 
-    def check_usage(self, ctx):
+    def check_can_use(self, ctx):
         return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_channel(ctx)
 
     def on_used(self, ctx):
@@ -416,11 +419,11 @@ class Command:
         return item.lower() in self.aliases + [self.name]
 
     async def __call__(self, bot, ctx):
-        usage = self.check_usage(ctx)
-        if usage == DeniedUsageReason.NONE:
+        can_use = self.check_can_use(ctx)
+        if can_use == DeniedUsageReason.NONE:
             self.on_used(ctx)
             return await self.func(bot, ctx, *self.fargs, **self.fkwargs)
-        if DeniedUsageReason.PERMISSION in usage:
+        if DeniedUsageReason.PERMISSION in can_use:
             return await bot.send_message(ctx.channel, f"@{ctx.user} You do not have permission to use this command.")
 
 
