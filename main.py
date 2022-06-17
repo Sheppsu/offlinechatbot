@@ -53,7 +53,6 @@ class Bot:
         self.ws = None
         self.running = False
         self.loop = asyncio.get_event_loop()
-        self.future_objects = []
 
         # Data
         self.database = Database()
@@ -110,7 +109,9 @@ class Bot:
     # Util
 
     def set_timed_event(self, wait, callback, *args, **kwargs):
-        return asyncio.run_coroutine_threadsafe(do_timed_event(wait, callback, *args, **kwargs), self.loop)
+        future = asyncio.run_coroutine_threadsafe(do_timed_event(wait, callback, *args, **kwargs), self.loop)
+        future.add_done_callback(future_callback)
+        return future
 
     # File save/load
 
@@ -218,18 +219,6 @@ class Bot:
                     if perf_counter() - last_ping >= 60*60:
                         self.database.ping()
 
-                    # Check all future objects and if they're done: print the result and remove them from the list
-                    for future in self.future_objects:
-                        if future.done():
-                            try:
-                                result = future.result()
-                                if result is not None:
-                                    print(future.result())
-                            except:
-                                print(traceback.format_exc())
-                            finally:
-                                self.future_objects.remove(future)
-
                     # Check if poll is no longer running, in which case, the bot is no longer running.
                     if poll.done():
                         print(poll.result())
@@ -276,7 +265,7 @@ class Bot:
             if ctx.message_type == MessageType.PRIVMSG:
                 # Run in its own thread to avoid holding up the polling thread
                 future = asyncio.run_coroutine_threadsafe(self.on_message(ctx), self.loop)
-                self.future_objects.append(future)
+                future.add_done_callback(future_callback)
 
     async def join(self, channel):
         await self.ws.send(f"JOIN #{channel}")
@@ -434,7 +423,6 @@ class Bot:
                                 f"Question: {html.unescape(resp['question'])} monkaHmm "
                                 f"Answers: {answer_string}")
         self.trivia_future = self.set_timed_event(20, self.on_trivia_finish, ctx.channel)
-        self.trivia_future.add_done_callback(future_callback)
 
     @requires_gamba_data
     async def on_answer(self, ctx, answer):
@@ -495,7 +483,6 @@ class Bot:
                                              f"{self.scramble_manager.get_scramble_name(scramble_type)}: "
                                              f"{scrambled_word.lower()}")
         future = self.set_timed_event(120, self.on_scramble_finish, ctx.channel, scramble_type)
-        future.add_done_callback(future_callback)
         self.scramble_manager.pass_future(scramble_type, future)
 
     async def on_scramble(self, ctx, scramble_type):
@@ -531,10 +518,8 @@ class Bot:
     async def on_scramble_finish(self, channel, scramble_type):
         answer = self.scramble_manager.get_answer(scramble_type)
         name = self.scramble_manager.get_scramble_name(scramble_type)
-        self.scramble_manager.reset(scramble_type)
-        await self.send_message(channel,
-                                f"Time is up! The {answer} was {name}")
-
+        self.scramble_manager.reset(scramble_type, cancel=False)
+        await self.send_message(channel, f"Time is up! The {name} was {answer}")
 
     def add_new_user(self, user):
         self.gamba_data.update({user: {
@@ -795,7 +780,6 @@ class Bot:
 
         await self.send_message(ctx.channel, f"{ctx.user} has started a Bomb Party game! Anyone else who wants to play should type !join. When enough players have joined, the host should type !start to start the game, otherwise the game will automatically start or close after 2 minutes.")
         self.bomb_party_future = self.set_timed_event(120, self.close_or_start_game, ctx.channel)
-        self.bomb_party_future.add_done_callback(future_callback)
 
     async def close_or_start_game(self, channel):
         if not self.bomb_party_helper.can_start:
@@ -819,7 +803,6 @@ class Bot:
 
         await self.send_message(ctx.channel, f"@{self.bomb_party_helper.current_player} You're up first! Your string of letters is {self.bomb_party_helper.current_letters}")
         self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.starting_time, self.bomb_party_timer, ctx.channel)
-        self.bomb_party_future.add_done_callback(future_callback)
 
     @command_manager.command("join", Cooldown(0, 3))
     async def join_bomb_party(self, ctx):
@@ -885,7 +868,6 @@ class Bot:
         await self.send_message(channel, f"@{player} Your string of letters is {self.bomb_party_helper.current_letters} - "
                                          f"You have {round(self.bomb_party_helper.seconds_left)} seconds.")
         self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.seconds_left, self.bomb_party_timer, channel)
-        self.bomb_party_future.add_done_callback(future_callback)
 
     async def on_bomb_party(self, ctx):
         if ctx.user != self.bomb_party_helper.current_player.user:

@@ -255,12 +255,13 @@ class Scramble:
         self.hint = ""
         self.future = None
 
-        setattr(self, "generate_answer", answer_generator)
+        self.generate_answer = answer_generator
 
-    def reset(self):
+    def reset(self, cancel=True):
         self.answer = None
         self.hint = ""
-        if self.future is not None and not self.future.cancelled() and not self.future.done():
+        if self.future is not None and not self.future.cancelled() and not self.future.done() and cancel:
+            print("Cancelling")
             self.future.cancel()
         self.future = None
 
@@ -336,8 +337,8 @@ class ScrambleManager:
                 scramble.difficulty_multiplier
             )
 
-    def reset(self, identifier):
-        self.scrambles[identifier].reset()
+    def reset(self, identifier, cancel=True):
+        self.scrambles[identifier].reset(cancel)
 
     def pass_future(self, identifier, future):
         self.scrambles[identifier].future = future
