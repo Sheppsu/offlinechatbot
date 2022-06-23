@@ -397,7 +397,6 @@ class Bot:
 
     # TODO: consider putting trivia stuff in its own class
 
-    @command_manager.command("trivia")
     async def trivia(self, ctx):
         # TODO: get this working again
         if self.answer is not None:
