@@ -2,7 +2,7 @@
 
 # TODO: clean up code in general
 #       utilize DMs
-#       different rate limits for mods and broadcaster
+#       different rate limits for mod and broadcaster
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -21,6 +21,7 @@ from constants import *
 
 Client().run()  # Update top player json file
 command_manager = CommandManager()
+import get_popular_anime  # Update popular anime json file
 
 TESTING = True if len(sys.argv) > 1 and sys.argv[1] == "--test" else False
 
@@ -43,6 +44,7 @@ class Bot:
     pull_options: dict
     afk: dict
     all_words: list
+    anime: list
 
     restarts = 0
 
@@ -96,6 +98,7 @@ class Bot:
             "map": Scramble("map name", lambda: random.choice(self.top_maps), 1.3),
             "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
             "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.6, ScrambleHintType.EVERY_OTHER, True),
+            "anime": Scramble("anime", lambda: random.choice(self.anime), 1.3)
         }
         self.scramble_manager = ScrambleManager(self.scrambles)
 
@@ -135,6 +138,10 @@ class Bot:
         with open("data/all_words.json", "r") as f:
             self.all_words = [word.lower() for word in json.load(f)]
 
+    def load_anime(self):
+        with open("data/anime.json", "r") as f:
+            self.anime = json.load(f)
+
     def load_db_data(self):
         self.pity = self.database.get_pity()
         self.gamba_data = self.database.get_userdata()
@@ -158,6 +165,7 @@ class Bot:
         self.load_facts()
         self.load_all_words()
         self.load_genshin()
+        self.load_anime()
         self.load_db_data()
 
     def save_money(self, user):
@@ -473,6 +481,7 @@ class Bot:
     @command_manager.command("scramble_map", fargs=["map"])
     @command_manager.command("scramble_emote", fargs=["emote"])
     @command_manager.command("scramble_genshin", fargs=["genshin"])
+    @command_manager.command("scramble_anime", fargs=["anime"])
     async def scramble(self, ctx, scramble_type):
         if self.scramble_manager.in_progress(scramble_type):
             return
