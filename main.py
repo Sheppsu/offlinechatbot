@@ -515,7 +515,10 @@ class Bot:
     @command_manager.command("hint_map", fargs=["map"])
     @command_manager.command("hint_emote", fargs=["emote"])
     @command_manager.command("hint_genshin", fargs=["genshin"])
+    @command_manager.command("hint_anime", fargs=["anime"])
     async def hint(self, ctx, scramble_type):
+        if not self.scramble_manager.in_progress(scramble_type):
+            return
         if not self.scramble_manager.hints_left(scramble_type):
             return await self.send_message(ctx.channel, f"@{ctx.user} There are no hints left bruh")
         await self.send_message(ctx.channel,
