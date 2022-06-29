@@ -1,5 +1,6 @@
 from .enums import *
 from .exceptions import PagingException
+from urllib.parse import unquote
 
 
 class Util:
@@ -80,7 +81,7 @@ class Anime:
         self.id = data.get('id')
         self.title = data.get('title')
         self.main_picture = Picture(data['main_picture']) if data.get("main_picture") is not None else None
-        self.alternative_titles = AlternativeTitles(data['alternative_titles']) if data.get('alternative_title') is not None else None
+        self.alternative_titles = AlternativeTitles(data['alternative_titles']) if data.get('alternative_titles') is not None else None
         self.start_date = data.get('start_date')
         self.end_date = data.get('end_date')
         self.synopsis = data.get('synopsis')
@@ -134,13 +135,15 @@ class Paging:
     def get_next(self, client):
         if self.next is None:
             raise PagingException("Cannot get next because there is none.")
-        url_args = dict([arg.split("=") for arg in self.next[self.next.index("?")+1:].split("&")])
+        url = unquote(self.next)
+        url_args = dict([arg.split("=") for arg in url[url.index("?")+1:].split("&")])
         return getattr(client, self.endpoint)(**url_args)
 
     def get_previous(self, client):
         if self.previous is None:
             raise PagingException("Cannot get previous because there is none.")
-        url_args = dict([arg.split("=") for arg in self.previous[self.previous.index("?")+1:].split("&")])
+        url = unquote(self.previous)
+        url_args = dict([arg.split("=") for arg in url[url.index("?")+1:].split("&")])
         return getattr(client, self.endpoint)(**url_args)
 
 

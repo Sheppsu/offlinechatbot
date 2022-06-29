@@ -1,6 +1,7 @@
 from mysql import connector
 from datetime import datetime
 import os
+import json
 
 
 class Database:
@@ -88,6 +89,23 @@ class Database:
 
     def delete_user(self, user):
         self.cursor.execute(f"DELETE FROM userdata WHERE username = '{user}'")
+
+    def new_animecompare_game(self, user, answer):
+        self.cursor.execute(f"INSERT INTO animecompare_games (user, answer) VALUES ('{user}', {json.dumps(answer)})")
+        self.database.commit()
+
+    def get_in_progress_animecompare_games(self):
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM animecompare_games WHERE finished = 0")
+        return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
+
+    def update_animecompare_game(self, user, score, answer):
+        self.cursor.execute(f"UPDATE animecompare_games SET score = {score}, answer = {json.dumps(answer)} WHERE user = '{user}'")
+        self.database.commit()
+
+    def finish_animecompare_game(self, user):
+        self.cursor.execute(f"UPDATE animecompare_games SET finished = 1 WHERE user = '{user}'")
+        self.database.commit()
 
     @property
     def current_time(self):

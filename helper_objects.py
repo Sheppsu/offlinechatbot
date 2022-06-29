@@ -349,6 +349,47 @@ class Trivia:
         pass
 
 
+class AnimeCompareGame:
+    def __init__(self, user, answer, score=0):
+        self.user = user
+        self.answer = answer
+        self.score = score
+
+
+class AnimeCompare:
+    def __init__(self, anime_list: list):
+        self.current_games = []
+        self.anime_list = anime_list
+
+    def generate_answer(self):
+        anime1_i = random.randint(0, len(self.anime_list)-1)
+        anime1 = self.anime_list.pop(anime1_i)
+        anime2_i = random.randint(0, len(self.anime_list)-1)
+        anime2 = self.anime_list.pop(anime2_i)
+        self.anime_list.insert(anime1_i, anime1)
+        return {
+            "anime1": (anime1, anime1_i),
+            "anime2": (anime2, anime2_i + (1 if anime2_i >= anime1 else 0))
+        }
+
+    def new_game(self, user):
+        self.current_games.append(AnimeCompareGame(user, self.generate_answer()))
+
+    def on_guess(self, ctx):
+        game = self.get_game(ctx.user)
+        if game is None:
+            return
+        guess = ctx.message
+
+    def get_game(self, user):
+        for game in self.current_games:
+            if game.user == user:
+                return game
+
+    def __contains__(self, user):
+        return self.get_game(user) is not None
+
+
 Cooldown = namedtuple("Cooldown", ["command_cd", "user_cd"])
 
 

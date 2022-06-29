@@ -98,7 +98,7 @@ class Bot:
             "map": Scramble("map name", lambda: random.choice(self.top_maps), 1.3),
             "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
             "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.6, ScrambleHintType.EVERY_OTHER, True),
-            "anime": Scramble("anime", lambda: random.choice(self.anime), 1.3)
+            "anime": Scramble("anime", lambda: random.choice(self.anime[:200]), 1.3)
         }
         self.scramble_manager = ScrambleManager(self.scrambles)
 
