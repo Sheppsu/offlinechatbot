@@ -27,8 +27,11 @@ def format_title(title):
 
 with open("data/anime.json", "w") as f:
     json.dump(list(map(
-        lambda r: format_title(r.anime.alternative_titles.en
-                               if r.anime.alternative_titles.en is not None and
-                                  r.anime.alternative_titles.en != ""
-                               else r.anime.title),
+        lambda r: (
+            format_title(r.anime.alternative_titles.en
+                         if r.anime.alternative_titles.en is not None and
+                            r.anime.alternative_titles.en != ""
+                         else r.anime.title),
+            r.anime.main_picture.large
+        ),
         ranking)), f)
