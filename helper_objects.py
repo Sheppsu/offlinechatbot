@@ -350,10 +350,19 @@ class Trivia:
 
 
 class AnimeCompareGame:
-    def __init__(self, user, answer, score=0):
+    def __init__(self, user, answers, score=0):
+        self.id = None
         self.user = user
-        self.answer = answer
+        self.answers = answers
         self.score = score
+        self.finished = False
+
+    @property
+    def answer(self):
+        return 1 if self.answers["anime1"][1] < self.answers["anime2"][1] else 2
+
+    def get_question_string(self):
+        return f"Which anime is more popular? {self.answers['anime1'][0]} or {self.answers['anime2'][0]}"
 
 
 class AnimeCompare:
@@ -361,30 +370,42 @@ class AnimeCompare:
         self.current_games = []
         self.anime_list = anime_list
 
-    def generate_answer(self):
+    def generate_answer(self, game=None) -> dict[str, tuple[str, int]]:
         anime1_i = random.randint(0, len(self.anime_list)-1)
         anime1 = self.anime_list.pop(anime1_i)
         anime2_i = random.randint(0, len(self.anime_list)-1)
         anime2 = self.anime_list.pop(anime2_i)
         self.anime_list.insert(anime1_i, anime1)
-        return {
+        answers = {
             "anime1": (anime1, anime1_i),
-            "anime2": (anime2, anime2_i + (1 if anime2_i >= anime1 else 0))
+            "anime2": (anime2, anime2_i + (1 if anime2_i >= anime1_i else 0))
         }
-
-    def new_game(self, user):
-        self.current_games.append(AnimeCompareGame(user, self.generate_answer()))
-
-    def on_guess(self, ctx):
-        game = self.get_game(ctx.user)
         if game is None:
-            return
-        guess = ctx.message
+            return answers
+        game.answers = answers
 
-    def get_game(self, user):
+    def new_game(self, user) -> AnimeCompareGame:
+        game = AnimeCompareGame(user, self.generate_answer())
+        self.current_games.append(game)
+        return game
+
+    def check_guess(self, ctx, game):
+        guess = ctx.message
+        if not guess.isdigit() or int(guess) not in [1, 2]:
+            return
+
+        if int(guess) == game.answer:
+            game.score += 1
+            return True
+        return False
+
+    def get_game(self, user) -> AnimeCompareGame:
         for game in self.current_games:
             if game.user == user:
                 return game
+
+    def finish_game(self, game):
+        self.current_games.remove(game)
 
     def __contains__(self, user):
         return self.get_game(user) is not None
@@ -448,7 +469,7 @@ class Command:
     def check_cooldown(self, ctx):
         self.update_usage(ctx)
         return DeniedUsageReason.NONE if perf_counter() - self.usage[ctx.channel]["global"] >= self.cooldown.command_cd and \
-               perf_counter() - self.usage[ctx.channel]["user"][ctx.user] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
+            perf_counter() - self.usage[ctx.channel]["user"][ctx.user] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
 
     def check_can_use(self, ctx):
         return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_channel(ctx)
