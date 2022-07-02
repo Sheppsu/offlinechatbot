@@ -993,7 +993,7 @@ class Bot:
 
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
-        rs_format = "Recent score for {username}: {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp"
+        rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp"
 
         args = ctx.get_args()
         if len(args) == 0:
@@ -1020,12 +1020,13 @@ class Bot:
 
         await self.send_message(ctx.channel, rs_format.format(**{
             "username": score.user.username,
+            "passed": "" if score.passed else "(Failed)",
             "artist": score.beatmapset.artist,
             "title": score.beatmapset.title,
             "diff": score.beatmap.version,
             "mods": " +"+"".join(score.mods) if score.mods else "",
             "mapper": score.beatmapset.creator,
-            "star_rating": beatmap_attributes.star_rating,
+            "star_rating": round(beatmap_attributes.star_rating, 2),
             "pp": 0 if score.pp is None else round(score.pp, 2),
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
