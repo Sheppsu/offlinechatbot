@@ -91,21 +91,28 @@ class Database:
         self.cursor.execute(f"DELETE FROM userdata WHERE username = '{user}'")
 
     def new_animecompare_game(self, user, answer):
-        self.cursor.execute(f"INSERT INTO animecompare_games (user, answer) VALUES ('{user}', {json.dumps(answer)})")
+        cursor = self.cursor
+        cursor.execute(f"INSERT INTO animecompare_games (user, answer) VALUES ('{user}', '{self.format_animecompare_answer(answer)}')")
         self.database.commit()
+        cursor.execute("SELECT LAST_INSERT_ID()")
+        return cursor.fetchone()[0]
 
     def get_in_progress_animecompare_games(self):
         cursor = self.cursor
         cursor.execute("SELECT * FROM animecompare_games WHERE finished = 0")
         return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
 
-    def update_animecompare_game(self, user, score, answer):
-        self.cursor.execute(f"UPDATE animecompare_games SET score = {score}, answer = {json.dumps(answer)} WHERE user = '{user}'")
+    def update_animecompare_game(self, game_id, score, answer):
+        self.cursor.execute(f"UPDATE animecompare_games SET score = {score}, answer = '{self.format_animecompare_answer(answer)}' WHERE id = '{game_id}'")
         self.database.commit()
 
-    def finish_animecompare_game(self, user):
-        self.cursor.execute(f"UPDATE animecompare_games SET finished = 1 WHERE user = '{user}'")
+    def finish_animecompare_game(self, game_id):
+        self.cursor.execute(f"UPDATE animecompare_games SET finished = 1 WHERE id = {game_id}")
         self.database.commit()
+
+    @staticmethod
+    def format_animecompare_answer(answer):
+        return json.dumps(answer).replace("'", "\\'")
 
     @property
     def current_time(self):
