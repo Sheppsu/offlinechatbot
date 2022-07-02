@@ -993,7 +993,7 @@ class Bot:
 
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
-        rs_format = "Recent score for {username}: {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}"
+        rs_format = "Recent score for {username}: {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp"
 
         args = ctx.get_args()
         if len(args) == 0:
@@ -1009,13 +1009,14 @@ class Bot:
             if user is None:
                 return await self.send_message(ctx.channel, f"@{ctx.user} User {username} not found.")
             user_id = user.id
+            self.user_id_cache[username] = user_id
 
         scores = await osu_client.get_user_scores(user_id, "recent", 1, limit=1)
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no recent scores.")
 
         score = scores[0]
-        beatmap_attributes = await osu_client.get_beatmap_attributes(score.beatmap.id, score.mods, score.mode)
+        beatmap_attributes = await osu_client.get_beatmap_attributes(score.beatmap.id, score.mods if score.mods else None, score.mode)
 
         await self.send_message(ctx.channel, rs_format.format(**{
             "username": score.user.username,
