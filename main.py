@@ -109,6 +109,15 @@ class Bot:
         self.bomb_party_helper = BombParty()
         self.bomb_party_future = None
 
+        # Anime compare
+        self.compare_helper = AnimeCompare(self.anime)
+        self.anime_compare_future = {}
+        #games = list(map(
+        #    lambda game: AnimeCompareGame(game["user"], game["answer"], game["score"]),
+        #    self.database.get_in_progress_animecompare_games()
+        #))
+        #self.compare_helper.current_games = games
+
     # Util
 
     def set_timed_event(self, wait, callback, *args, **kwargs):
@@ -322,6 +331,11 @@ class Bot:
 
         if self.bomb_party_helper.started:
             await self.on_bomb_party(ctx)
+
+        if ctx.message.isdigit() and int(ctx.message) in [1, 2]:
+            game = self.compare_helper.get_game(ctx.user)
+            if game is not None:
+                await self.on_anime_compare(ctx, game)
 
         await self.on_afk(ctx)
 
@@ -927,6 +941,39 @@ class Bot:
     async def refresh_emotes(self, ctx):
         self.load_emotes()
         await self.send_message(ctx.channel, f"@{ctx.user} Emotes have been reloaded.")
+
+    @command_manager.command("anime_compare", aliases=["animecompare", "ac"], cooldown=Cooldown(0, 5))
+    async def anime_compare(self, ctx):
+        game = self.compare_helper.get_game(ctx.user)
+        if game is not None:
+            return
+        game = self.compare_helper.new_game(ctx.user)
+        await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
+        game_id = self.database.new_animecompare_game(ctx.user, game.answers)
+        game.id = game_id
+        self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
+
+    async def on_anime_compare(self, ctx, game):
+        check = self.compare_helper.check_guess(ctx, game)
+        if check is None:
+            return
+        self.anime_compare_future[ctx.user].cancel()
+        if not check:
+            await self.send_message(ctx.channel, f"@{ctx.user} Unfortunately, that is not the correct answer! Your final score is {game.score}.")
+            self.database.finish_animecompare_game(game.id)
+            del self.anime_compare_future[ctx.user]
+            self.compare_helper.finish_game(game)
+        else:
+            await self.send_message(ctx.channel, f"@{ctx.user} That is correct! Your current score is {game.score}.")
+            self.compare_helper.generate_answer(game)
+            self.database.update_animecompare_game(game.id, game.score, game.answers)
+            await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
+
+    async def anime_compare_timeout(self, ctx, game):
+        self.compare_helper.finish_game(game)
+        await self.send_message(ctx.channel, f"@{ctx.user} You did not answer in time. Your final score is {game.score}.")
+        self.database.finish_animecompare_game(game.id)
+        del self.anime_compare_future[ctx.user]
 
 
 bot = Bot(command_manager)
