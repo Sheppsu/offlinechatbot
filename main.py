@@ -17,9 +17,11 @@ from emotes import EmoteRequester
 from helper_objects import *
 from util import *
 from constants import *
+from osu import AsynchronousClient
 
 
 Client().run()  # Update top player json file
+osu_client = AsynchronousClient.from_client_credentials(int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), "http://127.0.0.1:8080")
 command_manager = CommandManager()
 import get_popular_anime  # Update popular anime json file
 
@@ -117,6 +119,9 @@ class Bot:
         #    self.database.get_in_progress_animecompare_games()
         #))
         #self.compare_helper.current_games = games
+
+        # rs
+        self.user_id_cache = {}
 
     # Util
 
@@ -985,6 +990,52 @@ class Bot:
     async def anime_compare_leaderboard(self, ctx):
         games = self.database.get_top_animecompare_games()
         await self.send_message(ctx.channel, f"@{ctx.user} The top anime compare scores are: {', '.join(['%s_%d' %(game['user'], game['score']) for game in games])}.")
+
+    @command_manager.command("rs", cooldown=Cooldown(0, 3))
+    async def recent_score(self, ctx):
+        rs_format = "Recent score for {username}: {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}"
+
+        args = ctx.get_args()
+        if len(args) == 0:
+            return await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username.")
+        username = ''.join([char for char in args[0] if char.isascii()]).strip()
+        if username == "":
+            return await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username.")
+
+        if username in self.user_id_cache:
+            user_id = self.user_id_cache[username]
+        else:
+            user = await osu_client.get_user(user=username, key="username")
+            if user is None:
+                return await self.send_message(ctx.channel, f"@{ctx.user} User {username} not found.")
+            user_id = user.id
+
+        scores = await osu_client.get_user_scores(user_id, "recent", 1, limit=1)
+        if not scores:
+            return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no recent scores.")
+
+        score = scores[0]
+        beatmap = await osu_client.get_beatmap(score.beatmap.id)
+
+        await self.send_message(ctx.channel, rs_format.format(**{
+            "username": score.user.username,
+            "artist": score.beatmapset.artist,
+            "title": score.beatmapset.title,
+            "diff": beatmap.version,
+            "mods": " +"+"".join(score.mods) if score.mods else "",
+            "mapper": score.beatmapset.creator,
+            "star_rating": beatmap.difficulty_rating,
+            "pp": 0 if score.pp is None else round(score.pp, 2),
+            "acc": round(score.accuracy * 100, 2),
+            "combo": score.max_combo,
+            "max_combo": beatmap.max_combo,
+            "genki_counts": f"%d/%d/%d/%d" % (
+                score.statistics.count_300,
+                score.statistics.count_100,
+                score.statistics.count_50,
+                score.statistics.count_miss
+            ),
+        }))
 
 
 bot = Bot(command_manager)
