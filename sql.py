@@ -102,6 +102,16 @@ class Database:
         cursor.execute("SELECT * FROM animecompare_games WHERE finished = 0")
         return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
 
+    def get_user_animecompare_games(self, user):
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM animecompare_games WHERE user = '%s'" % user)
+        return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
+
+    def get_top_animecompare_games(self):
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM animecompare_games WHERE finished = 1 ORDER BY score DESC LIMIT 5")
+        return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
+
     def update_animecompare_game(self, game_id, score, answer):
         self.cursor.execute(f"UPDATE animecompare_games SET score = {score}, answer = '{self.format_animecompare_answer(answer)}' WHERE id = '{game_id}'")
         self.database.commit()

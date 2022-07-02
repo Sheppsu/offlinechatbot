@@ -621,7 +621,7 @@ class Bot:
             user_to_check = ctx.user
         await self.send_message(ctx.channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
 
-    @command_manager.command("leaderboard")
+    @command_manager.command("leaderboard", aliases=["lb"])
     async def leaderboard(self, ctx):
         lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
         top_users = list(lead.keys())[-5:]
@@ -975,6 +975,16 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user} You did not answer in time. Your final score is {game.score}.")
         self.database.finish_animecompare_game(game.id)
         del self.anime_compare_future[ctx.user]
+
+    @command_manager.command("average_ac", aliases=["averageac", "averageanimecompare", "average_animecompare"])
+    async def average_anime_compare(self, ctx):
+        games = self.database.get_user_animecompare_games(ctx.user)
+        await self.send_message(ctx.channel, f"@{ctx.user} Your average score is {round(sum([game['score'] for game in games])/len(games), 2)}.")
+
+    @command_manager.command("ac_leaderboard", aliases=["aclb", "ac_lb", "acleaderboard", "animecompareleaderboard", "animecompare_leaderboard", "animecompareleaderboard"])
+    async def anime_compare_leaderboard(self, ctx):
+        games = self.database.get_top_animecompare_games()
+        await self.send_message(ctx.channel, f"@{ctx.user} The top anime compare scores are: {', '.join(['%s_%d' %(game['user'], game['score']) for game in games])}.")
 
 
 bot = Bot(command_manager)
