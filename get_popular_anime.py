@@ -31,7 +31,6 @@ with open("data/anime.json", "w") as f:
             format_title(r.anime.alternative_titles.en
                          if r.anime.alternative_titles.en is not None and
                             r.anime.alternative_titles.en != ""
-                         else r.anime.title),
-            r.anime.main_picture.large
+                         else r.anime.title)
         ),
         ranking)), f)
