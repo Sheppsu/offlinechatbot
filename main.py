@@ -1015,20 +1015,20 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no recent scores.")
 
         score = scores[0]
-        beatmap = await osu_client.get_beatmap(score.beatmap.id)
+        beatmap_attributes = await osu_client.get_beatmap_attributes(score.beatmap.id, score.mods, score.mode)
 
         await self.send_message(ctx.channel, rs_format.format(**{
             "username": score.user.username,
             "artist": score.beatmapset.artist,
             "title": score.beatmapset.title,
-            "diff": beatmap.version,
+            "diff": score.beatmap.version,
             "mods": " +"+"".join(score.mods) if score.mods else "",
             "mapper": score.beatmapset.creator,
-            "star_rating": beatmap.difficulty_rating,
+            "star_rating": beatmap_attributes.star_rating,
             "pp": 0 if score.pp is None else round(score.pp, 2),
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
-            "max_combo": beatmap.max_combo,
+            "max_combo": beatmap_attributes.max_combo,
             "genki_counts": f"%d/%d/%d/%d" % (
                 score.statistics.count_300,
                 score.statistics.count_100,
