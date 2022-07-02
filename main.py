@@ -968,6 +968,7 @@ class Bot:
             self.compare_helper.generate_answer(game)
             self.database.update_animecompare_game(game.id, game.score, game.answers)
             await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
+            self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
 
     async def anime_compare_timeout(self, ctx, game):
         self.compare_helper.finish_game(game)
