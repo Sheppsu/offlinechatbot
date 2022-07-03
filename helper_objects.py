@@ -40,8 +40,14 @@ class Context:
         message = " ".join(data[3:])[1:]
         return cls(user, channel, message, message_type, tags, source)
 
-    def get_args(self):
-        return self.message.split()[1:]
+    def get_args(self, char_acceptance="unicode"):
+        if char_acceptance.lower() == "ascii":
+            message = "".join(char for char in self.message if char.isascii())
+        elif char_acceptance.lower() == "unicode":
+            message = self.message
+        else:
+            raise ValueError("char_acceptance must be either 'ascii' or 'unicode'")
+        return message.split()[1:]
 
 
 class BombPartyPlayer:
