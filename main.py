@@ -1035,7 +1035,7 @@ class Bot:
         elif len(args) == 0 or args[0].strip() == "":  # user did not provide a username and osu! account is not linked
             return await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username.")
         else:  # username was provided
-            username = args[0].strip()
+            username = " ".join(args).strip()
 
             # Get user id
             if username in self.user_id_cache:
@@ -1083,7 +1083,7 @@ class Bot:
         if len(args) == 0 or args[0].strip() == "":
             return await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username.")
 
-        username = args[0].strip()
+        username = " ".join(args).strip()
         user = await osu_client.get_user(user=username, key="username")
 
         if user is None:
@@ -1096,7 +1096,7 @@ class Bot:
         self.osu_data[ctx.user] = {"username": user.username, "user_id": user.id}
         self.user_id_cache[user.username] = user.id
 
-        await self.send_message(ctx.channel, f"@{ctx.user} Linked {username} to your account.")
+        await self.send_message(ctx.channel, f"@{ctx.user} Linked {user.username} to your account.")
 
 
 bot = Bot(command_manager)
