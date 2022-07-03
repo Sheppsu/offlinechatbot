@@ -410,6 +410,7 @@ class AnimeCompare:
                 return game
 
     def finish_game(self, game):
+        game.finished = True
         self.current_games.remove(game)
 
     def __contains__(self, user):
