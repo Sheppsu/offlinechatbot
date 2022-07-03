@@ -320,7 +320,7 @@ class Bot:
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
             ctx.message = ctx.message[8:]
 
-        ascii_message = "".join([char for char in ctx.message if char.isascii()])
+        ascii_message = "".join([char for char in ctx.message if char.isascii()]).strip()
 
         if ctx.message.startswith("Use code"):
             await asyncio.sleep(1)
