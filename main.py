@@ -320,11 +320,13 @@ class Bot:
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
             ctx.message = ctx.message[8:]
 
+        ascii_message = "".join([char for char in ctx.message if char.isascii()])
+
         if ctx.message.startswith("Use code"):
             await asyncio.sleep(1)
             await self.send_message(ctx.channel, "PogU 👆 Use code \"BTMC\" !!!")
-        elif ctx.message.strip() in [str(num) for num in range(1, 5)] and self.trivia_diff is not None:
-            message = int(ctx.message)
+        elif ascii_message.strip() in [str(num) for num in range(1, 5)] and self.trivia_diff is not None:
+            message = int(ascii_message)
             if message in self.guessed_answers:
                 return
             await self.on_answer(ctx, message)
@@ -337,7 +339,7 @@ class Bot:
         if self.bomb_party_helper.started:
             await self.on_bomb_party(ctx)
 
-        if ctx.message.isdigit() and int(ctx.message) in [1, 2]:
+        if ascii_message.isdigit() and int(ascii_message) in [1, 2]:
             game = self.compare_helper.get_game(ctx.user)
             if game is not None:
                 await self.on_anime_compare(ctx, game)
@@ -345,7 +347,7 @@ class Bot:
         await self.on_afk(ctx)
 
         if ctx.message.startswith("!"):
-            command = ctx.message.split()[0].lower().replace("!", "")
+            command = ascii_message.split()[0].lower().replace("!", "")
             await self.cm(command, ctx)  # Automatically checks that the command exists
 
     # Commands
