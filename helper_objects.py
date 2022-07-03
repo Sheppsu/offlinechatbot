@@ -364,6 +364,9 @@ class AnimeCompareGame:
     def get_question_string(self):
         return f"Which anime is more popular? {self.answers['anime1'][0]} or {self.answers['anime2'][0]}"
 
+    def get_ranking_string(self):
+        return f"Popularity ranking: {self.answers['anime1'][0]} - #{self.answers['anime1'][1]} | {self.answers['anime2'][0]} - #{self.answers['anime2'][1]}"
+
 
 class AnimeCompare:
     def __init__(self, anime_list: list):
@@ -389,8 +392,10 @@ class AnimeCompare:
         self.current_games.append(game)
         return game
 
-    def check_guess(self, ctx, game):
+    @staticmethod
+    def check_guess(ctx, game):
         guess = ctx.message
+        guess = "".join([char for char in guess if char.isascii()])  # Remove invis character from chatterino
         if not guess.isdigit() or int(guess) not in [1, 2]:
             return
 

@@ -964,12 +964,12 @@ class Bot:
             return
         self.anime_compare_future[ctx.user].cancel()
         if not check:
-            await self.send_message(ctx.channel, f"@{ctx.user} Unfortunately, that is not the correct answer! Your final score is {game.score}.")
+            await self.send_message(ctx.channel, f"@{ctx.user} Unfortunately, that is not the correct answer! Your final score is {game.score}. {game.get_ranking_string()}.")
             self.database.finish_animecompare_game(game.id)
             del self.anime_compare_future[ctx.user]
             self.compare_helper.finish_game(game)
         else:
-            await self.send_message(ctx.channel, f"@{ctx.user} That is correct! Your current score is {game.score}.")
+            await self.send_message(ctx.channel, f"@{ctx.user} That is correct! Your current score is {game.score}. {game.get_ranking_string()}.")
             self.compare_helper.generate_answer(game)
             self.database.update_animecompare_game(game.id, game.score, game.answers)
             await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
