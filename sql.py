@@ -120,6 +120,19 @@ class Database:
         self.cursor.execute(f"UPDATE animecompare_games SET finished = 1 WHERE id = {game_id}")
         self.database.commit()
 
+    def new_osu_data(self, user, osu_username, osu_user_id):
+        self.cursor.execute(f"INSERT INTO osu_data (user, osu_user_id, osu_username) VALUES ('{user}', {osu_user_id}, '{osu_username}')")
+        self.database.commit()
+
+    def update_osu_data(self, user, osu_username, osu_user_id):
+        self.cursor.execute(f"UPDATE osu_data SET osu_user_id = {osu_user_id}, osu_username = '{osu_username}' WHERE user = '{user}'")
+        self.database.commit()
+
+    def get_osu_data(self):
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM osu_data")
+        return {data[0]: {"user_id": data[1], "username": data[2]} for data in cursor.fetchall()}
+
     @staticmethod
     def format_animecompare_answer(answer):
         return json.dumps(answer).replace("'", "\\'")
