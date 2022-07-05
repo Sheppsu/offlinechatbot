@@ -23,3 +23,9 @@ layout = '!"$\\\'(),-./0123456789:;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnop
 admins = [
     "sheepposu"
 ]
+proper_mode_name = {
+    "osu": "osu!standard",
+    "taiko": "osu!taiko",
+    "fruits": "osu!catch",
+    "mania": "osu!mania"
+}

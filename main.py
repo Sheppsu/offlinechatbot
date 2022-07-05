@@ -21,12 +21,18 @@ from constants import *
 from osu import AsynchronousClient
 
 
-Client().run()  # Update top player json file
+TESTING = "--test" in sys.argv
+
+if not TESTING or not os.path.exists("data/top players (200).json"):
+    Client().run()  # Update top player json file
+if not TESTING or not os.path.exists("data/anime.json"):
+    import get_popular_anime  # Update popular anime json file
+
 osu_client = AsynchronousClient.from_client_credentials(int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), "http://127.0.0.1:8080")
 command_manager = CommandManager()
-import get_popular_anime  # Update popular anime json file
 
-TESTING = True if len(sys.argv) > 1 and sys.argv[1] == "--test" else False
+
+
 
 
 class Bot:
@@ -996,56 +1002,56 @@ class Bot:
         games = self.database.get_top_animecompare_games()
         await self.send_message(ctx.channel, f"@{ctx.user} The top anime compare scores are: {', '.join(['%s_%d' %(game['user'], game['score']) for game in games])}.")
 
-    @command_manager.command("rs", cooldown=Cooldown(0, 3))
-    async def recent_score(self, ctx):
-        # Constants
-        proper_mode_name = {
-            "osu": "osu!standard",
-            "taiko": "osu!taiko",
-            "fruits": "osu!catch",
-            "mania": "osu!mania"
-        }
-        rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp"
+    async def process_osu_username_arg(self, ctx, args):
+        if len(args) == 0 and ctx.user in self.osu_data:  # user did not provide a username, but osu! account is linked
+            return self.osu_data[ctx.user]['username']
+        elif len(args) == 0 or args[0].strip() == "":  # user did not provide a username and osu! account is not linked
+            await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username.")
+        else:  # username was provided
+            return " ".join(args).strip()
 
-        # Process arguments
-
-        args = ctx.get_args('ascii')
-        lower_args = list(map(str.lower, args))
-
-        # Process mode argument
+    async def process_osu_mode_args(self, ctx, args):
         mode = 'osu'
+        lower_args = list(map(str.lower, args))
         if "-m" in lower_args:
             index = lower_args.index("-m")
             args.pop(index)
             mode = args.pop(index).strip()
             if not mode.isdigit() or int(mode) not in range(0, 4):
-                return await self.send_message(ctx.channel, f"@{ctx.user} Invalid mode. Valid modes are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
+                return await self.send_message(ctx.channel,
+                                               f"@{ctx.user} Invalid mode. Valid modes are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
             mode = {
                 0: "osu",
                 1: "taiko",
                 2: "fruits",
                 3: "mania"
             }[int(mode)]
+        return mode, args
 
-        # Process username argument
-        if len(args) == 0 and ctx.user in self.osu_data:  # user did not provide a username, but osu! account is linked
-            print("Username and user id already known!")
-            username = self.osu_data[ctx.user]['username']
-            user_id = self.osu_data[ctx.user]['user_id']
-        elif len(args) == 0 or args[0].strip() == "":  # user did not provide a username and osu! account is not linked
-            return await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username.")
-        else:  # username was provided
-            username = " ".join(args).strip()
+    @command_manager.command("rs", cooldown=Cooldown(0, 3))
+    async def recent_score(self, ctx):
+        rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp"
 
-            # Get user id
-            if username in self.user_id_cache:
-                user_id = self.user_id_cache[username]
-            else:
-                user = await osu_client.get_user(user=username, key="username")
-                if user is None:
-                    return await self.send_message(ctx.channel, f"@{ctx.user} User {username} not found.")
-                user_id = user.id
-                self.user_id_cache[username] = user_id
+        # Process arguments
+
+        args = ctx.get_args('ascii')
+
+        # Process mode argument
+        mode, args = await self.process_osu_mode_args(ctx, args)
+        if mode is None:
+            return
+
+        username = await self.process_osu_username_arg(ctx, args)
+        if username is None:
+            return
+        if username not in self.user_id_cache:
+            user = await osu_client.get_user(user=username, key="username")
+            if user is None:
+                return await self.send_message(ctx.channel, f"@{ctx.user} User {username} not found.")
+            user_id = user.id
+            self.user_id_cache[username] = user_id
+        else:
+            user_id = self.user_id_cache[username]
 
         # Get recent score
         scores = await osu_client.get_user_scores(user_id, "recent", include_fails=1, mode=mode, limit=1)
@@ -1076,6 +1082,43 @@ class Bot:
                 score.statistics.count_miss
             ),
         }))
+
+    @command_manager.command("osu", cooldown=Cooldown(0, 5))
+    async def osu_profile(self, ctx):
+        profile_layout = "{username}'s profile [{mode}]: #{global_rank} ({country}#{country_rank}) - {pp}pp; Peak (last 90 days): #{peak_rank} | " \
+                         "{accuracy}% | {play_count} playcount ({play_time} hrs) | Medal count: {medal_count}/271 ({medal_completion}%) | " \
+                         "Followers: {follower_count} | Mapping subs: {subscriber_count}"
+
+        args = ctx.get_args('ascii')
+        mode, args = await self.process_osu_mode_args(ctx, args)
+        if mode is None:
+            return
+        username = await self.process_osu_username_arg(ctx, args)
+        if username is None:
+            return
+
+        user = await osu_client.get_user(user=username, mode=mode, key="username")
+        if user is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user} User {username} not found.")
+
+        stats = user.statistics
+        data = {
+            "username": user.username,
+            "mode": proper_mode_name[mode],
+            "global_rank": stats.global_rank,
+            "country": user.country["code"],
+            "country_rank": stats.country_rank,
+            "pp": stats.pp,
+            "peak_rank": min(user.rank_history["data"]),
+            "accuracy": round(stats.hit_accuracy, 2),
+            "play_count": stats.play_count,
+            "play_time": stats.play_time//3600,
+            "medal_count": len(user.user_achievements),
+            "medal_completion": round(len(user.user_achievements) / 271 * 100, 2),
+            "follower_count": user.follower_count,
+            "subscriber_count": user.mapping_follower_count,
+        }
+        await self.send_message(ctx.channel, profile_layout.format(**data))
 
     @command_manager.command("link", cooldown=Cooldown(0, 2))
     async def link_osu_account(self, ctx):
