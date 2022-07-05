@@ -1156,13 +1156,13 @@ class Bot:
             return
 
 
-        top_scores = await osu_client.get_user_scores(user_id, "best", mode=mode)
+        top_scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
         if not top_scores:
             return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no top scores for {proper_mode_name[mode]}.")
         if not recent_tops:
             top_scores = top_scores[:5]
         else:
-            top_scores = sorted(top_scores, key=lambda x: datetime.fromisoformat(x.created_at))[:5]
+            top_scores = sorted(top_scores, key=lambda x: datetime.fromisoformat(x.created_at), reverse=True)[:5]
 
         score_format = "{artist} - {title} [{diff}]{mods} {acc}% ({genki_counts}): {pp}pp | {time_ago} ago"
         message = f"Top{' recent' if recent_tops else ''} {proper_mode_name[mode]} scores for {username}: "
