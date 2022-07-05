@@ -1010,6 +1010,13 @@ class Bot:
         games = self.database.get_top_animecompare_games()
         await self.send_message(ctx.channel, f"@{ctx.user} The top anime compare scores are: {', '.join(['%s_%d' %(game['user'], game['score']) for game in games])}.")
 
+    @command_manager.command("ac_top", aliases=["actop"], cooldown=Cooldown(0, 5))
+    async def anime_compare_top(self, ctx):
+        game = self.database.get_top_animecompare_game_for_user(ctx.user)
+        if not game:
+            return await self.send_message(ctx.channel, f"@{ctx.user} You have not played any anime compare games yet.")
+        await self.send_message(ctx.channel, f"@{ctx.user} Your top anime compare score is {game[0]['score']}.")
+
     async def process_osu_username_arg(self, ctx, args):
         if len(args) == 0 and ctx.user in self.osu_data:  # user did not provide a username, but osu! account is linked
             return self.osu_data[ctx.user]['username']
@@ -1154,7 +1161,6 @@ class Bot:
         user_id = await self.get_osu_user_id_from_osu_username(ctx, username)
         if user_id is None:
             return
-
 
         top_scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
         if not top_scores:
