@@ -2,6 +2,7 @@ import sys
 import traceback
 import asyncio
 from datetime import datetime
+import pytz
 
 
 def print(message):
@@ -35,17 +36,33 @@ def future_callback(future):
         traceback.print_exc()
 
 
+def split_message(message):
+    messages = []
+    while len(message) > 0:
+        messages.append(message[:496])
+        message = message[496:]
+    return messages
+
+
 def format_date(date):
-    minutes = (datetime.now() - date).total_seconds() // 60
-    hours = 0
-    days = 0
-    if minutes >= 60:
-        hours = minutes // 60
-        minutes = minutes % 60
-        if hours >= 24:
-            days = hours // 24
-            hours = hours % 24
-    elif minutes == 0:
-        return f"{(datetime.now() - date).seconds} seconds"
-    return ((f"{int(days)} day(s) " if days != 0 else "") + (f" {int(hours)} hour(s) " if hours != 0 else "") + (
-        f" {int(minutes)} minute(s)" if minutes != 0 else "")).strip()
+    time_values = {
+        "seconds": ("minutes", 60),
+        "minutes": ("hours", 60),
+        "hours": ("days", 24),
+        "days": ("months", 30),
+        "months": ("years", 12),
+        "years": ("centuries", 100),
+    }
+    seconds = (datetime.now(pytz.UTC) - date.replace(tzinfo=pytz.UTC)).total_seconds()
+    info = {"seconds": seconds}
+    for label, time_value in time_values.items():
+        if info[label] >= time_value[1]:
+            info[time_value[0]] = info[label] // time_value[1]
+            info[label] %= time_value[1]
+        else:
+            break
+
+    used_info = list(info.keys())[-2:]
+    used_info.reverse()
+
+    return " ".join(f"{int(info[label])} {label}" for label in used_info)
