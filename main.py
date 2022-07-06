@@ -33,9 +33,6 @@ osu_client = AsynchronousClient.from_client_credentials(int(os.getenv("OSU_CLIEN
 command_manager = CommandManager()
 
 
-
-
-
 class Bot:
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
@@ -354,10 +351,7 @@ class Bot:
             if scramble.in_progress:
                 await self.on_scramble(ctx, scramble_type)
 
-        if self.bomb_party_helper.started:
-            await self.on_bomb_party(ctx)
-
-        if ascii_message.isdigit() and int(ascii_message) in [1, 2]:
+        if ascii_message.isdigit() and int(ascii_message.strip()) in [1, 2]:
             game = self.compare_helper.get_game(ctx.user)
             if game is not None:
                 await self.on_anime_compare(ctx, game)
@@ -367,6 +361,10 @@ class Bot:
         if ctx.message.startswith("!"):
             command = ascii_message.split()[0].lower().replace("!", "")
             await self.cm(command, ctx)  # Automatically checks that the command exists
+
+        # Put it over to maybe stop it from breaking the bot
+        if self.bomb_party_helper.started:
+            await self.on_bomb_party(ctx)
 
     # Commands
 
@@ -872,8 +870,8 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user} You have left the game of bomb party.")
         if self.bomb_party_helper.started and await self.check_win(ctx.channel):
             if self.bomb_party_future is not None:
-                self.bomb_party_future.cancel()
-        elif self.bomb_party_helper.current_player == ctx.user:
+                self.bomb_party_future.cancel()  #
+        elif self.bomb_party_helper.started and self.bomb_party_helper.current_player.user == ctx.user:
             if self.bomb_party_future is not None:
                 self.bomb_party_future.cancel()
             await self.next_player(ctx.channel)
