@@ -4,7 +4,8 @@
 #       utilize DMs
 #       different rate limits for mod and broadcaster
 #       make decorators for osu arguments
-
+#       per channel rate limits
+import osu
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -1101,7 +1102,7 @@ class Bot:
                 score.statistics.count_50,
                 score.statistics.count_miss
             ),
-            "time_ago": format_date(datetime.fromisoformat(score.created_at))
+            "time_ago": format_date(score.created_at)
         }))
 
     @command_manager.command("osu", cooldown=Cooldown(0, 5))
@@ -1123,7 +1124,7 @@ class Bot:
         profile_layout = "{username}'s profile [{mode}]: #{global_rank} ({country}#{country_rank}) - {pp}pp; Peak (last 90 days): #{peak_rank} | " \
                          "{accuracy}% | {play_count} playcount ({play_time} hrs) | Medal count: {medal_count}/271 ({medal_completion}%) | " \
                          "Followers: {follower_count} | Mapping subs: {subscriber_count}"
-        await self.send_message(ctx.channel, profile_layout.format(profile_layout.format({
+        await self.send_message(ctx.channel, profile_layout.format(**{
             "username": user.username,
             "mode": proper_mode_name[mode],
             "global_rank": stats.global_rank,
@@ -1138,7 +1139,7 @@ class Bot:
             "medal_completion": round(len(user.user_achievements) / 271 * 100, 2),
             "follower_count": user.follower_count,
             "subscriber_count": user.mapping_follower_count,
-        })))
+        }))
 
     @command_manager.command("osutop", cooldown=Cooldown(0, 5))
     async def osu_top(self, ctx):
@@ -1168,7 +1169,7 @@ class Bot:
         if not recent_tops:
             top_scores = top_scores[:5]
         else:
-            top_scores = sorted(top_scores, key=lambda x: datetime.fromisoformat(x.created_at), reverse=True)[:5]
+            top_scores = sorted(top_scores, key=lambda x: x.created_at, reverse=True)[:5]
 
         score_format = "{artist} - {title} [{diff}]{mods} {acc}% ({genki_counts}): {pp}pp | {time_ago} ago"
         message = f"Top{' recent' if recent_tops else ''} {proper_mode_name[mode]} scores for {username}: "
@@ -1186,7 +1187,7 @@ class Bot:
                     score.statistics.count_miss
                 ),
                 "pp": 0 if score.pp is None else round(score.pp, 2),
-                "time_ago": format_date(datetime.fromisoformat(score.created_at)),
+                "time_ago": format_date(score.created_at),
             })
 
         await self.send_message(ctx.channel, message)
