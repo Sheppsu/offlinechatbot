@@ -71,17 +71,6 @@ class BombParty:
         "lives": range(1, 5 + 1),
     }
 
-    in_progress: bool
-    started: bool
-    used_words: list
-    party: dict
-    current_player_index: int
-    current_letters: str
-    bomb_start_time: float
-    turn_order: list
-    timer: int
-    bomb_settings: dict
-
     def __init__(self):
         self.bomb_party_letters = self.construct_bomb_party_letters()
         self.set_default_values()
