@@ -120,11 +120,10 @@ class Bot:
         # Anime compare
         self.compare_helper = AnimeCompare(self.anime)
         self.anime_compare_future = {}
-        #games = list(map(
-        #    lambda game: AnimeCompareGame(game["user"], game["answer"], game["score"]),
-        #    self.database.get_in_progress_animecompare_games()
-        #))
-        #self.compare_helper.current_games = games
+
+        # osu! stuff
+        self.last_beatmap = None
+        self.last_beatmap_attributes = None
 
     # Util
 
@@ -1020,7 +1019,7 @@ class Bot:
         if len(args) == 0 and ctx.user in self.osu_data:  # user did not provide a username, but osu! account is linked
             return self.osu_data[ctx.user]['username']
         elif len(args) == 0 or args[0].strip() == "":  # user did not provide a username and osu! account is not linked
-            await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username.")
+            await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username or link your account with !link.")
         else:  # username was provided
             return " ".join(args).strip()
 
@@ -1056,11 +1055,18 @@ class Bot:
         # Process arguments
 
         args = ctx.get_args('ascii')
+        lower_args = list(map(str.lower, args))
 
         # Process mode argument
         mode, args = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
+
+        best = False
+        if "-b" in lower_args:
+            index = lower_args.index("-b")
+            args.pop(index)
+            best = True
 
         username = await self.process_osu_username_arg(ctx, args)
         if username is None:
@@ -1071,12 +1077,19 @@ class Bot:
             return
 
         # Get recent score
-        scores = await osu_client.get_user_scores(user_id, "recent", include_fails=1, mode=mode, limit=1)
+        if not best:
+            scores = await osu_client.get_user_scores(user_id, "recent", include_fails=1, mode=mode, limit=1)
+        else:
+            scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
+            scores = sorted(scores, key=lambda x: x.created_at, reverse=True)
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no recent scores for {proper_mode_name[mode]}.")
 
         score = scores[0]
+        self.last_beatmap = score.beatmap
+        self.last_beatmap.beatmapset = score.beatmapset
         beatmap_attributes = await osu_client.get_beatmap_attributes(score.beatmap.id, score.mods if score.mods else None, score.mode)
+        self.last_beatmap_attributes = beatmap_attributes
 
         rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp | {time_ago} ago"
@@ -1102,6 +1115,47 @@ class Bot:
             ),
             "time_ago": format_date(score.created_at)
         }))
+
+    @command_manager.command("c", aliases=['compare'], cooldown=Cooldown(0, 3))
+    async def compare_score(self, ctx):
+        if self.last_beatmap is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user} I don't have a cache of the last beatmap.")
+
+        username = await self.process_osu_username_arg(ctx, ctx.get_args('ascii'))
+        if username is None:
+            return
+
+        user_id = await self.get_osu_user_id_from_osu_username(ctx, username)
+        if user_id is None:
+            return
+
+        scores = await osu_client.get_user_beatmap_scores(self.last_beatmap.id, user_id)
+        if not scores:
+            return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no scores on that beatmap.")
+
+        score_format = "{artist} - {title} [{diff}]{mods} ({mapper}) " \
+                       "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp | {time_ago} ago"
+        message = ""
+        for score in scores[:5]:
+            message += "🌟" + score_format.format(**{
+                "artist": self.last_beatmap.beatmapset.artist,
+                "title": self.last_beatmap.beatmapset.title,
+                "diff": self.last_beatmap.version,
+                "mods": " +"+"".join(score.mods) if score.mods else "",
+                "mapper": self.last_beatmap.beatmapset.creator,
+                "acc": round(score.accuracy * 100, 2),
+                "combo": score.max_combo,
+                "max_combo": self.last_beatmap_attributes.max_combo,
+                "genki_counts": f"%d/%d/%d/%d" % (
+                    score.statistics.count_300,
+                    score.statistics.count_100,
+                    score.statistics.count_50,
+                    score.statistics.count_miss
+                ),
+                "pp": 0 if score.pp is None else round(score.pp, 2),
+                "time_ago": format_date(score.created_at)
+            })
+        await self.send_message(ctx.channel, message)
 
     @command_manager.command("osu", cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
