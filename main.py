@@ -783,7 +783,7 @@ class Bot:
         args = ctx.get_args()
         await self.send_message(ctx.channel, f"@{ctx.user} Your afk has been set.")
         message = " ".join(args)
-        self.afk[ctx.user] = {"message": message, "time": datetime.now().isoformat()}
+        self.afk[ctx.user] = {"message": message, "time": datetime.now(pytz.UTC).isoformat()}
         self.database.save_afk(ctx.user, message)
 
     @command_manager.command("help", aliases=["sheepp_commands", "sheep_commands", "sheepcommands",
@@ -802,8 +802,9 @@ class Bot:
 
         if ctx.user not in self.afk:
             return
-        elif (datetime.now() - datetime.fromisoformat(self.afk[ctx.user]['time'])).seconds > 60:
-            await self.send_message(ctx.channel, f"@{ctx.user} Your afk has been removed.")
+        elif (datetime.now(tz=pytz.UTC) - datetime.fromisoformat(self.afk[ctx.user]['time']).replace(tzinfo=pytz.UTC)).seconds > 60:
+            await self.send_message(ctx.channel, f"@{ctx.user} Your afk has been removed. "
+                                                 f"(Afk for {format_date(datetime.fromisoformat(self.afk[ctx.user]['time']))}.)")
             del self.afk[ctx.user]
             self.database.delete_afk(ctx.user)
 
