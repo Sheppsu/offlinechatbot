@@ -37,7 +37,7 @@ class Context:
         except KeyError:
             message_type = data[1 + offset]
         channel = data[2 + offset][1:]
-        message = " ".join(data[3:])[1:]
+        message = " ".join(data[3 + offset:])[1:]
         return cls(user, channel, message, message_type, tags, source)
 
     def get_args(self, char_acceptance="unicode"):
