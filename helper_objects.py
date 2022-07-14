@@ -406,7 +406,13 @@ class AnimeCompare:
 
     def finish_game(self, game):
         game.finished = True
-        self.current_games.remove(game)
+        index = -1
+        for i, cgame in enumerate(self.current_games):
+            if cgame.id == game.id:
+                index = i
+                break
+        if index != -1:
+            self.current_games.pop(index)
 
     def __contains__(self, user):
         return self.get_game(user) is not None
