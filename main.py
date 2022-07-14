@@ -972,7 +972,7 @@ class Bot:
             return
         game = self.compare_helper.new_game(ctx.user)
         await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
-        game.id = self.database.new_animecompare_game(ctx.user, game.answers)
+        game.id = self.database.new_animecompare_game(ctx.user)
         self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
 
     async def on_anime_compare(self, ctx, game):
@@ -988,7 +988,7 @@ class Bot:
         else:
             await self.send_message(ctx.channel, f"@{ctx.user} That is correct! Your current score is {game.score}. {game.get_ranking_string()}.")
             self.compare_helper.generate_answer(game)
-            self.database.update_animecompare_game(game.id, game.score, game.answers)
+            self.database.update_animecompare_game(game.id, game.score)
             await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
             self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
 

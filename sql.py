@@ -90,9 +90,9 @@ class Database:
     def delete_user(self, user):
         self.cursor.execute(f"DELETE FROM userdata WHERE username = '{user}'")
 
-    def new_animecompare_game(self, user, answer):
+    def new_animecompare_game(self, user):
         cursor = self.cursor
-        cursor.execute(f"INSERT INTO animecompare_games (user, answer) VALUES ('{user}', '{json.dumps(answer)}')")
+        cursor.execute(f"INSERT INTO animecompare_games (user) VALUES ('{user}')")
         self.database.commit()
         cursor.execute("SELECT LAST_INSERT_ID()")
         return cursor.fetchone()[0]
@@ -100,25 +100,25 @@ class Database:
     def get_in_progress_animecompare_games(self):
         cursor = self.cursor
         cursor.execute("SELECT * FROM animecompare_games WHERE finished = 0")
-        return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
+        return [{"id": data[0], "user": data[1], "score": data[2]} for data in cursor.fetchall()]
 
     def get_user_animecompare_games(self, user):
         cursor = self.cursor
         cursor.execute("SELECT * FROM animecompare_games WHERE user = '%s'" % user)
-        return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
+        return [{"id": data[0], "user": data[1], "score": data[2]} for data in cursor.fetchall()]
 
     def get_top_animecompare_games(self):
         cursor = self.cursor
         cursor.execute("SELECT * FROM animecompare_games WHERE finished = 1 ORDER BY score DESC LIMIT 5")
-        return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
+        return [{"id": data[0], "user": data[1], "score": data[2]} for data in cursor.fetchall()]
 
     def get_top_animecompare_game_for_user(self, user):
         cursor = self.cursor
         cursor.execute(f"SELECT * FROM animecompare_games WHERE finished = 1 AND user = '{user}' ORDER BY score DESC LIMIT 1")
-        return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
+        return [{"id": data[0], "user": data[1], "score": data[2]} for data in cursor.fetchall()]
 
-    def update_animecompare_game(self, game_id, score, answer):
-        self.cursor.execute(f"UPDATE animecompare_games SET score = {score}, answer = '{json.dumps(answer)}' WHERE id = '{game_id}'")
+    def update_animecompare_game(self, game_id, score):
+        self.cursor.execute(f"UPDATE animecompare_games SET score = {score} WHERE id = '{game_id}'")
         self.database.commit()
 
     def finish_animecompare_game(self, game_id):
