@@ -92,7 +92,7 @@ class Database:
 
     def new_animecompare_game(self, user, answer):
         cursor = self.cursor
-        cursor.execute(f"INSERT INTO animecompare_games (user, answer) VALUES ('{user}', '{self.format_animecompare_answer(answer)}')")
+        cursor.execute(f"INSERT INTO animecompare_games (user, answer) VALUES ('{user}', '{json.dumps(answer)}')")
         self.database.commit()
         cursor.execute("SELECT LAST_INSERT_ID()")
         return cursor.fetchone()[0]
