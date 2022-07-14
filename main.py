@@ -972,8 +972,7 @@ class Bot:
             return
         game = self.compare_helper.new_game(ctx.user)
         await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
-        game_id = self.database.new_animecompare_game(ctx.user, game.answers)
-        game.id = game_id
+        game.id = self.database.new_animecompare_game(ctx.user, game.answers)
         self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
 
     async def on_anime_compare(self, ctx, game):
@@ -984,7 +983,7 @@ class Bot:
         if not check:
             await self.send_message(ctx.channel, f"@{ctx.user} Unfortunately, that is not the correct answer! Your final score is {game.score}. {game.get_ranking_string()}.")
             self.database.finish_animecompare_game(game.id)
-            del self.anime_compare_future[ctx.user]
+            self.anime_compare_future[ctx.user] = None
             self.compare_helper.finish_game(game)
         else:
             await self.send_message(ctx.channel, f"@{ctx.user} That is correct! Your current score is {game.score}. {game.get_ranking_string()}.")
@@ -997,7 +996,7 @@ class Bot:
         self.compare_helper.finish_game(game)
         await self.send_message(ctx.channel, f"@{ctx.user} You did not answer in time. Your final score is {game.score}.")
         self.database.finish_animecompare_game(game.id)
-        del self.anime_compare_future[ctx.user]
+        self.anime_compare_future[ctx.user] = None
 
     @command_manager.command("average_ac", aliases=["averageac", "averageanimecompare", "average_animecompare"])
     async def average_anime_compare(self, ctx):

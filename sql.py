@@ -118,7 +118,7 @@ class Database:
         return [{"id": data[0], "user": data[1], "score": data[2], "answer": json.loads(data[4])} for data in cursor.fetchall()]
 
     def update_animecompare_game(self, game_id, score, answer):
-        self.cursor.execute(f"UPDATE animecompare_games SET score = {score}, answer = '{self.format_animecompare_answer(answer)}' WHERE id = '{game_id}'")
+        self.cursor.execute(f"UPDATE animecompare_games SET score = {score}, answer = '{json.dumps(answer)}' WHERE id = '{game_id}'")
         self.database.commit()
 
     def finish_animecompare_game(self, game_id):
@@ -137,10 +137,6 @@ class Database:
         cursor = self.cursor
         cursor.execute("SELECT * FROM osu_data")
         return {data[0]: {"user_id": data[1], "username": data[2]} for data in cursor.fetchall()}
-
-    @staticmethod
-    def format_animecompare_answer(answer):
-        return json.dumps(answer).replace("'", "\\'")
 
     @property
     def current_time(self):
