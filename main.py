@@ -5,7 +5,6 @@
 #       different rate limits for mod and broadcaster
 #       make decorators for osu arguments
 #       per channel rate limits
-import osu
 from dotenv import load_dotenv
 load_dotenv()
 
