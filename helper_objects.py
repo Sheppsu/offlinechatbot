@@ -324,7 +324,7 @@ class ScrambleManager:
 
     def check_answer(self, identifier, guess):
         scramble = self.scrambles[identifier]
-        if (guess.lower() == scramble.answer.lower() and not scramble.case_sensitive) or guess == scramble.answer:
+        if (guess.lower() == scramble.answer.lower().strip() and not scramble.case_sensitive) or guess == scramble.answer.strip():
             return round(
                 random.randint(5, 10) *
                 len(scramble.answer.replace(" ", "")) *
