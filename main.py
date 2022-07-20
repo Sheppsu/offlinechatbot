@@ -1093,9 +1093,11 @@ class Bot:
         rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp | {time_ago} ago"
         # Format and send message for recent score
+        genkis = (score.statistics.count_300, score.statistics.count_100,
+                score.statistics.count_50, score.statistics.count_miss)
         await self.send_message(ctx.channel, rs_format.format(**{
             "username": score.user.username,
-            "passed": "" if score.passed else "(Failed)",
+            "passed": "" if score.passed else f"(Failed {round(sum(genkis)/beatmap_attributes.max_combo*100)}%)",
             "artist": score.beatmapset.artist,
             "title": score.beatmapset.title,
             "diff": score.beatmap.version,
@@ -1106,12 +1108,7 @@ class Bot:
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
             "max_combo": beatmap_attributes.max_combo,
-            "genki_counts": f"%d/%d/%d/%d" % (
-                score.statistics.count_300,
-                score.statistics.count_100,
-                score.statistics.count_50,
-                score.statistics.count_miss
-            ),
+            "genki_counts": f"%d/%d/%d/%d" %genkis,
             "time_ago": format_date(score.created_at)
         }))
 
