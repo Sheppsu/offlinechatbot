@@ -366,14 +366,13 @@ class AnimeCompareGame:
 class AnimeCompare:
     def __init__(self, anime_list: list):
         self.current_games = []
-        self.anime_list = anime_list
 
-    def generate_answer(self, game=None) -> dict[str, tuple[str, int]]:
-        anime1_i = random.randint(0, len(self.anime_list)-1)
-        anime1 = self.anime_list.pop(anime1_i)
-        anime2_i = random.randint(0, len(self.anime_list)-1)
-        anime2 = self.anime_list.pop(anime2_i)
-        self.anime_list.insert(anime1_i, anime1)
+    def generate_answer(self, anime_list, game=None) -> dict[str, tuple[str, int]]:
+        anime1_i = random.randint(0, len(anime_list)-1)
+        anime1 = anime_list.pop(anime1_i)
+        anime2_i = random.randint(0, len(anime_list)-1)
+        anime2 = anime_list.pop(anime2_i)
+        anime_list.insert(anime1_i, anime1)
         answers = {
             "anime1": (anime1, anime1_i),
             "anime2": (anime2, anime2_i + (1 if anime2_i >= anime1_i else 0))
@@ -382,8 +381,8 @@ class AnimeCompare:
             return answers
         game.answers = answers
 
-    def new_game(self, user) -> AnimeCompareGame:
-        game = AnimeCompareGame(user, self.generate_answer())
+    def new_game(self, user, anime_list) -> AnimeCompareGame:
+        game = AnimeCompareGame(user, self.generate_answer(anime_list))
         self.current_games.append(game)
         return game
 

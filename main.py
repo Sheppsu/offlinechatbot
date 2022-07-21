@@ -235,6 +235,7 @@ class Bot:
 
                 last_check = perf_counter() - 20
                 last_ping = perf_counter() - 60*60  # 1 hour
+                last_update = perf_counter() - 60
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other threads to run
 
@@ -251,6 +252,9 @@ class Bot:
                     # Ping database once an hour for keepalive
                     if perf_counter() - last_ping >= 60*60:
                         self.database.ping()
+
+                    if perf_counter() - last_update >= 60:
+                        import get_popular_anime  # Update popular anime json file
 
                     # Check if poll is no longer running, in which case, the bot is no longer running.
                     if poll.done():
@@ -969,7 +973,7 @@ class Bot:
         game = self.compare_helper.get_game(ctx.user)
         if game is not None:
             return
-        game = self.compare_helper.new_game(ctx.user)
+        game = self.compare_helper.new_game(ctx.user, self.anime)
         await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
         game.id = self.database.new_animecompare_game(ctx.user)
         self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
@@ -986,7 +990,7 @@ class Bot:
             self.compare_helper.finish_game(game)
         else:
             await self.send_message(ctx.channel, f"@{ctx.user} That is correct! Your current score is {game.score}. {game.get_ranking_string()}.")
-            self.compare_helper.generate_answer(game)
+            self.compare_helper.generate_answer(self.anime, game)
             self.database.update_animecompare_game(game.id, game.score)
             await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
             self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
