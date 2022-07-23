@@ -991,11 +991,11 @@ class Bot:
         self.anime_compare_future[ctx.user].cancel()
         self.anime_compare_future[ctx.user] = None
         if not check:
-            await self.send_message(ctx.channel, f"@{ctx.user} Unfortunately, that is not the correct answer! Your final score is {game.score}. {game.get_ranking_string()}.")
+            await self.send_message(ctx.channel, f"@{ctx.user} Incorrect. Your final score is {game.score}. {game.get_ranking_string()}.")
             self.database.finish_animecompare_game(game.id)
             self.compare_helper.finish_game(game)
         else:
-            await self.send_message(ctx.channel, f"@{ctx.user} That is correct! Your current score is {game.score}. {game.get_ranking_string()}.")
+            await self.send_message(ctx.channel, f"@{ctx.user} Correct! Your current score is {game.score}. {game.get_ranking_string()}.")
             self.compare_helper.generate_answer(self.anime, game)
             self.database.update_animecompare_game(game.id, game.score)
             await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
@@ -1007,17 +1007,17 @@ class Bot:
         self.database.finish_animecompare_game(game.id)
         self.anime_compare_future[ctx.user] = None
 
-    @command_manager.command("average_ac", aliases=["averageac", "averageanimecompare", "average_animecompare"])
+    @command_manager.command("average_ac", aliases=["acaverage", "ac_avg", "ac_average", "acavg"])
     async def average_anime_compare(self, ctx):
         games = self.database.get_user_animecompare_games(ctx.user)
         await self.send_message(ctx.channel, f"@{ctx.user} Your average score is {round(sum([game['score'] for game in games])/len(games), 2)}.")
 
-    @command_manager.command("ac_leaderboard", aliases=["aclb", "ac_lb", "acleaderboard", "animecompareleaderboard", "animecompare_leaderboard", "animecompareleaderboard"])
+    @command_manager.command("ac_leaderboard", aliases=["aclb", "ac_lb", "acleaderboard"])
     async def anime_compare_leaderboard(self, ctx):
         games = self.database.get_top_animecompare_games()
         await self.send_message(ctx.channel, f"@{ctx.user} The top anime compare scores are: {', '.join(['%s_%d' %(game['user'], game['score']) for game in games])}.")
 
-    @command_manager.command("ac_top", aliases=["actop"], cooldown=Cooldown(0, 5))
+    @command_manager.command("ac_top", aliases=["actop", "topac", "top_ac"], cooldown=Cooldown(0, 5))
     async def anime_compare_top(self, ctx):
         game = self.database.get_top_animecompare_game_for_user(ctx.user)
         if not game:
