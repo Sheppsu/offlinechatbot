@@ -910,9 +910,12 @@ class Bot:
 
     async def bomb_party_timer(self, channel):
         msg = self.bomb_party_helper.on_explode()
+        print(msg)
         await self.send_message(channel, msg)
+        print("checking win")
         if await self.check_win(channel):
             return
+        print("next player")
         await self.next_player(channel)
 
     async def next_player(self, channel):

@@ -144,10 +144,14 @@ class BombParty:
         self.used_words.append(message)
 
     def on_explode(self):
+        print("setting timer")
         self.timer = self.bomb_settings['timer']
+        print("bomb start time to zero")
         self.bomb_start_time = 0
+        print("player loses life")
         player = self.current_player
         player.lives -= 1
+        print("return message")
         return f"@{player.user} " + \
                (f"You ran out of time and now have {player.lives} {'♥' * player.lives} heart(s) left"
                 if player.lives != 0 else "You ran out of time and lost all your lives! YouDied")
@@ -165,7 +169,9 @@ class BombParty:
         self.current_letters = random.choice(self.bomb_party_letters[self.bomb_settings['difficulty']])
 
     def get_winner(self):
+        print("getting winner")
         players_left = [player for player in self.party.values() if player.lives != 0]
+        print("returning winner")
         return players_left[0] if len(players_left) == 1 else None
 
     def set_setting(self, setting, value):
