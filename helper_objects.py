@@ -71,13 +71,23 @@ class BombParty:
         "lives": range(1, 5 + 1),
     }
 
-    def __init__(self):
-        self.bomb_party_letters = self.construct_bomb_party_letters()
-        self.set_default_values()
+    def __init__(self, init=True):
+        if init:
+            self.bomb_party_letters = self.construct_bomb_party_letters()
+            self.bomb_setting_functions = {
+                "lives": self.on_lives_set,
+            }
 
-        self.bomb_setting_functions = {
-            "lives": self.on_lives_set,
-        }
+        self.in_progress = False
+        self.started = False
+        self.used_words = []
+        self.party = {}
+        self.current_player_index = 0
+        self.current_letters = ""
+        self.bomb_start_time = 0
+        self.turn_order = []
+        self.timer = 30
+        self.bomb_settings = self.default_settings
 
     @property
     def default_settings(self):
@@ -89,16 +99,7 @@ class BombParty:
         }
 
     def set_default_values(self):
-        self.in_progress = False
-        self.started = False
-        self.used_words = []
-        self.party = {}
-        self.current_player_index = 0
-        self.current_letters = ""
-        self.bomb_start_time = 0
-        self.turn_order = []
-        self.timer = 30
-        self.bomb_settings = self.default_settings
+        self.__init__(init=False)
 
     @staticmethod
     def construct_bomb_party_letters():

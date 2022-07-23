@@ -49,6 +49,7 @@ class Bot:
         self.ws = None
         self.running = False
         self.loop = asyncio.get_event_loop()
+        self.last_message = ""
 
         # Save/load data from files or to/from database
         self.pity = {}
@@ -323,7 +324,8 @@ class Bot:
         await self.message_lock.acquire()
         messages = split_message(message)
         for msg in messages:
-            await self.ws.send(f"PRIVMSG #{channel} :/me {msg}")
+            await self.ws.send(f"PRIVMSG #{channel} :/me {msg}"+("\U000e0000" if self.last_message == msg else ""))
+            self.last_message = msg
             print(f"> PRIVMSG #{channel} :/me {msg}")
             await asyncio.sleep(self.get_wait_for_channel(channel))  # Avoid going over ratelimits
         self.message_lock.release()
@@ -353,7 +355,8 @@ class Bot:
             if scramble.in_progress:
                 await self.on_scramble(ctx, scramble_type)
 
-        if ascii_message.isdigit() and int(ascii_message.strip()) in [1, 2]:
+        if ctx.user in self.anime_compare_future and self.anime_compare_future[ctx.user] is not None and \
+                ascii_message.isdigit() and int(ascii_message.strip()) in [1, 2]:
             game = self.compare_helper.get_game(ctx.user)
             if game is not None:
                 await self.on_anime_compare(ctx, game)
@@ -983,10 +986,10 @@ class Bot:
         if check is None:
             return
         self.anime_compare_future[ctx.user].cancel()
+        self.anime_compare_future[ctx.user] = None
         if not check:
             await self.send_message(ctx.channel, f"@{ctx.user} Unfortunately, that is not the correct answer! Your final score is {game.score}. {game.get_ranking_string()}.")
             self.database.finish_animecompare_game(game.id)
-            self.anime_compare_future[ctx.user] = None
             self.compare_helper.finish_game(game)
         else:
             await self.send_message(ctx.channel, f"@{ctx.user} That is correct! Your current score is {game.score}. {game.get_ranking_string()}.")
