@@ -256,6 +256,7 @@ class Bot:
 
                     if perf_counter() - last_update >= 60:
                         import get_popular_anime  # Update popular anime json file
+                        self.load_anime()
 
                     # Check if poll is no longer running, in which case, the bot is no longer running.
                     if poll.done():
