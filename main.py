@@ -584,7 +584,7 @@ class Bot:
         }})
         self.database.new_user(user)
 
-    @command_manager.command("collect")
+    # @command_manager.command("collect")
     @requires_gamba_data
     async def collect(self, ctx):
         money = random.randint(10, 100)
@@ -592,7 +592,7 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user} You collected {money} Becky Bucks!")
         self.save_money(ctx.user)
 
-    @command_manager.command("gamba")
+    # @command_manager.command("gamba")
     @requires_gamba_data
     async def gamba(self, ctx):
         args = ctx.get_args()
