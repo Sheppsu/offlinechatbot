@@ -7,7 +7,7 @@ if len(sys.argv) < 2:
     print("Must provide an a user and how much money to give them.")
     quit()
 
-if not sys.argv[2].isnumeric():
+if not sys.argv[2].isnumeric() and not (sys.argv[2][1:].isnumeric() and sys.argv[2][0] == "-"):
     print("Money must be a valid number.")
     quit()
 
