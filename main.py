@@ -167,6 +167,11 @@ class Bot:
         for data in self.osu_data.values():
             self.user_id_cache[data["username"]] = data["user_id"]
 
+    def reload_db_data(self):
+        self.database.close()
+        self.database.create_connection()
+        self.load_db_data()
+
     def load_emotes(self):
         emote_requester = EmoteRequester(self.client_id, self.client_secret)
         return {
@@ -967,7 +972,7 @@ class Bot:
 
     @command_manager.command("reload_db", permission=CommandPermission.ADMIN)
     async def reload_from_db(self, ctx):
-        self.load_db_data()
+        self.reload_db_data()
         await self.send_message(ctx.channel, f"@{ctx.user} Local data has been reloaded from database.")
 
     @command_manager.command("reload_emotes", permission=CommandPermission.ADMIN)
