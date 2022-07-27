@@ -1,14 +1,7 @@
-import sys
 import traceback
 import asyncio
 from datetime import datetime
 import pytz
-
-
-def print(message):
-    # TODO: timezone
-    sys.stdout.write(f"[{datetime.now().isoformat()}]{message}\n")
-    sys.stdout.flush()
 
 
 def requires_gamba_data(func):

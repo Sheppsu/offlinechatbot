@@ -12,10 +12,12 @@ import websockets
 import requests
 import html
 import os
+import sys
 from get_top_players import Client
 from sql import Database
 from emotes import EmoteRequester
 from helper_objects import *
+from context import Context, ContextType
 from util import *
 from constants import *
 from osu import AsynchronousClient
@@ -234,11 +236,11 @@ class Bot:
             self.running = True
 
             try:
+                # Start up
                 await self.connect()  # Connect to the irc server
                 poll = asyncio.run_coroutine_threadsafe(self.poll(), self.loop)  # Begin polling for events sent by the server
-                await asyncio.sleep(5)  # Leave time for reply from server before beginning to join channels and stuff
-                await self.run()  # Join channels + whatever else is in the function
 
+                # Running loop
                 last_check = perf_counter() - 20
                 last_ping = perf_counter() - 60*60  # 1 hour
                 last_update = perf_counter() - 60
@@ -279,14 +281,7 @@ class Bot:
                     await self.start()
             except:
                 print(traceback.format_exc())
-            finally:
-                self.running = False
-
-    async def run(self):
-        # await self.register_cap("tags")  # Not using atm
-        await self.join(self.channel_to_run_in)
-        if not TESTING:
-            await self.join(self.username)
+        self.running = False
 
     async def connect(self):
         await self.ws.send(f"PASS {self.oauth}")
@@ -304,12 +299,15 @@ class Bot:
                 continue
 
             # Account for tags
-            ctx = Context.from_string(data)
+            ctxs = Context(data)
 
-            if ctx.message_type == MessageType.PRIVMSG:
-                # Run in its own thread to avoid holding up the polling thread
-                future = asyncio.run_coroutine_threadsafe(self.on_message(ctx), self.loop)
-                future.add_done_callback(future_callback)
+            for ctx in ctxs:
+                if ctx.type == "376":
+                    await self.on_running()
+                elif ctx.type == ContextType.PRIVMSG:
+                    # Run in its own thread to avoid holding up the polling thread
+                    future = asyncio.run_coroutine_threadsafe(self.on_message(ctx), self.loop)
+                    future.add_done_callback(future_callback)
 
     async def join(self, channel):
         await self.ws.send(f"JOIN #{channel}")
@@ -337,6 +335,13 @@ class Bot:
         self.message_lock.release()
 
     # Events
+
+    async def on_running(self):
+        await self.register_cap("tags")
+        await self.register_cap("commands")
+        await self.join(self.channel_to_run_in)
+        if not TESTING:
+            await self.join(self.username)
 
     async def on_message(self, ctx):
         if (not self.offline and ctx.channel == self.channel_to_run_in) or ctx.user == self.username:
@@ -1185,8 +1190,9 @@ class Bot:
 
         stats = user.statistics
 
+        total_medals = 275
         profile_layout = "{username}'s profile [{mode}]: #{global_rank} ({country}#{country_rank}) - {pp}pp; Peak (last 90 days): #{peak_rank} | " \
-                         "{accuracy}% | {play_count} playcount ({play_time} hrs) | Medal count: {medal_count}/271 ({medal_completion}%) | " \
+                         "{accuracy}% | {play_count} playcount ({play_time} hrs) | Medal count: {medal_count}/{total_medals} ({medal_completion}%) | " \
                          "Followers: {follower_count} | Mapping subs: {subscriber_count}"
         await self.send_message(ctx.channel, profile_layout.format(**{
             "username": user.username,
@@ -1200,7 +1206,8 @@ class Bot:
             "play_count": stats.play_count,
             "play_time": stats.play_time//3600,
             "medal_count": len(user.user_achievements),
-            "medal_completion": round(len(user.user_achievements) / 271 * 100, 2),
+            "total_medals": total_medals,
+            "medal_completion": round(len(user.user_achievements) / total_medals * 100, 2),
             "follower_count": user.follower_count,
             "subscriber_count": user.mapping_follower_count,
         }))
