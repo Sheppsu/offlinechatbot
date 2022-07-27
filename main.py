@@ -17,7 +17,7 @@ from get_top_players import Client
 from sql import Database
 from emotes import EmoteRequester
 from helper_objects import *
-from context import Context, ContextType
+from context import *
 from util import *
 from constants import *
 from osu import AsynchronousClient
@@ -52,6 +52,12 @@ class Bot:
         self.running = False
         self.loop = asyncio.get_event_loop()
         self.last_message = ""
+        self.own_state = None
+        self.irc_command_handlers = {
+            "376": self.on_running,
+            ContextType.PRIVMSG: self.on_message,
+            ContextType.USERSTATE: self.on_user_state,
+        }
 
         # Save/load data from files or to/from database
         self.pity = {}
@@ -133,6 +139,12 @@ class Bot:
         future = asyncio.run_coroutine_threadsafe(do_timed_event(wait, callback, *args, **kwargs), self.loop)
         future.add_done_callback(future_callback)
         return future
+
+    def get_wait_for_channel(self, channel):
+        # TODO: make a check for if the bot is a moderator in the channel
+        if channel == self.username or (self.own_state is not None and self.own_state.mod):
+            return 0.3
+        return 1.5
 
     # File save/load
 
@@ -222,12 +234,6 @@ class Bot:
             print(traceback.format_exc())
             self.offline = False
 
-    def get_wait_for_channel(self, channel):
-        # TODO: make a check for if the bot is a moderator in the channel
-        if channel == self.username:
-            return 0.3
-        return 1.5
-
     # Fundamental
 
     async def start(self):
@@ -302,12 +308,10 @@ class Bot:
             ctxs = Context(data)
 
             for ctx in ctxs:
-                if ctx.type == "376":
-                    await self.on_running()
-                elif ctx.type == ContextType.PRIVMSG:
-                    # Run in its own thread to avoid holding up the polling thread
-                    future = asyncio.run_coroutine_threadsafe(self.on_message(ctx), self.loop)
-                    future.add_done_callback(future_callback)
+                for cmd, handler in self.irc_command_handlers.items():
+                    if ctx.type == cmd:
+                        future = asyncio.run_coroutine_threadsafe(handler(ctx), self.loop)
+                        future.add_done_callback(future_callback)
 
     async def join(self, channel):
         await self.ws.send(f"JOIN #{channel}")
@@ -328,23 +332,28 @@ class Bot:
         await self.message_lock.acquire()
         messages = split_message(message)
         for msg in messages:
-            await self.ws.send(f"PRIVMSG #{channel} :/me {msg}"+("\U000e0000" if self.last_message == msg else ""))
+            msg = msg + ("\U000e0000" if self.last_message == msg else "")
+            await self.ws.send(f"PRIVMSG #{channel} :/me {msg}")
             self.last_message = msg
             print(f"> PRIVMSG #{channel} :/me {msg}")
             await asyncio.sleep(self.get_wait_for_channel(channel))  # Avoid going over ratelimits
         self.message_lock.release()
 
-    # Events
+    # IRC command handlers
 
-    async def on_running(self):
+    async def on_running(self, ctx):
         await self.register_cap("tags")
         await self.register_cap("commands")
         await self.join(self.channel_to_run_in)
         if not TESTING:
             await self.join(self.username)
 
-    async def on_message(self, ctx):
-        if (not self.offline and ctx.channel == self.channel_to_run_in) or ctx.user == self.username:
+    async def on_user_state(self, ctx: UserStateContext):
+        if ctx.username == self.username:
+            self.own_state = ctx
+
+    async def on_message(self, ctx: MessageContext):
+        if (not self.offline and ctx.channel == self.channel_to_run_in) or ctx.user.username == self.username:
             return
 
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
@@ -366,9 +375,9 @@ class Bot:
             if scramble.in_progress:
                 await self.on_scramble(ctx, scramble_type)
 
-        if ctx.user in self.anime_compare_future and self.anime_compare_future[ctx.user] is not None and \
+        if ctx.user.username in self.anime_compare_future and self.anime_compare_future[ctx.user.username] is not None and \
                 ascii_message.isdigit() and int(ascii_message.strip()) in [1, 2]:
-            game = self.compare_helper.get_game(ctx.user)
+            game = self.compare_helper.get_game(ctx.user.username)
             if game is not None:
                 await self.on_anime_compare(ctx, game)
 
@@ -387,7 +396,7 @@ class Bot:
     @command_manager.command("pull", Cooldown(1, 2), aliases=["genshinpull"])
     async def pull(self, ctx):
         # TODO: Try and make this look more clean
-        user = ctx.user
+        user = ctx.user.username
         if user not in self.pity:
             self.pity.update({user: {4: 0, 5: 0}})
             self.database.new_pity(user, 0, 0)
@@ -442,18 +451,18 @@ class Bot:
     async def guess(self, ctx):
         args = ctx.get_args()
         if len(args) < 1:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You must provide a number 1-1000 to guess with")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You must provide a number 1-1000 to guess with")
 
         if not args[0].isdigit():
-            return await self.send_message(ctx.channel, f"@{ctx.user} That's not a valid number OuttaPocket Tssk")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} That's not a valid number OuttaPocket Tssk")
 
         guess = int(args[0])
 
         if self.number == guess:
-            await self.send_message(ctx.channel, f"@{ctx.user} You got it PogYou")
+            await self.send_message(ctx.channel, f"@{ctx.user.username} You got it PogYou")
             self.number = random.randint(1, 1000)
         else:
-            await self.send_message(ctx.channel, f"@{ctx.user} It's not {guess}. Try guessing " + (
+            await self.send_message(ctx.channel, f"@{ctx.user.username} It's not {guess}. Try guessing " + (
                 "higher" if guess < self.number else "lower") + ". veryPog")
 
     # TODO: consider putting trivia stuff in its own class
@@ -489,14 +498,14 @@ class Bot:
         self.guessed_answers.append(answer)
         worth = self.trivia_info[self.trivia_diff]
         if answer == self.answer:
-            await self.send_message(ctx.channel, f"@{ctx.user} {answer} is the correct answer ✅. You gained {worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))} Becky Bucks 5Head Clap")
-            self.gamba_data[ctx.user]['money'] += worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))
-            self.save_money(ctx.user)
+            await self.send_message(ctx.channel, f"@{ctx.user.username} {answer} is the correct answer ✅. You gained {worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))} Becky Bucks 5Head Clap")
+            self.gamba_data[ctx.user.username]['money'] += worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))
+            self.save_money(ctx.user.username)
             await self.on_trivia_finish(ctx.channel, timeout=False)
         else:
-            await self.send_message(ctx.channel, f"@{ctx.user} {answer} is wrong ❌. You lost {worth*self.trivia_info['penalty']} Becky Bucks 3Head Clap")
-            self.gamba_data[ctx.user]['money'] -= worth*self.trivia_info['penalty']
-            self.save_money(ctx.user)
+            await self.send_message(ctx.channel, f"@{ctx.user.username} {answer} is wrong ❌. You lost {worth*self.trivia_info['penalty']} Becky Bucks 3Head Clap")
+            self.gamba_data[ctx.user.username]['money'] -= worth*self.trivia_info['penalty']
+            self.save_money(ctx.user.username)
             if self.answer not in self.guessed_answers and len(self.guessed_answers) == 3:
                 self.trivia_diff = None  # make sure someone doesn't answer before it can say no one got it right
                 await self.send_message(ctx.channel, f"No one answered correctly! The answer was {self.answer}.")
@@ -520,14 +529,14 @@ class Bot:
 
         hit = random.choice((True, False))
         await self.send_message(ctx.channel,
-                                f"{ctx.user} slapped {args[0]}! D:" if hit else f"{ctx.user} tried to slap {args[0]}, but they caught it! pepePoint")
+                                f"{ctx.user.username} slapped {args[0]}! D:" if hit else f"{ctx.user.username} tried to slap {args[0]}, but they caught it! pepePoint")
 
     @command_manager.command("pity")
     async def pity(self, ctx):
-        if ctx.user not in self.pity:
+        if ctx.user.username not in self.pity:
             return await self.send_message(ctx.channel, "You haven't rolled yet (from the time the bot started up).")
-        await self.send_message(ctx.channel, f"@{ctx.user} 4* pity in {10 - self.pity[ctx.user][4]} rolls; "
-                                             f"5* pity in {90 - self.pity[ctx.user][5]} rolls.")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} 4* pity in {10 - self.pity[ctx.user.username][4]} rolls; "
+                                             f"5* pity in {90 - self.pity[ctx.user.username][5]} rolls.")
 
     @command_manager.command("scramble", fargs=["word"])
     @command_manager.command("scramble_osu", fargs=["osu"])
@@ -554,14 +563,14 @@ class Bot:
         name = self.scramble_manager.get_scramble_name(scramble_type)
         self.scramble_manager.reset(scramble_type)
         await self.send_message(ctx.channel,
-                                f"@{ctx.user} You got it right! "
+                                f"@{ctx.user.username} You got it right! "
                                 f"{answer} was the "
                                 f"{name}. "
                                 f"Drake You've won {money} Becky Bucks!")
-        if ctx.user not in self.gamba_data:
-            self.add_new_user(ctx.user)
-        self.gamba_data[ctx.user]["money"] += money
-        self.save_money(ctx.user)
+        if ctx.user.username not in self.gamba_data:
+            self.add_new_user(ctx.user.username)
+        self.gamba_data[ctx.user.username]["money"] += money
+        self.save_money(ctx.user.username)
 
     @command_manager.command("hint", fargs=["word"])
     @command_manager.command("hint_osu", fargs=["osu"])
@@ -573,7 +582,7 @@ class Bot:
         if not self.scramble_manager.in_progress(scramble_type):
             return
         if not self.scramble_manager.hints_left(scramble_type):
-            return await self.send_message(ctx.channel, f"@{ctx.user} There are no hints left bruh")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} There are no hints left bruh")
         await self.send_message(ctx.channel,
                                 f"Here's a hint "
                                 f"({self.scramble_manager.get_scramble_name(scramble_type)}): "
@@ -598,9 +607,9 @@ class Bot:
     @requires_gamba_data
     async def collect(self, ctx):
         money = random.randint(10, 100)
-        self.gamba_data[ctx.user]["money"] += money
-        await self.send_message(ctx.channel, f"@{ctx.user} You collected {money} Becky Bucks!")
-        self.save_money(ctx.user)
+        self.gamba_data[ctx.user.username]["money"] += money
+        await self.send_message(ctx.channel, f"@{ctx.user.username} You collected {money} Becky Bucks!")
+        self.save_money(ctx.user.username)
 
     # @command_manager.command("gamba")
     @requires_gamba_data
@@ -608,43 +617,43 @@ class Bot:
         args = ctx.get_args()
         if not args:
             return await self.send_message(ctx.channel,
-                                           f"@{ctx.user} You must provide an amount to bet and a risk factor. Do !riskfactor to learn more")
+                                           f"@{ctx.user.username} You must provide an amount to bet and a risk factor. Do !riskfactor to learn more")
         if len(args) < 2:
             return await self.send_message(ctx.channel,
-                                           f"@{ctx.user} You must also provide a risk factor. Do !riskfactor to learn more.")
+                                           f"@{ctx.user.username} You must also provide a risk factor. Do !riskfactor to learn more.")
 
         if args[0].lower() == "all":
-            args[0] = self.gamba_data[ctx.user]['money']
+            args[0] = self.gamba_data[ctx.user.username]['money']
         try:
             amount = float(args[0])
             risk_factor = int(args[1])
         except ValueError:
             return await self.send_message(ctx.channel,
-                                           f"@{ctx.user} You must provide a valid number (integer for risk factor) value.")
+                                           f"@{ctx.user.username} You must provide a valid number (integer for risk factor) value.")
         if risk_factor not in range(1, 100):
-            return await self.send_message(ctx.channel, f"@{ctx.user} The risk factor you provided is outside the range 1-99!")
-        if amount > self.gamba_data[ctx.user]["money"]:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You don't have enough Becky Bucks to bet that much!")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} The risk factor you provided is outside the range 1-99!")
+        if amount > self.gamba_data[ctx.user.username]["money"]:
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You don't have enough Becky Bucks to bet that much!")
         if amount == 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You can't bet nothing bruh")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You can't bet nothing bruh")
         if amount < 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user} Please specify a positive integer bruh")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} Please specify a positive integer bruh")
 
         loss = random.randint(1, 100) in range(risk_factor)
         if loss:
-            await self.send_message(ctx.channel, f"@{ctx.user} YIKES! You lost {amount} Becky Bucks ❌ [LOSE]")
-            self.gamba_data[ctx.user]["money"] -= amount
+            await self.send_message(ctx.channel, f"@{ctx.user.username} YIKES! You lost {amount} Becky Bucks ❌ [LOSE]")
+            self.gamba_data[ctx.user.username]["money"] -= amount
         else:
             payout = round((1 + risk_factor * 0.01) * amount - amount, 2)
-            await self.send_message(ctx.channel, f"@{ctx.user} You gained {payout} Becky Bucks! ✅ [WIN]")
-            self.gamba_data[ctx.user]["money"] += payout
-        self.gamba_data[ctx.user]["money"] = round(self.gamba_data[ctx.user]["money"], 2)
-        self.save_money(ctx.user)
+            await self.send_message(ctx.channel, f"@{ctx.user.username} You gained {payout} Becky Bucks! ✅ [WIN]")
+            self.gamba_data[ctx.user.username]["money"] += payout
+        self.gamba_data[ctx.user.username]["money"] = round(self.gamba_data[ctx.user.username]["money"], 2)
+        self.save_money(ctx.user.username)
 
     @command_manager.command("riskfactor")
     async def risk_factor(self, ctx):
         await self.send_message(ctx.channel,
-                                f"@{ctx.user} The risk factor determines your chances of losing the bet and your payout. "
+                                f"@{ctx.user.username} The risk factor determines your chances of losing the bet and your payout. "
                                 f"The chance of you winning the bet is 100 minus the risk factor. "
                                 f"Your payout is (1 + riskfactor*0.01)) * amount bet "
                                 f"(basically says more risk = better payout)")
@@ -653,11 +662,11 @@ class Bot:
     @requires_gamba_data
     async def balance(self, ctx):
         args = ctx.get_args()
-        user_to_check = ctx.user
+        user_to_check = ctx.user.username
         if args:
             user_to_check = args[0].replace("@", "").lower()
         if user_to_check not in self.gamba_data:
-            user_to_check = ctx.user
+            user_to_check = ctx.user.username
         await self.send_message(ctx.channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
 
     @command_manager.command("leaderboard", aliases=["lb"])
@@ -676,8 +685,8 @@ class Bot:
         lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
         users = list(lead.keys())
         users.reverse()
-        rank = users.index(ctx.user) + 1
-        await self.send_message(ctx.channel, f"@{ctx.user} You are currently rank {rank} in terms of Becky Bucks!")
+        rank = users.index(ctx.user.username) + 1
+        await self.send_message(ctx.channel, f"@{ctx.user.username} You are currently rank {rank} in terms of Becky Bucks!")
 
     @command_manager.command("sheepp_filter", aliases=["sheep_filter"])
     async def filter(self, ctx):
@@ -690,25 +699,25 @@ class Bot:
         args = ctx.get_args()
         user_to_give = args[0].lower()
         if user_to_give not in self.gamba_data:
-            return await self.send_message(ctx.channel, f"@{ctx.user} That's not a valid user to give money to.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} That's not a valid user to give money to.")
         if not self.gamba_data[user_to_give]['settings']['receive']:
             return await self.send_message(ctx.channel,
-                                           f"@{ctx.user} This user has their receive setting turned off and therefore cannot accept money.")
+                                           f"@{ctx.user.username} This user has their receive setting turned off and therefore cannot accept money.")
         amount = args[1]
         try:
             amount = round(float(amount), 2)
         except ValueError:
-            return await self.send_message(ctx.channel, f"@{ctx.user} That's not a valid number.")
-        if self.gamba_data[ctx.user]['money'] < amount:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You don't have that much money to give.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} That's not a valid number.")
+        if self.gamba_data[ctx.user.username]['money'] < amount:
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You don't have that much money to give.")
 
         if amount < 0:
             return await self.send_message(ctx.channel, "You can't give someone a negative amount OuttaPocket Tssk")
 
-        self.gamba_data[ctx.user]['money'] -= amount
+        self.gamba_data[ctx.user.username]['money'] -= amount
         self.gamba_data[user_to_give]['money'] += amount
-        await self.send_message(ctx.channel, f"@{ctx.user} You have given {user_to_give} {amount} Becky Bucks!")
-        self.save_money(ctx.user)
+        await self.send_message(ctx.channel, f"@{ctx.user.username} You have given {user_to_give} {amount} Becky Bucks!")
+        self.save_money(ctx.user.username)
         self.save_money(user_to_give)
 
     @command_manager.command("toggle")
@@ -716,45 +725,45 @@ class Bot:
     async def toggle(self, ctx):
         args = ctx.get_args()
         if len(args) < 2:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You must provide a setting name and either on or off")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You must provide a setting name and either on or off")
         setting = args[0].lower()
-        if setting not in self.gamba_data[ctx.user]['settings']:
+        if setting not in self.gamba_data[ctx.user.username]['settings']:
             return await self.send_message(ctx.channel,
-                                           f"@{ctx.user} That's not a valid setting name. The settings consist of the following: " + ", ".join(
-                                               list(self.gamba_data[ctx.user]['settings'].keys())))
+                                           f"@{ctx.user.username} That's not a valid setting name. The settings consist of the following: " + ", ".join(
+                                               list(self.gamba_data[ctx.user.username]['settings'].keys())))
         try:
             value = {"on": True, "off": False}[args[1].lower()]
         except KeyError:
             return await self.send_message(ctx.channel, "You must specify on or off.")
 
-        self.gamba_data[ctx.user]['settings'][setting] = value
-        self.database.update_userdata(ctx.user, setting, value)
-        await self.send_message(ctx.channel, f"@{ctx.user} The {setting} setting has been turned {args[1]}.")
+        self.gamba_data[ctx.user.username]['settings'][setting] = value
+        self.database.update_userdata(ctx.user.username, setting, value)
+        await self.send_message(ctx.channel, f"@{ctx.user.username} The {setting} setting has been turned {args[1]}.")
 
     @command_manager.command("rps", Cooldown(2, 4))
     @requires_gamba_data
     async def rps(self, ctx):
         args = ctx.get_args()
         if not args:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You must say either rock, paper, or scissors. "
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You must say either rock, paper, or scissors. "
                                                         f"(You can also use the first letter for short)")
         choice = args[0][0].lower()
         if choice not in ('r', 'p', 's'):
-            return await self.send_message(ctx.channel, f"@{ctx.user} That's not a valid move. You must say either rock, paper, or scissors. "
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} That's not a valid move. You must say either rock, paper, or scissors. "
                                                         f"(You can also use the first letter for short)")
 
         com_choice = random.choice(('r', 'p', 's'))
         win = {"r": "s", "s": "p", "p": "r"}
         abbr = {"r": "rock", "s": "scissors", "p": "paper"}
         if com_choice == choice:
-            return await self.send_message(ctx.channel, f"@{ctx.user} I also chose {abbr[com_choice]}! bruh")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} I also chose {abbr[com_choice]}! bruh")
         if win[com_choice] == choice:
-            await self.send_message(ctx.channel, f"@{ctx.user} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
-            self.gamba_data[ctx.user]['money'] -= 10
-            return self.save_money(ctx.user)
-        await self.send_message(ctx.channel, f"@{ctx.user} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
-        self.gamba_data[ctx.user]['money'] += 10
-        self.save_money(ctx.user)
+            await self.send_message(ctx.channel, f"@{ctx.user.username} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
+            self.gamba_data[ctx.user.username]['money'] -= 10
+            return self.save_money(ctx.user.username)
+        await self.send_message(ctx.channel, f"@{ctx.user.username} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
+        self.gamba_data[ctx.user.username]['money'] += 10
+        self.save_money(ctx.user.username)
         
     @command_manager.command("new_name", permission=CommandPermission.ADMIN)
     async def new_name(self, ctx):
@@ -767,7 +776,7 @@ class Bot:
         self.gamba_data[old_name]['money'] += self.gamba_data[new_name]['money']
         self.gamba_data[new_name] = dict(self.gamba_data[old_name])
         del self.gamba_data[old_name]
-        await self.send_message(ctx.channel, f"@{ctx.user} The data has been updated for the new name!")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} The data has been updated for the new name!")
         self.database.delete_user(old_name)
         self.save_money(new_name)
         for setting, val in self.gamba_data[new_name]["settings"].items():
@@ -776,7 +785,7 @@ class Bot:
     @command_manager.command("scramble_multipliers", aliases=["scramblemultipliers", "scramble_multiplier", "scramblemultiplier"])
     async def scramble_difficulties(self, ctx):
         await self.send_message(ctx.channel,
-                                f"@{ctx.user} Difficulty multiplier for each scramble: "
+                                f"@{ctx.user.username} Difficulty multiplier for each scramble: "
                                 "%s" % ', '.join(
                                     ['%s-%s' % (identifier, scramble.difficulty_multiplier)
                                      for identifier, scramble in self.scrambles.items()])
@@ -784,7 +793,7 @@ class Bot:
 
     @command_manager.command("scramble_calc", aliases=["scramblecalc"])
     async def scramble_calc(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user} Scramble payout is calculated by picking a random number 5-10, "
+        await self.send_message(ctx.channel, f"@{ctx.user.username} Scramble payout is calculated by picking a random number 5-10, "
                                              f"multiplying that by the length of the word (excluding spaces), multiplying "
                                              f"that by hint reduction, and multiplying that by the scramble difficulty "
                                              f"multiplier for that specific scramble. To see the difficulty multipliers, "
@@ -793,57 +802,57 @@ class Bot:
 
     @command_manager.command("cumfact", aliases=["cum_fact"], blacklist=["btmc"])
     async def fact(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user} {random.choice(self.facts)}")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} {random.choice(self.facts)}")
 
     @command_manager.command("afk")
     async def afk(self, ctx):
         args = ctx.get_args()
-        await self.send_message(ctx.channel, f"@{ctx.user} Your afk has been set.")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} Your afk has been set.")
         message = " ".join(args)
-        self.afk[ctx.user] = {"message": message, "time": datetime.now(pytz.UTC).isoformat()}
-        self.database.save_afk(ctx.user, message)
+        self.afk[ctx.user.username] = {"message": message, "time": datetime.now(pytz.UTC).isoformat()}
+        self.database.save_afk(ctx.user.username, message)
 
     @command_manager.command("help", aliases=["sheepp_commands", "sheep_commands", "sheepcommands",
                                               "sheeppcommands", "sheephelp", "sheepphelp",
                                               "sheep_help", "sheep_help"])
     async def help_command(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user} sheepposubot help (do !commands for StreamElements): https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} sheepposubot help (do !commands for StreamElements): https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
 
     async def on_afk(self, ctx):
         pings = [word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in ctx.message.lower().split() if word.startswith("@")]
         for ping in pings:
             if ping in self.afk:
-                await self.send_message(ctx.channel,  f"@{ctx.user} {ping} is afk "
+                await self.send_message(ctx.channel,  f"@{ctx.user.username} {ping} is afk "
                                                       f"({format_date(datetime.fromisoformat(self.afk[ping]['time']))} ago): "
                                                       f"{self.afk[ping]['message']}")
 
-        if ctx.user not in self.afk:
+        if ctx.user.username not in self.afk:
             return
-        elif (datetime.now(tz=pytz.UTC) - datetime.fromisoformat(self.afk[ctx.user]['time']).replace(tzinfo=pytz.UTC)).seconds > 60:
-            await self.send_message(ctx.channel, f"@{ctx.user} Your afk has been removed. "
-                                                 f"(Afk for {format_date(datetime.fromisoformat(self.afk[ctx.user]['time']))}.)")
-            del self.afk[ctx.user]
-            self.database.delete_afk(ctx.user)
+        elif (datetime.now(tz=pytz.UTC) - datetime.fromisoformat(self.afk[ctx.user.username]['time']).replace(tzinfo=pytz.UTC)).seconds > 60:
+            await self.send_message(ctx.channel, f"@{ctx.user.username} Your afk has been removed. "
+                                                 f"(Afk for {format_date(datetime.fromisoformat(self.afk[ctx.user.username]['time']))}.)")
+            del self.afk[ctx.user.username]
+            self.database.delete_afk(ctx.user.username)
 
     async def trivia_category(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user} I'll make something more intuitive later but for now, "
+        await self.send_message(ctx.channel, f"@{ctx.user.username} I'll make something more intuitive later but for now, "
                                              f"if you want to know which number correlates to which category, "
                                              f"go here https://opentdb.com/api_config.php, click a category, "
                                              f"click generate url and then check the category specified in the url.")
 
     @command_manager.command("sourcecode", aliases=["sheepcode", "sheeppcode", "sheep_code", "sheepp_code"])
     async def sourcecode(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user} https://github.com/Sheepposu/offlinechatbot")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} https://github.com/Sheepposu/offlinechatbot")
 
     # Bomb party functions
     @command_manager.command("bombparty", aliases=["bomb_party"])
     async def bomb_party(self, ctx):
         if self.bomb_party_helper.in_progress:
             return
-        self.bomb_party_helper.add_player(ctx.user)
+        self.bomb_party_helper.add_player(ctx.user.username)
         self.bomb_party_helper.on_in_progress()
 
-        await self.send_message(ctx.channel, f"{ctx.user} has started a Bomb Party game! Anyone else who wants to play should type !join. When enough players have joined, the host should type !start to start the game, otherwise the game will automatically start or close after 2 minutes.")
+        await self.send_message(ctx.channel, f"{ctx.user.username} has started a Bomb Party game! Anyone else who wants to play should type !join. When enough players have joined, the host should type !start to start the game, otherwise the game will automatically start or close after 2 minutes.")
         self.bomb_party_future = self.set_timed_event(120, self.close_or_start_game, ctx.channel)
 
     async def close_or_start_game(self, channel):
@@ -856,10 +865,10 @@ class Bot:
     async def start_bomb_party(self, ctx, cancel=True):
         if not self.bomb_party_helper.in_progress or \
                 self.bomb_party_helper.started or \
-                ctx.user != self.bomb_party_helper.host:
+                ctx.user.username != self.bomb_party_helper.host:
             return
         if not self.bomb_party_helper.can_start:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You need at least 2 players to start the bomb party game.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You need at least 2 players to start the bomb party game.")
         if cancel:
             self.bomb_party_future.cancel()
 
@@ -873,22 +882,22 @@ class Bot:
     async def join_bomb_party(self, ctx):
         if not self.bomb_party_helper.in_progress or self.bomb_party_helper.started:
             return
-        if ctx.user in self.bomb_party_helper.party:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You have already joined the game")
+        if ctx.user.username in self.bomb_party_helper.party:
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You have already joined the game")
 
-        self.bomb_party_helper.add_player(ctx.user)
-        await self.send_message(ctx.channel, f"@{ctx.user} You have joined the game of bomb party!")
+        self.bomb_party_helper.add_player(ctx.user.username)
+        await self.send_message(ctx.channel, f"@{ctx.user.username} You have joined the game of bomb party!")
 
     @command_manager.command("leave", Cooldown(0, 3))
     async def leave_bomb_party(self, ctx):
-        if ctx.user not in self.bomb_party_helper.party:
+        if ctx.user.username not in self.bomb_party_helper.party:
             return
-        self.bomb_party_helper.remove_player(ctx.user)
-        await self.send_message(ctx.channel, f"@{ctx.user} You have left the game of bomb party.")
+        self.bomb_party_helper.remove_player(ctx.user.username)
+        await self.send_message(ctx.channel, f"@{ctx.user.username} You have left the game of bomb party.")
         if self.bomb_party_helper.started and await self.check_win(ctx.channel):
             if self.bomb_party_future is not None:
                 self.bomb_party_future.cancel()  #
-        elif self.bomb_party_helper.started and self.bomb_party_helper.current_player.user == ctx.user:
+        elif self.bomb_party_helper.started and self.bomb_party_helper.current_player.user == ctx.user.username:
             if self.bomb_party_future is not None:
                 self.bomb_party_future.cancel()
             await self.next_player(ctx.channel)
@@ -901,23 +910,23 @@ class Bot:
     async def change_bomb_settings(self, ctx):
         if not self.bomb_party_helper.in_progress or \
                 self.bomb_party_helper.started or \
-                self.bomb_party_helper.host != ctx.user:
+                self.bomb_party_helper.host != ctx.user.username:
             return
         args = ctx.message.content.split()
         if len(args) < 2:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You must provide a setting name and the value: "
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You must provide a setting name and the value: "
                                                         f"!settings <setting> <value>. Valid settings: "
                                                         f"{self.bomb_party_helper.valid_settings_string}")
         setting = args[0].lower()
         value = args[1].lower()
         return_msg = self.bomb_party_helper.set_setting(setting, value)
-        await self.send_message(ctx.channel, f"@{ctx.user} {return_msg}")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} {return_msg}")
 
     @command_manager.command("players")
     async def player_list(self, ctx):
         if not self.bomb_party_helper.in_progress:
             return
-        await self.send_message(ctx.channel, f"@{ctx.user} Current players playing bomb party: {', '.join(self.bomb_party_helper.player_list)}")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} Current players playing bomb party: {', '.join(self.bomb_party_helper.player_list)}")
 
     async def bomb_party_timer(self, channel):
         msg = self.bomb_party_helper.on_explode()
@@ -938,7 +947,7 @@ class Bot:
         self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.seconds_left, self.bomb_party_timer, channel)
 
     async def on_bomb_party(self, ctx):
-        if ctx.user != self.bomb_party_helper.current_player.user:
+        if ctx.user.username != self.bomb_party_helper.current_player.user:
             return
         if ctx.message not in self.all_words:
             return
@@ -978,68 +987,68 @@ class Bot:
     @command_manager.command("reload_db", permission=CommandPermission.ADMIN)
     async def reload_from_db(self, ctx):
         self.reload_db_data()
-        await self.send_message(ctx.channel, f"@{ctx.user} Local data has been reloaded from database.")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} Local data has been reloaded from database.")
 
     @command_manager.command("reload_emotes", permission=CommandPermission.ADMIN)
     async def refresh_emotes(self, ctx):
         self.load_emotes()
-        await self.send_message(ctx.channel, f"@{ctx.user} Emotes have been reloaded.")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} Emotes have been reloaded.")
 
     @command_manager.command("anime_compare", aliases=["animecompare", "ac"], cooldown=Cooldown(0, 5))
     async def anime_compare(self, ctx):
-        game = self.compare_helper.get_game(ctx.user)
+        game = self.compare_helper.get_game(ctx.user.username)
         if game is not None:
             return
-        game = self.compare_helper.new_game(ctx.user, self.anime)
-        await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
-        game.id = self.database.new_animecompare_game(ctx.user)
-        self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
+        game = self.compare_helper.new_game(ctx.user.username, self.anime)
+        await self.send_message(ctx.channel, f"@{ctx.user.username} {game.get_question_string()}")
+        game.id = self.database.new_animecompare_game(ctx.user.username)
+        self.anime_compare_future[ctx.user.username] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
 
     async def on_anime_compare(self, ctx, game):
         check = self.compare_helper.check_guess(ctx, game)
         if check is None:
             return
-        self.anime_compare_future[ctx.user].cancel()
-        self.anime_compare_future[ctx.user] = None
+        self.anime_compare_future[ctx.user.username].cancel()
+        self.anime_compare_future[ctx.user.username] = None
         if not check:
-            await self.send_message(ctx.channel, f"@{ctx.user} Incorrect. Your final score is {game.score}. {game.get_ranking_string()}.")
+            await self.send_message(ctx.channel, f"@{ctx.user.username} Incorrect. Your final score is {game.score}. {game.get_ranking_string()}.")
             self.database.finish_animecompare_game(game.id)
             self.compare_helper.finish_game(game)
         else:
-            await self.send_message(ctx.channel, f"@{ctx.user} Correct! Your current score is {game.score}. {game.get_ranking_string()}.")
+            await self.send_message(ctx.channel, f"@{ctx.user.username} Correct! Your current score is {game.score}. {game.get_ranking_string()}.")
             self.compare_helper.generate_answer(self.anime, game)
             self.database.update_animecompare_game(game.id, game.score)
-            await self.send_message(ctx.channel, f"@{ctx.user} {game.get_question_string()}")
-            self.anime_compare_future[ctx.user] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
+            await self.send_message(ctx.channel, f"@{ctx.user.username} {game.get_question_string()}")
+            self.anime_compare_future[ctx.user.username] = self.set_timed_event(10, self.anime_compare_timeout, ctx, game)
 
     async def anime_compare_timeout(self, ctx, game):
         self.compare_helper.finish_game(game)
-        await self.send_message(ctx.channel, f"@{ctx.user} You did not answer in time. Your final score is {game.score}.")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} You did not answer in time. Your final score is {game.score}.")
         self.database.finish_animecompare_game(game.id)
-        self.anime_compare_future[ctx.user] = None
+        self.anime_compare_future[ctx.user.username] = None
 
     @command_manager.command("average_ac", aliases=["acaverage", "ac_avg", "ac_average", "acavg"])
     async def average_anime_compare(self, ctx):
-        games = self.database.get_user_animecompare_games(ctx.user)
-        await self.send_message(ctx.channel, f"@{ctx.user} Your average score is {round(sum([game['score'] for game in games])/len(games), 2)}.")
+        games = self.database.get_user_animecompare_games(ctx.user.username)
+        await self.send_message(ctx.channel, f"@{ctx.user.username} Your average score is {round(sum([game['score'] for game in games])/len(games), 2)}.")
 
     @command_manager.command("ac_leaderboard", aliases=["aclb", "ac_lb", "acleaderboard"])
     async def anime_compare_leaderboard(self, ctx):
         games = self.database.get_top_animecompare_games()
-        await self.send_message(ctx.channel, f"@{ctx.user} The top anime compare scores are: {', '.join(['%s_%d' %(game['user'], game['score']) for game in games])}.")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} The top anime compare scores are: {', '.join(['%s_%d' %(game['user'], game['score']) for game in games])}.")
 
     @command_manager.command("ac_top", aliases=["actop", "topac", "top_ac"], cooldown=Cooldown(0, 5))
     async def anime_compare_top(self, ctx):
-        game = self.database.get_top_animecompare_game_for_user(ctx.user)
+        game = self.database.get_top_animecompare_game_for_user(ctx.user.username)
         if not game:
-            return await self.send_message(ctx.channel, f"@{ctx.user} You have not played any anime compare games yet.")
-        await self.send_message(ctx.channel, f"@{ctx.user} Your top anime compare score is {game[0]['score']}.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} You have not played any anime compare games yet.")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} Your top anime compare score is {game[0]['score']}.")
 
     async def process_osu_username_arg(self, ctx, args):
-        if len(args) == 0 and ctx.user in self.osu_data:  # user did not provide a username, but osu! account is linked
-            return self.osu_data[ctx.user]['username']
+        if len(args) == 0 and ctx.user.username in self.osu_data:  # user did not provide a username, but osu! account is linked
+            return self.osu_data[ctx.user.username]['username']
         elif len(args) == 0 or args[0].strip() == "":  # user did not provide a username and osu! account is not linked
-            await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username or link your account with !link.")
+            await self.send_message(ctx.channel, f"@{ctx.user.username} Please specify a username or link your account with !link.")
         else:  # username was provided
             return " ".join(args).strip()
 
@@ -1052,7 +1061,7 @@ class Bot:
             mode = args.pop(index).strip()
             if not mode.isdigit() or int(mode) not in range(0, 4):
                 return await self.send_message(ctx.channel,
-                                               f"@{ctx.user} Invalid mode. Valid modes are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
+                                               f"@{ctx.user.username} Invalid mode. Valid modes are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
             mode = {
                 0: "osu",
                 1: "taiko",
@@ -1066,7 +1075,7 @@ class Bot:
             try:
                 user = await osu_client.get_user(user=username, key="username")
             except requests.exceptions.HTTPError:
-                return await self.send_message(ctx.channel, f"@{ctx.user} User {username} not found.")
+                return await self.send_message(ctx.channel, f"@{ctx.user.username} User {username} not found.")
             self.user_id_cache[username] = user.id
         return self.user_id_cache[username]
 
@@ -1103,7 +1112,7 @@ class Bot:
             scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
             scores = sorted(scores, key=lambda x: x.created_at, reverse=True)
         if not scores:
-            return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no recent scores for {proper_mode_name[mode]}.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} User {username} has no recent scores for {proper_mode_name[mode]}.")
 
         score = scores[0]
         self.last_beatmap = score.beatmap
@@ -1136,7 +1145,7 @@ class Bot:
     @command_manager.command("c", aliases=['compare'], cooldown=Cooldown(0, 3))
     async def compare_score(self, ctx):
         if self.last_beatmap is None:
-            return await self.send_message(ctx.channel, f"@{ctx.user} I don't have a cache of the last beatmap.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} I don't have a cache of the last beatmap.")
 
         username = await self.process_osu_username_arg(ctx, ctx.get_args('ascii'))
         if username is None:
@@ -1148,7 +1157,7 @@ class Bot:
 
         scores = await osu_client.get_user_beatmap_scores(self.last_beatmap.id, user_id)
         if not scores:
-            return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no scores on that beatmap.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} User {username} has no scores on that beatmap.")
 
         score_format = "{artist} - {title} [{diff}]{mods} ({mapper}) " \
                        "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp | {time_ago} ago"
@@ -1186,7 +1195,7 @@ class Bot:
 
         user = await osu_client.get_user(user=username, mode=mode, key="username")
         if user is None:
-            return await self.send_message(ctx.channel, f"@{ctx.user} User {username} not found.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} User {username} not found.")
 
         stats = user.statistics
 
@@ -1236,7 +1245,7 @@ class Bot:
 
         top_scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
         if not top_scores:
-            return await self.send_message(ctx.channel, f"@{ctx.user} User {username} has no top scores for {proper_mode_name[mode]}.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} User {username} has no top scores for {proper_mode_name[mode]}.")
         if not recent_tops:
             top_scores = top_scores[:5]
         else:
@@ -1267,22 +1276,22 @@ class Bot:
     async def link_osu_account(self, ctx):
         args = ctx.get_args('ascii')
         if len(args) == 0 or args[0].strip() == "":
-            return await self.send_message(ctx.channel, f"@{ctx.user} Please specify a username.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} Please specify a username.")
 
         username = " ".join(args).strip()
         user = await osu_client.get_user(user=username, key="username")
 
         if user is None:
-            return await self.send_message(ctx.channel, f"@{ctx.user} User {username} not found.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.username} User {username} not found.")
 
-        if ctx.user in self.osu_data:
-            self.database.update_osu_data(ctx.user, user.username, user.id)
+        if ctx.user.username in self.osu_data:
+            self.database.update_osu_data(ctx.user.username, user.username, user.id)
         else:
-            self.database.new_osu_data(ctx.user, user.username, user.id)
-        self.osu_data[ctx.user] = {"username": user.username, "user_id": user.id}
+            self.database.new_osu_data(ctx.user.username, user.username, user.id)
+        self.osu_data[ctx.user.username] = {"username": user.username, "user_id": user.id}
         self.user_id_cache[user.username] = user.id
 
-        await self.send_message(ctx.channel, f"@{ctx.user} Linked {user.username} to your account.")
+        await self.send_message(ctx.channel, f"@{ctx.user.username} Linked {user.username} to your account.")
 
 
 bot = Bot(command_manager)

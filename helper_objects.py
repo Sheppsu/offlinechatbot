@@ -442,7 +442,7 @@ class DeniedUsageReason(IntFlag):
 class Command:
     permissions = {
         CommandPermission.NONE: lambda ctx: True,
-        CommandPermission.ADMIN: lambda ctx: ctx.user in admins
+        CommandPermission.ADMIN: lambda ctx: ctx.user.username in admins
     }
 
     def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None, blacklist=None, whitelist=None, fargs=None, fkwargs=None):
@@ -474,22 +474,22 @@ class Command:
 
     def update_usage(self, ctx):
         if ctx.channel not in self.usage:
-            self.usage[ctx.channel] = {"global": -self.cooldown.command_cd, "user": {ctx.user: -self.cooldown.user_cd}}
+            self.usage[ctx.channel] = {"global": -self.cooldown.command_cd, "user": {ctx.user.username: -self.cooldown.user_cd}}
             return
-        if ctx.user not in self.usage[ctx.channel]["user"]:
-            self.usage[ctx.channel]["user"][ctx.user] = -self.cooldown.user_cd
+        if ctx.user.username not in self.usage[ctx.channel]["user"]:
+            self.usage[ctx.channel]["user"][ctx.user.username] = -self.cooldown.user_cd
 
     def check_cooldown(self, ctx):
         self.update_usage(ctx)
         return DeniedUsageReason.NONE if perf_counter() - self.usage[ctx.channel]["global"] >= self.cooldown.command_cd and \
-            perf_counter() - self.usage[ctx.channel]["user"][ctx.user] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
+            perf_counter() - self.usage[ctx.channel]["user"][ctx.user.username] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
 
     def check_can_use(self, ctx):
         return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_channel(ctx)
 
     def on_used(self, ctx):
         self.usage[ctx.channel]["global"] = perf_counter()
-        self.usage[ctx.channel]["user"][ctx.user] = perf_counter()
+        self.usage[ctx.channel]["user"][ctx.user.username] = perf_counter()
 
     def __contains__(self, item):
         return item.lower() in self.aliases + [self.name]
@@ -500,7 +500,7 @@ class Command:
             self.on_used(ctx)
             return await self.func(bot, ctx, *self.fargs, **self.fkwargs)
         if DeniedUsageReason.PERMISSION in can_use:
-            return await bot.send_message(ctx.channel, f"@{ctx.user} You do not have permission to use this command.")
+            return await bot.send_message(ctx.channel, f"@{ctx.user.username} You do not have permission to use this command.")
 
 
 class CommandManager:
