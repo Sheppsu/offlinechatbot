@@ -819,7 +819,7 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user.username} sheepposubot help (do !commands for StreamElements): https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
 
     async def on_afk(self, ctx):
-        pings = [word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in ctx.message.lower().split() if word.startswith("@")]
+        pings = set([word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in ctx.message.lower().split() if word.startswith("@")])
         for ping in pings:
             if ping in self.afk:
                 await self.send_message(ctx.channel,  f"@{ctx.user.username} {ping} is afk "
