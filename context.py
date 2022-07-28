@@ -1,14 +1,15 @@
-from enum import IntEnum
+from enum import Enum
 from datetime import datetime
 import pytz
 
 
-class ContextType(IntEnum):
-    PRIVMSG = 0
-    JOIN = 1
-    PART = 2
-    USERSTATE = 3
-    ROOMSTATE = 4
+class ContextType(Enum):
+    PRIVMSG = "PRIVMSG"
+    JOIN = "JOIN"
+    PART = "PART"
+    USERSTATE = "USERSTATE"
+    ROOMSTATE = "ROOMSTATE"
+    CONNECTED = "376"
 
 
 class Context:
@@ -26,7 +27,7 @@ class Context:
             offset = 1 if tags is not None else 0
             source = data[0 + offset]
             try:
-                message_type = ContextType[data[1 + offset]]
+                message_type = ContextType(data[1 + offset])
             except KeyError:
                 contexts.append(UnknownContext(source, data[1 + offset]))
                 continue
@@ -56,7 +57,7 @@ class Context:
 
 class JoinContext:
     __slots__ = (
-        "channel", "source", "user_state", "room_state"
+        "channel", "source",
     )
     type = ContextType.JOIN
 
