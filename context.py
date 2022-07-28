@@ -48,6 +48,8 @@ class Context:
                 contexts.append(UserStateContext(source, channel, tags))
             elif message_type == ContextType.ROOMSTATE:
                 contexts.append(RoomStateContext(source, channel, tags))
+            else:
+                contexts.append(UnknownContext(source, message_type))
         return contexts
 
     @staticmethod
