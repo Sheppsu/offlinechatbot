@@ -28,7 +28,7 @@ class Context:
             source = data[0 + offset]
             try:
                 message_type = ContextType(data[1 + offset])
-            except KeyError:
+            except ValueError:
                 contexts.append(UnknownContext(source, data[1 + offset]))
                 continue
             channel = data[2 + offset][1:]
