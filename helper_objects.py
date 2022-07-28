@@ -6,10 +6,6 @@ from collections import namedtuple
 from constants import admins
 
 
-class MessageType(IntEnum):
-    PRIVMSG = 0
-
-
 class Context:
     __slots__ = (
         "tags", "source", "message_type", "channel", "message", "user"
