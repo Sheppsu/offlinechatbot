@@ -6,46 +6,6 @@ from collections import namedtuple
 from constants import admins
 
 
-class Context:
-    __slots__ = (
-        "tags", "source", "message_type", "channel", "message", "user"
-    )
-
-    def __init__(self, user="", channel="", message="", message_type=None, tags=None, source=None):
-        self.user = user
-        self.channel = channel
-        self.message = message
-        self.message_type = message_type
-        self.tags = tags
-        self.source = source
-
-    @classmethod
-    def from_string(cls, string):
-        data = string.split()
-        tags = None
-        if data[0].startswith("@"):
-            tags = {tag.split("=")[0]: tag.split("=")[1] for tag in data[0].split(";")}
-        offset = 1 if tags is not None else 0
-        source = data[0 + offset]
-        user = source.split("!")[0][1:]
-        try:
-            message_type = MessageType[data[1 + offset]]
-        except KeyError:
-            message_type = data[1 + offset]
-        channel = data[2 + offset][1:]
-        message = " ".join(data[3 + offset:])[1:]
-        return cls(user, channel, message, message_type, tags, source)
-
-    def get_args(self, char_acceptance="unicode"):
-        if char_acceptance.lower() == "ascii":
-            message = "".join(char for char in self.message if char.isascii())
-        elif char_acceptance.lower() == "unicode":
-            message = self.message
-        else:
-            raise ValueError("char_acceptance must be either 'ascii' or 'unicode'")
-        return message.split()[1:]
-
-
 class BombPartyPlayer:
     def __init__(self, user, lives):
         self.user = user
