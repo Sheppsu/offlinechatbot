@@ -54,10 +54,23 @@ class Bot:
         self.last_message = ""
         self.own_state = None
         self.irc_command_handlers = {
-            "376": self.on_running,
+            ContextType.CONNECTED: self.on_running,
             ContextType.PRIVMSG: self.on_message,
             ContextType.USERSTATE: self.on_user_state,
+            ContextType.JOIN: self.on_join,
         }
+
+        # Is ed offline or not
+        self.offline = True
+
+        # Twitch api stuff
+        self.access_token, self.expire_time = self.get_access_token()
+        self.expire_time += perf_counter()
+
+        # Message related variables
+        self.message_send_cd = 1.5
+        self.last_message = 0
+        self.message_locks = {}
 
         # Save/load data from files or to/from database
         self.pity = {}
@@ -78,18 +91,6 @@ class Bot:
         # Load save data
         self.load_data()
         self.genshin = self.pull_options["3"] + self.pull_options["4"] + self.pull_options["5"]
-
-        # Is ed offline or not
-        self.offline = True
-
-        # Twitch api stuff
-        self.access_token, self.expire_time = self.get_access_token()
-        self.expire_time += perf_counter()
-
-        # Message related variables
-        self.message_send_cd = 1.5
-        self.last_message = 0
-        self.message_lock = asyncio.Lock()
 
         # Guess the number
         self.number = random.randint(1, 1000)
@@ -329,7 +330,7 @@ class Bot:
     async def send_message(self, channel, message):
         if not self.offline and channel == self.channel_to_run_in:
             return
-        await self.message_lock.acquire()
+        await self.message_locks[channel].acquire()
         messages = split_message(message)
         for msg in messages:
             msg = msg + ("\U000e0000" if self.last_message == msg else "")
@@ -337,7 +338,7 @@ class Bot:
             self.last_message = msg
             print(f"> PRIVMSG #{channel} :/me {msg}")
             await asyncio.sleep(self.get_wait_for_channel(channel))  # Avoid going over ratelimits
-        self.message_lock.release()
+        self.message_locks[channel].release()
 
     # IRC command handlers
 
@@ -351,6 +352,9 @@ class Bot:
     async def on_user_state(self, ctx: UserStateContext):
         if ctx.username == self.username:
             self.own_state = ctx
+
+    async def on_join(self, ctx: JoinContext):
+        self.message_locks[ctx.channel] = asyncio.Lock()
 
     async def on_message(self, ctx: MessageContext):
         if (not self.offline and ctx.channel == self.channel_to_run_in) or ctx.user.username == self.username:
