@@ -5,6 +5,7 @@
 #       different rate limits for mod and broadcaster
 #       make decorators for osu arguments
 #       per channel rate limits
+#       save bans to database so they can be made with a command and also check via user id
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -998,7 +999,8 @@ class Bot:
         self.load_emotes()
         await self.send_message(ctx.channel, f"@{ctx.user.username} Emotes have been reloaded.")
 
-    @command_manager.command("anime_compare", aliases=["animecompare", "ac"], cooldown=Cooldown(0, 5))
+    @command_manager.command("anime_compare", aliases=["animecompare", "ac"], cooldown=Cooldown(0, 5),
+                             banned=["osuwho"])
     async def anime_compare(self, ctx):
         game = self.compare_helper.get_game(ctx.user.username)
         if game is not None:

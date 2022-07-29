@@ -393,6 +393,7 @@ class DeniedUsageReason(IntFlag):
     COOLDOWN = 1 << 1
     PERMISSION = 1 << 2
     CHANNEL = 1 << 3
+    BANNED = 1 << 4
 
 
 class Command:
@@ -401,7 +402,8 @@ class Command:
         CommandPermission.ADMIN: lambda ctx: ctx.user.username in admins
     }
 
-    def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None, blacklist=None, whitelist=None, fargs=None, fkwargs=None):
+    def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None,
+                 blacklist=None, whitelist=None, banned=None, fargs=None, fkwargs=None):
         if blacklist is not None and whitelist is not None:
             raise ValueError("Cannot specify both blacklist_channels and whitelist_channels")
         self.usage = {}
@@ -412,6 +414,7 @@ class Command:
         self.aliases = list(map(str.lower, aliases)) if aliases is not None else []
         self.blacklist = blacklist
         self.whitelist = whitelist
+        self.banned = banned
         self.fargs = fargs if fargs is not None else []
         self.fkwargs = fkwargs if fkwargs is not None else {}
 
@@ -440,8 +443,11 @@ class Command:
         return DeniedUsageReason.NONE if perf_counter() - self.usage[ctx.channel]["global"] >= self.cooldown.command_cd and \
             perf_counter() - self.usage[ctx.channel]["user"][ctx.user.username] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
 
+    def check_banned(self, ctx):
+        return DeniedUsageReason.NONE if self.banned is None or ctx.user.username not in self.banned else DeniedUsageReason.BANNED
+
     def check_can_use(self, ctx):
-        return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_channel(ctx)
+        return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_channel(ctx) | self.check_banned(ctx)
 
     def on_used(self, ctx):
         self.usage[ctx.channel]["global"] = perf_counter()
@@ -457,6 +463,8 @@ class Command:
             return await self.func(bot, ctx, *self.fargs, **self.fkwargs)
         if DeniedUsageReason.PERMISSION in can_use:
             return await bot.send_message(ctx.channel, f"@{ctx.user.username} You do not have permission to use this command.")
+        elif DeniedUsageReason.BANNED in can_use:
+            return await bot.send_message(ctx.channel, f"@{ctx.user.username} You are banned from using this command.")
 
 
 class CommandManager:
