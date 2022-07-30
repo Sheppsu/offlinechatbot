@@ -2,9 +2,8 @@
 
 # TODO: clean up code in general
 #       utilize DMs
-#       different rate limits for mod and broadcaster
 #       make decorators for osu arguments
-#       per channel rate limits
+#       implement rate limit for unverified bot
 #       save bans to database so they can be made with a command and also check via user id
 from dotenv import load_dotenv
 load_dotenv()
@@ -47,7 +46,7 @@ class Bot:
     def __init__(self, command_manager):
         channels_to_run_in = [ChannelConfig("sheepposu")] if TESTING else [
             ChannelConfig("btmc", ChannelCommandInclusion.BLACKLIST, ["cumfact"]),
-            ChannelConfig("doritorainn", ChannelCommandInclusion.WHITELIST, ["osu", "rs", "osutop"]),
+            ChannelConfig("doritorainn", ChannelCommandInclusion.WHITELIST, ["osu", "rs", "osutop", "link"]),
             ChannelConfig(self.username),
         ]
 
