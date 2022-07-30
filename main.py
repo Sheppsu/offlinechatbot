@@ -41,13 +41,18 @@ class Bot:
     username = "sheepposubot"
     oauth = os.getenv("OAUTH")
     uri = "ws://irc-ws.chat.twitch.tv:80"
-    channel_to_run_in = "btmc" if not TESTING else "sheepposu"
 
     restarts = 0
 
     def __init__(self, command_manager):
+        channels_to_run_in = [ChannelConfig("sheepposu")] if TESTING else [
+            ChannelConfig("btmc", ChannelCommandInclusion.BLACKLIST, ["cumfact"]),
+            ChannelConfig("doritorainn", ChannelCommandInclusion.WHITELIST, ["osu", "rs", "osutop"]),
+            ChannelConfig(self.username),
+        ]
+
         self.cm = command_manager
-        self.cm.init(self)
+        self.cm.init(self, channels_to_run_in)
 
         self.ws = None
         self.running = False
@@ -62,7 +67,7 @@ class Bot:
         }
 
         # Is ed offline or not
-        self.offline = True
+        self.offlines = {channel: True for channel in self.cm.channels}
 
         # Twitch api stuff
         self.access_token, self.expire_time = self.get_access_token()
@@ -191,8 +196,8 @@ class Bot:
     def load_emotes(self):
         emote_requester = EmoteRequester(self.client_id, self.client_secret)
         return {
-            self.channel_to_run_in: sum(emote_requester.get_channel_emotes(self.channel_to_run_in), []),
-            self.username: sum(emote_requester.get_channel_emotes(self.username), [])
+            self.username: sum(emote_requester.get_channel_emotes(self.username), []),
+            **{channel: sum(emote_requester.get_channel_emotes(channel), []) for channel in self.cm.channels}
         }
 
     def load_genshin(self):
@@ -226,15 +231,15 @@ class Bot:
         resp = resp.json()
         return resp['access_token'], resp['expires_in']
 
-    def get_stream_status(self):
+    def get_stream_status(self, channel):
         try:
-            resp = requests.get("https://api.twitch.tv/helix/search/channels", params={"query": self.channel_to_run_in, "first": 1}, headers={"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id})
+            resp = requests.get("https://api.twitch.tv/helix/search/channels", params={"query": channel, "first": 1}, headers={"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id})
             resp.raise_for_status()
             resp = resp.json()
-            self.offline = not resp['data'][0]['is_live']
+            self.offlines[channel] = not resp['data'][0]['is_live']
         except:
             print(traceback.format_exc())
-            self.offline = False
+            self.offlines[channel] = False
 
     # Fundamental
 
@@ -255,9 +260,10 @@ class Bot:
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other threads to run
 
-                    # Check is ed is live
+                    # Check is channels are live
                     if perf_counter() - last_check >= 20:
-                        self.get_stream_status()
+                        for channel in self.cm.channels:
+                            self.get_stream_status(channel)
                         last_check = perf_counter()
 
                     # Check if access token needs to be renewed
@@ -329,7 +335,7 @@ class Bot:
         print(f"< CAP REQ :{caps}\r\n")
 
     async def send_message(self, channel, message):
-        if not self.offline and channel == self.channel_to_run_in:
+        if channel in self.offlines and not self.offlines[channel]:
             return
         await self.message_locks[channel].acquire()
         messages = split_message(message)
@@ -346,9 +352,8 @@ class Bot:
     async def on_running(self, ctx):
         await self.register_cap("tags")
         await self.register_cap("commands")
-        await self.join(self.channel_to_run_in)
-        if not TESTING:
-            await self.join(self.username)
+        for channel in self.cm.channels:
+            await self.join(channel)
 
     async def on_user_state(self, ctx: UserStateContext):
         if ctx.username == self.username:
@@ -358,7 +363,7 @@ class Bot:
         self.message_locks[ctx.channel] = asyncio.Lock()
 
     async def on_message(self, ctx: MessageContext):
-        if (not self.offline and ctx.channel == self.channel_to_run_in) or ctx.user.username == self.username:
+        if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or ctx.user.username == self.username:
             return
 
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
@@ -805,7 +810,7 @@ class Bot:
                                              f"do !scramble_multiplier. Hint reduction is the length of the word minus the "
                                              f"amount of hints used divided by the length of the word.")
 
-    @command_manager.command("cumfact", aliases=["cum_fact"], blacklist=["btmc"])
+    @command_manager.command("cumfact", aliases=["cum_fact"])
     async def fact(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user.username} {random.choice(self.facts)}")
 
@@ -864,17 +869,17 @@ class Bot:
         if not self.bomb_party_helper.can_start:
             self.close_bomb_party()
             return await self.send_message(channel, "The bomb party game has closed since there is only one player in the party.")
-        await self.start_bomb_party(Context(user="", channel=channel), False)
+        await self.start_bomb_party(MessageContext("", channel), True)
 
     @command_manager.command("start")
-    async def start_bomb_party(self, ctx, cancel=True):
-        if not self.bomb_party_helper.in_progress or \
-                self.bomb_party_helper.started or \
-                ctx.user.username != self.bomb_party_helper.host:
+    async def start_bomb_party(self, ctx, auto=False):
+        if not auto and (not self.bomb_party_helper.in_progress or
+                         self.bomb_party_helper.started or
+                         ctx.user.username != self.bomb_party_helper.host):
             return
         if not self.bomb_party_helper.can_start:
             return await self.send_message(ctx.channel, f"@{ctx.user.username} You need at least 2 players to start the bomb party game.")
-        if cancel:
+        if not auto:
             self.bomb_party_future.cancel()
 
         self.bomb_party_helper.on_start()

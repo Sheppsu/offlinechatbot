@@ -403,30 +403,19 @@ class Command:
     }
 
     def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None,
-                 blacklist=None, whitelist=None, banned=None, fargs=None, fkwargs=None):
-        if blacklist is not None and whitelist is not None:
-            raise ValueError("Cannot specify both blacklist_channels and whitelist_channels")
+                 banned=None, fargs=None, fkwargs=None):
         self.usage = {}
         self.name = name.lower()
         self.func = func
         self.permission = permission
         self.cooldown = cooldown
         self.aliases = list(map(str.lower, aliases)) if aliases is not None else []
-        self.blacklist = blacklist
-        self.whitelist = whitelist
         self.banned = banned
         self.fargs = fargs if fargs is not None else []
         self.fkwargs = fkwargs if fkwargs is not None else {}
 
     def print(self, out, *args, **kwargs):
         print(f"<{self.name}>: {str(out)}", *args, **kwargs)
-
-    def check_channel(self, ctx):
-        if self.blacklist is None and self.whitelist is None:
-            return DeniedUsageReason.NONE
-        if self.blacklist is not None:
-            return DeniedUsageReason.NONE if ctx.channel not in self.blacklist else DeniedUsageReason.CHANNEL
-        return DeniedUsageReason.NONE if ctx.channel in self.whitelist else DeniedUsageReason.CHANNEL
 
     def check_permission(self, ctx):
         return DeniedUsageReason.NONE if self.permissions[self.permission](ctx) else DeniedUsageReason.PERMISSION
@@ -447,7 +436,7 @@ class Command:
         return DeniedUsageReason.NONE if self.banned is None or ctx.user.username not in self.banned else DeniedUsageReason.BANNED
 
     def check_can_use(self, ctx):
-        return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_channel(ctx) | self.check_banned(ctx)
+        return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_banned(ctx)
 
     def on_used(self, ctx):
         self.usage[ctx.channel]["global"] = perf_counter()
@@ -467,12 +456,42 @@ class Command:
             return await bot.send_message(ctx.channel, f"@{ctx.user.username} You are banned from using this command.")
 
 
-class CommandManager:
-    commands = []
-    bot = None
+class ChannelCommandInclusion(IntEnum):
+    ALL = 0
+    NONE = 1
+    WHITELIST = 2
+    BLACKLIST = 3
 
-    def init(self, bot):
+
+class ChannelConfig:
+    def __init__(self, name, command_inclusion=ChannelCommandInclusion.ALL, commands=None):
+        self.name = name
+        self.command_inclusion = command_inclusion
+        self.commands = commands if commands is not None else []
+
+    def __contains__(self, item):
+        return self.can_use_command(item)
+
+    def can_use_command(self, command):
+        if self.command_inclusion == ChannelCommandInclusion.ALL:
+            return True
+        if self.command_inclusion == ChannelCommandInclusion.NONE:
+            return False
+        if self.command_inclusion == ChannelCommandInclusion.WHITELIST:
+            return command in self.commands
+        if self.command_inclusion == ChannelCommandInclusion.BLACKLIST:
+            return command not in self.commands
+
+
+class CommandManager:
+    def __init__(self):
+        self.commands = []
+        self.bot = None
+        self.channels = {}
+
+    def init(self, bot, channels):
         self.bot = bot
+        self.channels = {channel.name: channel for channel in channels}
 
     def command(self, *args, **kwargs):
         def decorator(func, *fargs, **fkwargs):
@@ -488,6 +507,8 @@ class CommandManager:
     async def __call__(self, command, ctx):
         if self.bot is None:
             raise Exception("CommandHandler must be initialized before being used to call commands.")
+        if ctx.channel not in self.channels or command not in self.channels[ctx.channel]:
+            return
 
         for c in self.commands:
             if command in c:
