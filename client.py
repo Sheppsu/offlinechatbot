@@ -55,6 +55,7 @@ class ClientBase:
                 else:
                     self.last_err = str(err)
             except Exception as e:
+                print(e)
                 if self.last_err == str(e):
                     await asyncio.sleep(60)
         await self.run()

@@ -45,11 +45,8 @@ class Bot:
     restarts = 0
 
     def __init__(self, command_manager):
-        channels_to_run_in = [ChannelConfig("sheepposu")] if TESTING else [
-            ChannelConfig("btmc", ChannelCommandInclusion.BLACKLIST, ["cumfact"]),
-            ChannelConfig("doritorainn", ChannelCommandInclusion.WHITELIST, ["osu", "rs", "osutop", "link"]),
-            ChannelConfig(self.username),
-        ]
+        self.database = Database()
+        channels_to_run_in = [ChannelConfig("sheepposu")] if TESTING else self.database.get_channels()
 
         self.cm = command_manager
         self.cm.init(self, channels_to_run_in)
@@ -92,8 +89,6 @@ class Bot:
         self.anime = []
         self.osu_data = {}
         self.user_id_cache = {}
-
-        self.database = Database()
 
         # Load save data
         self.load_data()
@@ -259,6 +254,7 @@ class Bot:
                 last_check = perf_counter() - 20
                 last_ping = perf_counter() - 60*60  # 1 hour
                 last_update = perf_counter() - 60
+                comm_done = False
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other threads to run
 
@@ -286,7 +282,8 @@ class Bot:
                         print(poll.result())
                         self.running = False
 
-                    if comm.done():
+                    if comm.done() and not comm_done:
+                        comm_done = True
                         try:
                             print(comm.result())
                         except:

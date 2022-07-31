@@ -1,5 +1,6 @@
 from mysql import connector
 from datetime import datetime
+from helper_objects import ChannelCommandInclusion, ChannelConfig
 import os
 import json
 
@@ -137,6 +138,11 @@ class Database:
         cursor = self.cursor
         cursor.execute("SELECT * FROM osu_data")
         return {data[0]: {"user_id": data[1], "username": data[2]} for data in cursor.fetchall()}
+
+    def get_channels(self):
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM channels")
+        return [ChannelConfig(data[0], ChannelCommandInclusion(int(data[2])), json.loads(data[3])) for data in cursor.fetchall()]
 
     @property
     def current_time(self):
