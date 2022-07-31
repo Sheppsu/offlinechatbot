@@ -20,6 +20,7 @@ from helper_objects import *
 from context import *
 from util import *
 from constants import *
+from client import Bot as CommunicationClient
 from osu import AsynchronousClient
 
 
@@ -54,6 +55,7 @@ class Bot:
         self.cm.init(self, channels_to_run_in)
 
         self.ws = None
+        self.comm_client = CommunicationClient(self)
         self.running = False
         self.loop = asyncio.get_event_loop()
         self.last_message = ""
@@ -251,6 +253,7 @@ class Bot:
                 # Start up
                 await self.connect()  # Connect to the irc server
                 poll = asyncio.run_coroutine_threadsafe(self.poll(), self.loop)  # Begin polling for events sent by the server
+                comm = asyncio.run_coroutine_threadsafe(self.comm_client.run(), self.loop)  # Start the client that communicates with remote clients
 
                 # Running loop
                 last_check = perf_counter() - 20
@@ -282,6 +285,9 @@ class Bot:
                     if poll.done():
                         print(poll.result())
                         self.running = False
+
+                    if comm.done():
+                        print(comm.result())
 
             except KeyboardInterrupt:
                 pass
