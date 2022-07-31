@@ -49,12 +49,13 @@ class ClientBase:
                 await self.poll()
         except websockets.ConnectionClosedError as err:
             if err.rcvd is None:
-                return traceback.print_exc()
-            print(err.rcvd.reason)
-            if err.rcvd.code == 3001 or str(err) == self.last_err:
-                await asyncio.sleep(60)
+                traceback.print_exc()
             else:
-                self.last_err = str(err)
+                print(err.rcvd.reason)
+                if err.rcvd.code == 3001 or str(err) == self.last_err:
+                    await asyncio.sleep(60)
+                else:
+                    self.last_err = str(err)
         except Exception as e:
             traceback.print_exc()
             if self.last_err == str(e):
