@@ -287,7 +287,10 @@ class Bot:
                         self.running = False
 
                     if comm.done():
-                        print(comm.result())
+                        try:
+                            print(comm.result())
+                        except:
+                            traceback.print_exc()
 
             except KeyboardInterrupt:
                 pass

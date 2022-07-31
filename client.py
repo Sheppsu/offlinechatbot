@@ -47,6 +47,8 @@ class ClientBase:
                 await self.make_connection()
                 await self.poll()
             except websockets.ConnectionClosedError as err:
+                if err.rcvd is None:
+                    return print(err)
                 print(err.rcvd.reason)
                 if err.rcvd.code == 3001 or str(err) == self.last_err:
                     await asyncio.sleep(60)
@@ -85,3 +87,4 @@ class Bot(ClientBase):
     async def on_refresh_db(self, client_id, params):
         self.bot.reload_db_data()
         await self.ws.send(f"{client_id} REFRESHDB OK")
+        print(f"> {client_id} REFRESHDB OK")
