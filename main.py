@@ -1,7 +1,7 @@
 # coding=utf-8
 
 # TODO: clean up code in general
-#       utilize DMs
+#       utilize DMs (maybe)
 #       make decorators for osu arguments
 #       implement rate limit for unverified bot
 #       save bans to database so they can be made with a command and also check via user id
@@ -188,6 +188,20 @@ class Bot:
         self.database.close()
         self.database.create_connection()
         self.load_db_data()
+
+    def reload_channels(self):
+        if TESTING:
+            return print("Cannot reload channels in testing mode")
+        current_channels = set([channel.id for channel in self.cm.channels])
+        channels = self.database.get_channels()
+        channel_ids = set([channel.id for channel in channels])
+        leave_channels = current_channels - channel_ids
+        join_channels = channel_ids - current_channels
+        for channel in leave_channels:
+            self.part(channel)
+        for channel in join_channels:
+            self.join(channel)
+        self.cm.load_channels(channels)
 
     def load_emotes(self):
         emote_requester = EmoteRequester(self.client_id, self.client_secret)

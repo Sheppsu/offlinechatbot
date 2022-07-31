@@ -142,7 +142,7 @@ class Database:
     def get_channels(self):
         cursor = self.cursor
         cursor.execute("SELECT * FROM channels")
-        return [ChannelConfig(data[0], ChannelCommandInclusion(int(data[2])), json.loads(data[3])) for data in cursor.fetchall()]
+        return [ChannelConfig(data[0], int(data[1]), ChannelCommandInclusion(int(data[2])), json.loads(data[3])) for data in cursor.fetchall()]
 
     @property
     def current_time(self):

@@ -71,7 +71,8 @@ class Bot(ClientBase):
         super().__init__()
 
         self.command_handlers = {
-            "REFRESHDB": self.on_refresh_db
+            "REFRESHDB": self.on_refresh_db,
+            "RELOAD_CHANNELS": self.on_channel_reload,
         }
 
     async def handle_data(self, data):
@@ -90,3 +91,8 @@ class Bot(ClientBase):
         self.bot.reload_db_data()
         await self.ws.send(f"{client_id} REFRESHDB OK")
         print(f"> {client_id} REFRESHDB OK")
+
+    async def on_channel_reload(self, client_id, params):
+        self.bot.reload_channels()
+        await self.ws.send(f"{client_id} RELOAD_CHANNELS OK")
+        print(f"> {client_id} RELOAD_CHANNELS OK")

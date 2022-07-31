@@ -464,8 +464,9 @@ class ChannelCommandInclusion(IntEnum):
 
 
 class ChannelConfig:
-    def __init__(self, name, command_inclusion=ChannelCommandInclusion.ALL, commands=None):
+    def __init__(self, name, channel_id, command_inclusion=ChannelCommandInclusion.ALL, commands=None):
         self.name = name
+        self.id = channel_id
         self.command_inclusion = command_inclusion
         self.commands = commands if commands is not None else []
 
@@ -491,6 +492,9 @@ class CommandManager:
 
     def init(self, bot, channels):
         self.bot = bot
+        self.load_channels(channels)
+
+    def load_channels(self, channels):
         self.channels = {channel.name: channel for channel in channels}
 
     def command(self, *args, **kwargs):
