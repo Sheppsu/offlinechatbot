@@ -3,10 +3,6 @@ import json
 import asyncio
 import requests
 from os import getenv
-from dotenv import load_dotenv
-
-
-load_dotenv()
 
 
 class ClientBase:
@@ -18,6 +14,7 @@ class ClientBase:
 
     def __init__(self):
         self.ws = None
+        self.last_err = None
 
     async def make_connection(self):
         await self.ws.send("AUTH " + self.PASSWORD)
@@ -49,9 +46,16 @@ class ClientBase:
             try:
                 await self.make_connection()
                 await self.poll()
+            except websockets.ConnectionClosedError as err:
+                print(err.rcvd.reason)
+                if err.rcvd.code == 3001 or str(err) == self.last_err:
+                    await asyncio.sleep(60)
+                else:
+                    self.last_err = str(err)
             except Exception as e:
-                print(e)
-                await self.run()
+                if self.last_err == str(e):
+                    await asyncio.sleep(60)
+        await self.run()
 
 
 class Bot(ClientBase):
