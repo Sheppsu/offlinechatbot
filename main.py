@@ -299,6 +299,7 @@ class Bot:
                     if comm.done() and not comm_done:
                         comm_done = True
                         try:
+                            print("Communication client finished")
                             print(comm.result())
                         except:
                             traceback.print_exc()

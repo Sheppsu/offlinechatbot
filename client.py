@@ -2,6 +2,7 @@ import websockets
 import json
 import asyncio
 import requests
+import traceback
 from os import getenv
 
 
@@ -48,14 +49,14 @@ class ClientBase:
                 await self.poll()
         except websockets.ConnectionClosedError as err:
             if err.rcvd is None:
-                return print(err)
+                return traceback.print_exc()
             print(err.rcvd.reason)
             if err.rcvd.code == 3001 or str(err) == self.last_err:
                 await asyncio.sleep(60)
             else:
                 self.last_err = str(err)
         except Exception as e:
-            print(e)
+            traceback.print_exc()
             if self.last_err == str(e):
                 await asyncio.sleep(60)
             self.last_err = str(e)
