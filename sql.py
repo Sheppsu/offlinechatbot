@@ -1,6 +1,7 @@
 from mysql import connector
 from datetime import datetime
 from helper_objects import ChannelCommandInclusion, ChannelConfig
+from pytz import timezone
 import os
 import json
 
@@ -28,7 +29,7 @@ class Database:
     def ping(self):
         try:
             self.database.ping(reconnect=True, attempts=3, delay=5)
-        except connector.Error as err:
+        except connector.Error:
             self.database = self.create_connection()
 
     def close(self):
@@ -143,6 +144,28 @@ class Database:
         cursor = self.cursor
         cursor.execute("SELECT * FROM channels")
         return [ChannelConfig(data[0], int(data[1]), ChannelCommandInclusion(int(data[2])), json.loads(data[3])) for data in cursor.fetchall()]
+
+    def add_timezone(self, userid, timezone_name):
+        self.cursor.execute(f"INSERT INTO timezones (userid, timezone) VALUES ({userid}, {timezone_name!r})")
+        self.database.commit()
+
+    def update_timezone(self, userid, timezone_name):
+        self.cursor.execute(f"UPDATE timezones SET timezone = {timezone_name!r} WHERE userid = {userid}")
+        self.database.commit()
+
+    def get_timezones(self):
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM timezones")
+        return {data[0]: timezone(data[1]) for data in cursor.fetchall()}
+
+    def add_userinfo(self, username, userid):
+        self.cursor.execute(f"INSERT INTO userinfo (username, userid) VALUES ({username!r}, {userid})")
+        self.database.commit()
+
+    def get_userinfo(self):
+        cursor = self.cursor
+        cursor.execute("SELECT * FROM userinfo")
+        return {data[0]: {"userid": data[1]} for data in cursor.fetchall()}
 
     @property
     def current_time(self):
