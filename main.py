@@ -367,7 +367,7 @@ class Bot:
         await self.message_locks[channel].acquire()
         messages = split_message(message)
         for msg in messages:
-            msg = msg + ("\U000e0000" if self.last_message == msg else "")
+            msg = msg + (" \U000e0000" if self.last_message == msg else "")
             await self.ws.send(f"PRIVMSG #{channel} :/me {msg}")
             self.last_message = msg
             print(f"> PRIVMSG #{channel} :/me {msg}")
@@ -565,7 +565,7 @@ class Bot:
     async def slap(self, ctx):
         args = ctx.get_args()
         if not args:
-            return await self.send_message(ctx.channel, "You must provide a user to slap.")
+            return
 
         hit = random.choice((True, False))
         await self.send_message(ctx.channel,
