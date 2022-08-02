@@ -104,7 +104,7 @@ class MessageContext:
         self.room_id = tags.get("room-id", None)
         self.tmi_sent_ts = bool(int(tags.get("tmi-sent-ts", 0)))
         self.turbo = bool(int(tags.get("turbo", 0)))
-        self.user_id = tags.get("user-id", None)
+        self.user_id = int(tags.get("user-id", -1))
         self.user_type = tags.get("user-type", None)
 
     def get_args(self, char_acceptance="unicode"):
