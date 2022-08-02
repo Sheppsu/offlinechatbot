@@ -1336,7 +1336,7 @@ class Bot:
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):
-        await self.send_message(ctx.channel, "Having trouble linking your timezone? Here's a list of valid timezones: "
+        await self.send_message(ctx.channel, "Having trouble linking your timezone? Here's a list of valid timezones (use the text on the left column): "
                                 "https://www.ibm.com/docs/en/cloudpakw3700/2.3.0.0?topic=SS6PD2_2.3.0/doc/psapsys_restapi/time_zone_list.html")
 
     @command_manager.command("linktz", cooldown=Cooldown(0, 3))
@@ -1346,8 +1346,10 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a timezone to link.")
 
         tz = args[0].lower().strip()
-        if tz.startswith("utc") or tz.startswith("gmt"):
+        if tz.startswith("gmt"):
             tz = "etc/" + tz
+        elif tz.startswith("utc"):
+            tz = "etc/" + tz[3:]
         lower_timezones = list(map(str.lower, all_timezones))
         if tz not in lower_timezones:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid timezone.")
