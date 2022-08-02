@@ -1334,13 +1334,20 @@ class Bot:
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {user.username} to your account.")
 
+    @command_manager.command("validtz")
+    async def valid_timezones(self, ctx):
+        await self.send_message(ctx.channel, "Having trouble linking your timezone? Here's a list of valid timezones: "
+                                "https://www.ibm.com/docs/en/cloudpakw3700/2.3.0.0?topic=SS6PD2_2.3.0/doc/psapsys_restapi/time_zone_list.html")
+
     @command_manager.command("linktz", cooldown=Cooldown(0, 3))
     async def link_timezone(self, ctx):
         args = ctx.get_args("ascii")
         if len(args) == 0 or args[0].strip() == "":
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a timezone to link.")
 
-        tz = args[0].lower()
+        tz = args[0].lower().strip()
+        if tz.startswith("utc") or tz.startswith("gmt"):
+            tz = "etc/" + tz
         lower_timezones = list(map(str.lower, all_timezones))
         if tz not in lower_timezones:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid timezone.")
@@ -1361,7 +1368,7 @@ class Bot:
         if len(args) == 0 or args[0].strip() == "":
             username = ctx.user.username
         else:
-            username = args[0].lower()
+            username = args[0].lower().replace("@", "")
 
         if username not in self.userinfo:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't recognize the user {username}")
