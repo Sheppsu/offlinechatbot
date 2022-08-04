@@ -32,6 +32,9 @@ if not TESTING or not os.path.exists("data/top players (200).json"):
     Client().run()  # Update top player json file
 if not TESTING or not os.path.exists("data/anime.json"):
     import get_popular_anime  # Update popular anime json file
+if not TESTING or not os.path.exists("data/azur_lane.json"):
+    from azur_lane import download_azur_lane_ship_names
+    download_azur_lane_ship_names()
 
 osu_client = AsynchronousClient.from_client_credentials(int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), "http://127.0.0.1:8080")
 command_manager = CommandManager()
@@ -93,6 +96,7 @@ class Bot:
         self.user_id_cache = {}
         self.timezones = {}
         self.userinfo = {}
+        self.azur_lane = []
 
         # Load save data
         self.load_data()
@@ -121,7 +125,8 @@ class Bot:
             "map": Scramble("map name", lambda: random.choice(self.top_maps), 1.3),
             "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
             "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.6, ScrambleHintType.EVERY_OTHER, True),
-            "anime": Scramble("anime", lambda: random.choice(self.anime[:200]), 1.3)
+            "anime": Scramble("anime", lambda: random.choice(self.anime[:200]), 1.3),
+            "al": Scramble("azur lane ship", lambda: random.choice(self.azur_lane), 0.7),
         }
         self.scramble_manager = ScrambleManager(self.scrambles)
 
@@ -179,6 +184,10 @@ class Bot:
         with open("data/anime.json", "r") as f:
             self.anime = json.load(f)
 
+    def load_azur_lane(self):
+        with open("data/azur_lane.json", "r") as f:
+            self.azur_lane = json.load(f)
+
     def load_db_data(self):
         self.pity = self.database.get_pity()
         self.gamba_data = self.database.get_userdata()
@@ -228,6 +237,7 @@ class Bot:
         self.load_all_words()
         self.load_genshin()
         self.load_anime()
+        self.load_azur_lane()
         self.load_db_data()
 
     def save_money(self, user):
@@ -584,6 +594,7 @@ class Bot:
     @command_manager.command("scramble_emote", fargs=["emote"])
     @command_manager.command("scramble_genshin", fargs=["genshin"])
     @command_manager.command("scramble_anime", fargs=["anime"])
+    @command_manager.command("scramble_al", fargs=["al"])
     async def scramble(self, ctx, scramble_type):
         if self.scramble_manager.in_progress(scramble_type):
             return
@@ -618,6 +629,7 @@ class Bot:
     @command_manager.command("hint_emote", fargs=["emote"])
     @command_manager.command("hint_genshin", fargs=["genshin"])
     @command_manager.command("hint_anime", fargs=["anime"])
+    @command_manager.command("hint_al", fargs=["al"])
     async def hint(self, ctx, scramble_type):
         if not self.scramble_manager.in_progress(scramble_type):
             return
