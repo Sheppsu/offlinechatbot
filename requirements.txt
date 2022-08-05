@@ -1,5 +1,5 @@
 python-dotenv>=0.20.0
-git+https://github.com/Sheepposu/osu.py@7abfeffca99773782dea6730e6267a9e400d99c3#egg=osu.py
+git+https://github.com/Sheepposu/osu.py@a145409f2997ad015ef82ab016a0d984e03af1d3#egg=osu.py
 websockets>=10.2
 mysql-connector-python>=8.0.29
 pytz==2022.1
