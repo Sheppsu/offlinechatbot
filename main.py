@@ -1168,9 +1168,9 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no recent scores for {proper_mode_name[mode]}.")
 
         score = scores[0]
-        self.last_beatmap = score.beatmap
-        self.last_beatmap.beatmapset = score.beatmapset
-        beatmap_attributes = await osu_client.get_beatmap_attributes(score.beatmap.id, score.mods if score.mods else None, score.mode)
+        beatmap = await osu_client.get_beatmap(score.beatmap.id)
+        self.last_beatmap = beatmap
+        beatmap_attributes = await osu_client.get_beatmap_attributes(beatmap.id, score.mods if score.mods else None, score.mode)
         self.last_beatmap_attributes = beatmap_attributes
 
         rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
@@ -1178,9 +1178,10 @@ class Bot:
         # Format and send message for recent score
         genkis = (score.statistics.count_300, score.statistics.count_100,
                 score.statistics.count_50, score.statistics.count_miss)
+        total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
         await self.send_message(ctx.channel, rs_format.format(**{
             "username": score.user.username,
-            "passed": "" if score.passed else f"(Failed {round(sum(genkis)/beatmap_attributes.max_combo*100)}%)",
+            "passed": "" if score.passed else f"(Failed {round(sum(genkis)/total_objects*100)}%)",
             "artist": score.beatmapset.artist,
             "title": score.beatmapset.title,
             "diff": score.beatmap.version,
