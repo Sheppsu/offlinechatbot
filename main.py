@@ -22,7 +22,8 @@ from context import *
 from util import *
 from constants import *
 from client import Bot as CommunicationClient
-from osu import AsynchronousClient
+from osu import AsynchronousClient, GameModeStr
+from beatmap_reader import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 
 
@@ -1132,6 +1133,46 @@ class Bot:
             self.user_id_cache[username] = user.id
         return self.user_id_cache[username]
 
+    @staticmethod
+    def get_if_fc(score, beatmap, beatmap_attributes):
+        if score.mode == GameModeStr.STANDARD:
+            count_300 = score.statistics.count_300
+            count_100 = score.statistics.count_100
+            count_50 = score.statistics.count_50
+            count_miss = score.statistics.count_miss
+            total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
+            total_hits = count_300 + count_100 + count_50 + count_miss
+
+            count_300 += count_miss + total_objects - total_hits
+            score.statistics.count_300 = count_300
+            score.statistics.count_miss, count_miss = 0, 0
+            score.max_combo = beatmap_attributes.max_combo
+
+            accuracy = (count_300 * 300 + count_100 * 100 + count_50 * 50) / \
+                       (300 * (count_300 + count_100 + count_50 + count_miss))
+            score.accuracy = accuracy
+
+            return accuracy, Bot.calculate_pp(score, beatmap, beatmap_attributes)
+
+    @staticmethod
+    def calculate_pp(score, beatmap, beatmap_attributes):
+        if score.mode == GameModeStr.STANDARD:
+            attributes = OsuDifficultyAttributes.from_attributes({
+                'aim_strain': beatmap_attributes.mode_attributes.aim_difficulty,
+                'speed_strain': beatmap_attributes.mode_attributes.speed_difficulty,
+                'flashlight_rating': beatmap_attributes.mode_attributes.flashlight_difficulty,
+                'slider_factor': beatmap_attributes.mode_attributes.slider_factor,
+                'approach_rate': beatmap_attributes.mode_attributes.approach_rate,
+                'overall_difficulty': beatmap_attributes.mode_attributes.overall_difficulty,
+                'drain_rate': beatmap.drain,
+                'hit_circle_count': beatmap.count_circles,
+                'slider_count': beatmap.count_sliders,
+                'spinner_count': beatmap.count_spinners,
+            })
+            score = OsuScoreAttributes.from_osupy_score(score)
+            calculator = OsuPerformanceCalculator(GameModeStr.STANDARD, attributes, score)
+            return calculator.calculate()
+
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
         # Process arguments
@@ -1174,11 +1215,16 @@ class Bot:
         self.last_beatmap_attributes = beatmap_attributes
 
         rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
-                    "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp | {time_ago} ago"
+                    "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp{if_fc_pp} | {time_ago} ago"
         # Format and send message for recent score
         genkis = (score.statistics.count_300, score.statistics.count_100,
-                score.statistics.count_50, score.statistics.count_miss)
+                  score.statistics.count_50, score.statistics.count_miss)
         total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
+        if score.pp is None and score.passed:
+            score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
+        if_fc_acc, if_fc_pp = None, None
+        if score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
+            if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
         await self.send_message(ctx.channel, rs_format.format(**{
             "username": score.user.username,
             "passed": "" if score.passed else f"(Failed {round(sum(genkis)/total_objects*100)}%)",
@@ -1188,11 +1234,12 @@ class Bot:
             "mods": " +"+score.mods.to_readable_string() if score.mods else "",
             "mapper": score.beatmapset.creator,
             "star_rating": round(beatmap_attributes.star_rating, 2),
-            "pp": 0 if score.pp is None else round(score.pp, 2),
+            "pp": round(score.pp, 2) if score.pp and score.passed else "",
+            "if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)" if if_fc_pp is not None else "",
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
             "max_combo": beatmap_attributes.max_combo,
-            "genki_counts": f"%d/%d/%d/%d" %genkis,
+            "genki_counts": f"%d/%d/%d/%d" % genkis,
             "time_ago": format_date(score.created_at)
         }))
 
