@@ -1,4 +1,5 @@
 from mal import Client
+from constants import name_formatting
 import os
 import json
 import sys
@@ -28,7 +29,9 @@ def format_title(anime):
         title = anime.title
     elif anime.title == "Hunter x Hunter":
         title = "Hunter x Hunter (1999)"
-    return "".join([char for char in title if char.isascii()])
+    elif anime.title == "Mirai Nikki":
+        title = "The Future Diary (OVA)"
+    return "".join([name_formatting[char] if char in name_formatting else char for char in title if char.isascii()])
 
 
 with open("data/anime.json", "w") as f:
