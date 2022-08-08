@@ -25,6 +25,7 @@ from client import Bot as CommunicationClient
 from osu import AsynchronousClient, GameModeStr, Score
 from beatmap_reader import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
+from copy import deepcopy
 
 
 TESTING = "--test" in sys.argv
@@ -1135,9 +1136,7 @@ class Bot:
 
     @staticmethod
     def get_if_fc(o_score, beatmap, beatmap_attributes):
-        score = Score({
-            attr: getattr(o_score, attr) for attr in o_score.__slots__
-        })
+        score = deepcopy(o_score)
         if score.mode == GameModeStr.STANDARD:
             count_300 = score.statistics.count_300
             count_100 = score.statistics.count_100
