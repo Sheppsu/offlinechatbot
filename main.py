@@ -1217,7 +1217,7 @@ class Bot:
         self.last_beatmap_attributes = beatmap_attributes
 
         rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
-                    "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp{if_fc_pp} | {time_ago} ago"
+                    "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
         # Format and send message for recent score
         genkis = (score.statistics.count_300, score.statistics.count_100,
                   score.statistics.count_50, score.statistics.count_miss)
@@ -1236,7 +1236,7 @@ class Bot:
             "mods": " +"+score.mods.to_readable_string() if score.mods else "",
             "mapper": score.beatmapset.creator,
             "star_rating": round(beatmap_attributes.star_rating, 2),
-            "pp": round(score.pp, 2) if score.pp and score.passed else "",
+            "pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
             "if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)" if if_fc_pp is not None else "",
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
