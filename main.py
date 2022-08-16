@@ -1168,6 +1168,7 @@ class Bot:
                 'slider_factor': beatmap_attributes.mode_attributes.slider_factor,
                 'approach_rate': beatmap_attributes.mode_attributes.approach_rate,
                 'overall_difficulty': beatmap_attributes.mode_attributes.overall_difficulty,
+                'max_combo': beatmap_attributes.max_combo,
                 'drain_rate': beatmap.drain,
                 'hit_circle_count': beatmap.count_circles,
                 'slider_count': beatmap.count_sliders,
