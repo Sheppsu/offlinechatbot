@@ -464,10 +464,11 @@ class ChannelCommandInclusion(IntEnum):
 
 
 class ChannelConfig:
-    def __init__(self, name, channel_id, command_inclusion=ChannelCommandInclusion.ALL, commands=None):
+    def __init__(self, name, channel_id, command_inclusion=ChannelCommandInclusion.ALL, offlineonly=True, commands=None):
         self.name = name
         self.id = channel_id
         self.command_inclusion = command_inclusion
+        self.offlineonly = offlineonly
         self.commands = commands if commands is not None else []
 
     def __contains__(self, item):

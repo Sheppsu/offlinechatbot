@@ -143,7 +143,7 @@ class Database:
     def get_channels(self):
         cursor = self.cursor
         cursor.execute("SELECT * FROM channels")
-        return [ChannelConfig(data[0], int(data[1]), ChannelCommandInclusion(int(data[2])), json.loads(data[3])) for data in cursor.fetchall()]
+        return [ChannelConfig(data[0], int(data[1]), ChannelCommandInclusion(int(data[2])), bool(data[3]), json.loads(data[4])) for data in cursor.fetchall()]
 
     def add_timezone(self, userid, timezone_name):
         self.cursor.execute(f"INSERT INTO timezones (userid, timezone) VALUES ({userid}, {timezone_name!r})")

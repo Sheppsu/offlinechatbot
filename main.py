@@ -62,7 +62,7 @@ class Bot:
         self.comm_client = CommunicationClient(self)
         self.running = False
         self.loop = asyncio.get_event_loop()
-        self.last_message = ""
+        self.last_message = {}
         self.own_state = None
         self.irc_command_handlers = {
             ContextType.CONNECTED: self.on_running,
@@ -80,7 +80,6 @@ class Bot:
 
         # Message related variables
         self.message_send_cd = 1.5
-        self.last_message = 0
         self.message_locks = {}
 
         # Save/load data from files or to/from database
@@ -379,9 +378,9 @@ class Bot:
         await self.message_locks[channel].acquire()
         messages = split_message(message)
         for msg in messages:
-            msg = msg + (" \U000e0000" if self.last_message == msg else "")
+            msg = msg + (" \U000e0000" if self.last_message[channel] == msg else "")
             await self.ws.send(f"PRIVMSG #{channel} :/me {msg}")
-            self.last_message = msg
+            self.last_message[channel] = msg
             print(f"> PRIVMSG #{channel} :/me {msg}")
             await asyncio.sleep(self.get_wait_for_channel(channel))  # Avoid going over ratelimits
         self.message_locks[channel].release()
@@ -400,6 +399,7 @@ class Bot:
 
     async def on_join(self, ctx: JoinContext):
         self.message_locks[ctx.channel] = asyncio.Lock()
+        self.last_message[ctx.channel] = ""
 
     async def on_message(self, ctx: MessageContext):
         if ctx.user.username not in self.userinfo:
