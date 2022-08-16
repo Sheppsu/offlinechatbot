@@ -292,8 +292,10 @@ class Bot:
 
                     # Check is channels are live
                     if perf_counter() - last_check >= 20:
-                        for channel in self.cm.channels:
-                            self.get_stream_status(channel)
+                        for channel in self.cm.channels.values():
+                            if not channel.offlineonly:
+                                continue
+                            self.get_stream_status(channel.name)
                         last_check = perf_counter()
 
                     # Check if access token needs to be renewed
