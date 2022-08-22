@@ -146,6 +146,17 @@ class Bot:
         self.last_beatmap = None
         self.last_beatmap_attributes = None
 
+        # timezone stuff
+        self.tz_abbreviations = {}
+        for name in pytz.all_timezones:
+            tzone = pytz.timezone(name)
+            for _, _, abbr in getattr(tzone, "_transition_info", [[None, None, datetime.now(tzone).tzname()]]):
+                if abbr not in self.tz_abbreviations:
+                    self.tz_abbreviations[abbr] = []
+                if name in self.tz_abbreviations[abbr]:
+                    continue
+                self.tz_abbreviations[abbr].append(name)
+
     # Util
 
     def set_timed_event(self, wait, callback, *args, **kwargs):
@@ -1412,15 +1423,17 @@ class Bot:
 
         tz = args[0].lower().strip()
         if tz.startswith("gmt"):
-            tz = "etc/" + tz
+            tz = "Etc/" + tz
         elif tz.startswith("utc"):
-            tz = "etc/" + tz[3:]
+            tz = "Etc/GMT" + tz[3:]
         lower_timezones = list(map(str.lower, all_timezones))
         if tz not in lower_timezones:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid timezone.")
-
-        tz = all_timezones[lower_timezones.index(tz)]
-        print(self.timezones)
+            if tz.upper() in self.tz_abbreviations:
+                tz = self.tz_abbreviations[tz.upper()][0]
+            else:
+                return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid timezone. Do !validtz if you are having trouble.")
+        else:
+            tz = all_timezones[lower_timezones.index(tz)]
         if ctx.user_id in self.timezones:
             self.database.update_timezone(ctx.user_id, tz)
         else:

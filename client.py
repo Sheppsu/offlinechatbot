@@ -4,6 +4,7 @@ import asyncio
 import requests
 import traceback
 from os import getenv
+from util import future_callback
 
 
 class ClientBase:
@@ -87,7 +88,8 @@ class Bot(ClientBase):
 
         print(f"Message received from client {client_id}: {command} {params if params else ''}")
         if command in self.command_handlers:
-            asyncio.run_coroutine_threadsafe(self.command_handlers[command](client_id, params), self.bot.loop)
+            future = asyncio.run_coroutine_threadsafe(self.command_handlers[command](client_id, params), self.bot.loop)
+            future.add_done_callback(future_callback)
 
     async def on_refresh_db(self, client_id, params):
         self.bot.reload_db_data()
