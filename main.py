@@ -219,7 +219,7 @@ class Bot:
     def reload_channels(self):
         if TESTING:
             return print("Cannot reload channels in testing mode")
-        current_channels = set([channel.id for channel in self.cm.channels])
+        current_channels = set([channel.id for channel in self.cm.channels.values()])
         channels = self.database.get_channels()
         channel_ids = set([channel.id for channel in channels])
         leave_channels = current_channels - channel_ids
