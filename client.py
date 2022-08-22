@@ -79,6 +79,9 @@ class Bot(ClientBase):
         }
 
     async def handle_data(self, data):
+        if data == "PING":
+            return await self.ws.send("PONG")
+
         data = data.split()
         client_id = data[0]
         command = data[1].upper()
@@ -87,6 +90,7 @@ class Bot(ClientBase):
             params = json.loads(" ".join(data[2:]))
 
         print(f"Message received from client {client_id}: {command} {params if params else ''}")
+
         if command in self.command_handlers:
             future = asyncio.run_coroutine_threadsafe(self.command_handlers[command](client_id, params), self.bot.loop)
             future.add_done_callback(future_callback)
