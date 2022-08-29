@@ -148,8 +148,8 @@ class Bot:
 
         # timezone stuff
         self.tz_abbreviations = {}
-        for name in pytz.all_timezones:
-            tzone = pytz.timezone(name)
+        for name in all_timezones:
+            tzone = timezone(name)
             for _, _, abbr in getattr(tzone, "_transition_info", [[None, None, datetime.now(tzone).tzname()]]):
                 if abbr not in self.tz_abbreviations:
                     self.tz_abbreviations[abbr] = []
@@ -225,9 +225,9 @@ class Bot:
         leave_channels = current_channels - channel_ids
         join_channels = channel_ids - current_channels
         for channel in leave_channels:
-            self.part(channel)
+            await self.part(channel)
         for channel in join_channels:
-            self.join(channel)
+            await self.join(channel)
         self.cm.load_channels(channels)
 
     def load_emotes(self):
