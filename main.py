@@ -132,7 +132,7 @@ class Bot:
         self.scramble_manager = ScrambleManager(self.scrambles)
 
         # Load emotes
-        self.emotes = self.load_emotes()
+        self.emotes = self.get_all_emotes()
 
         # Bomb party
         self.bomb_party_helper = BombParty()
@@ -231,12 +231,14 @@ class Bot:
                 await self.join(channel.name)
         self.cm.load_channels(channels)
 
-    def load_emotes(self):
-        emote_requester = EmoteRequester(self.client_id, self.client_secret)
-        return {
-            self.username: sum(emote_requester.get_channel_emotes(self.username), []),
-            **{channel: sum(emote_requester.get_channel_emotes(channel), []) for channel in self.cm.channels}
-        }
+    def get_emotes(self, channel, er=None):
+        if er is None:
+            er = EmoteRequester(self.client_id, self.client_secret)
+        return sum(er.get_channel_emotes(channel), [])
+
+    def get_all_emotes(self):
+        er = EmoteRequester(self.client_id, self.client_secret)
+        return {channel: self.get_emotes(channel, er) for channel in self.cm.channels}
 
     def load_genshin(self):
         with open("data/genshin.json", "r") as f:
@@ -415,6 +417,7 @@ class Bot:
     async def on_join(self, ctx: JoinContext):
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
+        self.emotes.update({ctx.channel: self.get_emotes(ctx.channel)})
 
     async def on_message(self, ctx: MessageContext):
         if ctx.user.username not in self.userinfo:
