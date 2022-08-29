@@ -101,6 +101,6 @@ class Bot(ClientBase):
         print(f"> {client_id} REFRESHDB OK")
 
     async def on_channel_reload(self, client_id, params):
-        self.bot.reload_channels()
+        await self.bot.reload_channels()
         await self.ws.send(f"{client_id} RELOAD_CHANNELS OK")
         print(f"> {client_id} RELOAD_CHANNELS OK")

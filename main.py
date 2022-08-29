@@ -216,7 +216,7 @@ class Bot:
         self.database.create_connection()
         self.load_db_data()
 
-    def reload_channels(self):
+    async def reload_channels(self):
         if TESTING:
             return print("Cannot reload channels in testing mode")
         current_channels = set([channel.id for channel in self.cm.channels.values()])
