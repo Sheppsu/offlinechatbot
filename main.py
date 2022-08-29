@@ -224,10 +224,11 @@ class Bot:
         channel_ids = set([channel.id for channel in channels])
         leave_channels = current_channels - channel_ids
         join_channels = channel_ids - current_channels
-        for channel in leave_channels:
-            await self.part(channel)
-        for channel in join_channels:
-            await self.join(channel)
+        for channel in channels:
+            if channel.id in leave_channels:
+                await self.part(channel.name)
+            elif channel.id in join_channels:
+                await self.join(channel.name)
         self.cm.load_channels(channels)
 
     def load_emotes(self):
@@ -386,6 +387,7 @@ class Bot:
         print(f"< CAP REQ :{caps}\r\n")
 
     async def send_message(self, channel, message):
+        # TODO: fix rate limit handling shit
         if channel in self.offlines and not self.offlines[channel]:
             return
         await self.message_locks[channel].acquire()
