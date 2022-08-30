@@ -143,8 +143,7 @@ class Bot:
         self.anime_compare_future = {}
 
         # osu! stuff
-        self.last_beatmap = None
-        self.last_beatmap_attributes = None
+        self.beatmap_cache = {}
 
         # timezone stuff
         self.tz_abbreviations = {}
@@ -417,7 +416,8 @@ class Bot:
     async def on_join(self, ctx: JoinContext):
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
-        self.emotes.update({ctx.channel: self.get_emotes(ctx.channel)})
+        self.emotes[ctx.channel] = self.get_emotes(ctx.channel)
+        self.beatmap_cache[ctx.channel] = None
 
     async def on_message(self, ctx: MessageContext):
         if ctx.user.username not in self.userinfo:
@@ -1061,11 +1061,6 @@ class Bot:
         self.reload_db_data()
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Local data has been reloaded from database.")
 
-    @command_manager.command("reload_emotes", permission=CommandPermission.ADMIN)
-    async def refresh_emotes(self, ctx):
-        self.load_emotes()
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Emotes have been reloaded.")
-
     @command_manager.command("anime_compare", aliases=["animecompare", "ac"], cooldown=Cooldown(0, 5),
                              banned=["osuwho"])
     async def anime_compare(self, ctx):
@@ -1117,6 +1112,24 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You have not played any anime compare games yet.")
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your top anime compare score is {game[0]['score']}.")
 
+    def process_value_arg(self, flag, args, default=None):
+        lower_args = list(map(str.lower, args))
+        if flag in lower_args:
+            index = lower_args.index(flag)
+            args.pop(index)
+            if len(args) == 0:
+                return
+            value = args.pop(index).strip()
+            return value
+        return default
+
+    def process_arg(self, flag, args):
+        lower_args = list(map(str.lower, args))
+        if flag in lower_args:
+            args.pop(lower_args.index(flag))
+            return True
+        return False
+
     async def process_osu_username_arg(self, ctx, args):
         if len(args) == 0 and ctx.user.username in self.osu_data:  # user did not provide a username, but osu! account is linked
             return self.osu_data[ctx.user.username]['username']
@@ -1126,22 +1139,24 @@ class Bot:
             return " ".join(args).strip()
 
     async def process_osu_mode_args(self, ctx, args):
-        mode = 'osu'
-        lower_args = list(map(str.lower, args))
-        if "-m" in lower_args:
-            index = lower_args.index("-m")
-            args.pop(index)
-            mode = args.pop(index).strip()
-            if not mode.isdigit() or int(mode) not in range(0, 4):
-                return await self.send_message(ctx.channel,
-                                               f"@{ctx.user.display_name} Invalid mode. Valid modes are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
-            mode = {
-                0: "osu",
-                1: "taiko",
-                2: "fruits",
-                3: "mania"
-            }[int(mode)]
-        return mode, args
+        arg = self.process_value_arg("-m", args, 0)
+        if arg is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify a mode with the -m argument. "
+                                                        f"Valid modes are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
+        if type(arg) != int and (not arg.isdigit() or int(arg) not in range(0, 4)):
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Invalid mode. Valid modes "
+                                                        f"are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
+        return ("osu", "taiko", "fruits", "mania")[int(arg)]
+
+    async def process_index_arg(self, ctx, args, rng=range(1, 101)):
+        arg = self.process_value_arg("-i", args, 1)
+        if arg is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify an index with the -i argument. "
+                                                        f"Specify a number between {rng[0]} and {rng[-1]}")
+        if type(arg) != int and (not arg.isdigit() or int(arg) not in rng):
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify a number between "
+                                                        f"{rng[0]} and {rng[-1]} for the -i argument.")
+        return int(arg)-1
 
     async def get_osu_user_id_from_osu_username(self, ctx, username):
         if username not in self.user_id_cache:
@@ -1196,21 +1211,14 @@ class Bot:
 
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
-        # Process arguments
-
         args = ctx.get_args('ascii')
-        lower_args = list(map(str.lower, args))
-
-        # Process mode argument
-        mode, args = await self.process_osu_mode_args(ctx, args)
+        mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
-
-        best = False
-        if "-b" in lower_args:
-            index = lower_args.index("-b")
-            args.pop(index)
-            best = True
+        index = await self.process_index_arg(ctx, args)
+        if index is None:
+            return
+        best = self.process_arg("-b", args)
 
         username = await self.process_osu_username_arg(ctx, args)
         if username is None:
@@ -1222,18 +1230,18 @@ class Bot:
 
         # Get recent score
         if not best:
-            scores = await osu_client.get_user_scores(user_id, "recent", include_fails=1, mode=mode, limit=1)
+            scores = await osu_client.get_user_scores(user_id, "recent", include_fails=1, mode=mode, limit=1, offset=index)
         else:
             scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
             scores = sorted(scores, key=lambda x: x.created_at, reverse=True)
         if not scores:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no recent scores for {proper_mode_name[mode]}.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no recent scores for {proper_mode_name[mode]} "
+                                                        f"or the index you specified is out of range.")
 
-        score = scores[0]
+        score = scores[0 if not best else index]
         beatmap = await osu_client.get_beatmap(score.beatmap.id)
-        self.last_beatmap = beatmap
         beatmap_attributes = await osu_client.get_beatmap_attributes(beatmap.id, score.mods if score.mods else None, score.mode)
-        self.last_beatmap_attributes = beatmap_attributes
+        self.beatmap_cache[ctx.channel] = (beatmap, beatmap_attributes)
 
         rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
@@ -1266,8 +1274,10 @@ class Bot:
 
     @command_manager.command("c", aliases=['compare'], cooldown=Cooldown(0, 3))
     async def compare_score(self, ctx):
-        if self.last_beatmap is None:
+        if self.beatmap_cache[ctx.channel] is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
+
+        beatmap, beatmap_attributes = self.beatmap_cache[ctx.channel]
 
         username = await self.process_osu_username_arg(ctx, ctx.get_args('ascii'))
         if username is None:
@@ -1277,30 +1287,37 @@ class Bot:
         if user_id is None:
             return
 
-        scores = await osu_client.get_user_beatmap_scores(self.last_beatmap.id, user_id)
+        scores = await osu_client.get_user_beatmap_scores(beatmap.id, user_id)
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no scores on that beatmap.")
 
         score_format = "{artist} - {title} [{diff}]{mods} ({mapper}) " \
-                       "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}pp | {time_ago} ago"
-        message = ""
+                       "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
+        message = f"Scores for {username}: "
         for score in scores[:5]:
+            if score.pp is None and score.passed:
+                score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
+            if_fc_acc, if_fc_pp = None, None
+            if score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
+                if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
             message += "🌟" + score_format.format(**{
-                "artist": self.last_beatmap.beatmapset.artist,
-                "title": self.last_beatmap.beatmapset.title,
-                "diff": self.last_beatmap.version,
+                "artist": beatmap.beatmapset.artist,
+                "title": beatmap.beatmapset.title,
+                "diff": beatmap.version,
                 "mods": " +"+score.mods.to_readable_string() if score.mods else "",
-                "mapper": self.last_beatmap.beatmapset.creator,
+                "mapper": beatmap.beatmapset.creator,
                 "acc": round(score.accuracy * 100, 2),
                 "combo": score.max_combo,
-                "max_combo": self.last_beatmap_attributes.max_combo,
+                "max_combo": beatmap_attributes.max_combo,
                 "genki_counts": f"%d/%d/%d/%d" % (
                     score.statistics.count_300,
                     score.statistics.count_100,
                     score.statistics.count_50,
                     score.statistics.count_miss
                 ),
-                "pp": 0 if score.pp is None else round(score.pp, 2),
+                "pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
+                "if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)"
+                if if_fc_pp is not None else "",
                 "time_ago": format_date(score.created_at)
             })
         await self.send_message(ctx.channel, message)
@@ -1308,7 +1325,7 @@ class Bot:
     @command_manager.command("osu", cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
         args = ctx.get_args('ascii')
-        mode, args = await self.process_osu_mode_args(ctx, args)
+        mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
         username = await self.process_osu_username_arg(ctx, args)
@@ -1346,16 +1363,11 @@ class Bot:
     @command_manager.command("osutop", cooldown=Cooldown(0, 5))
     async def osu_top(self, ctx):
         args = ctx.get_args('ascii')
-        lower_args = [arg.lower() for arg in args]
 
-        mode, args = await self.process_osu_mode_args(ctx, args)
+        mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
-
-        recent_tops = False
-        if "-r" in lower_args:
-            args.pop(lower_args.index("-r"))
-            recent_tops = True
+        recent_tops = self.process_arg("-r", args)
 
         username = await self.process_osu_username_arg(ctx, args)
         if username is None:
