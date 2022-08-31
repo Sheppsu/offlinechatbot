@@ -618,6 +618,9 @@ class Bot:
     async def scramble(self, ctx, scramble_type):
         if self.scramble_manager.in_progress(scramble_type):
             return
+        if scramble_type == "emote" and len(self.emotes[ctx.channel]) < 20:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must have at least 20 emotes "
+                                                        "in this channel to use the emote scramble.")
 
         scrambled_word = self.scramble_manager.get_scramble(scramble_type, ctx.channel)
         await self.send_message(ctx.channel, f"Unscramble this "
