@@ -442,7 +442,7 @@ class Bot:
             return
 
         for scramble_type, scramble in self.scrambles.items():
-            if scramble.in_progress:
+            if scramble.in_progress(ctx.channel):
                 await self.on_scramble(ctx, scramble_type)
 
         if ctx.user.username in self.anime_compare_future and self.anime_compare_future[ctx.user.username] is not None and \
@@ -616,7 +616,7 @@ class Bot:
     @command_manager.command("scramble_anime", fargs=["anime"])
     @command_manager.command("scramble_al", fargs=["al"])
     async def scramble(self, ctx, scramble_type):
-        if self.scramble_manager.in_progress(scramble_type):
+        if self.scramble_manager.in_progress(scramble_type, ctx.channel):
             return
         if scramble_type == "emote" and len(self.emotes[ctx.channel]) < 20:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must have at least 20 emotes "
@@ -627,20 +627,21 @@ class Bot:
                                              f"{self.scramble_manager.get_scramble_name(scramble_type)}: "
                                              f"{scrambled_word.lower()}")
         future = self.set_timed_event(120, self.on_scramble_finish, ctx.channel, scramble_type)
-        self.scramble_manager.pass_future(scramble_type, future)
+        self.scramble_manager.pass_future(scramble_type, ctx.channel, future)
 
     async def on_scramble(self, ctx, scramble_type):
-        money = self.scramble_manager.check_answer(scramble_type, ctx.message)
+        money = self.scramble_manager.check_answer(scramble_type, ctx.channel, ctx.message)
         if money is None:
             return
-        answer = self.scramble_manager.get_answer(scramble_type)
+        answer = self.scramble_manager.get_answer(scramble_type, ctx.channel)
         name = self.scramble_manager.get_scramble_name(scramble_type)
-        self.scramble_manager.reset(scramble_type)
+        self.scramble_manager.reset(scramble_type, ctx.channel)
         await self.send_message(ctx.channel,
                                 f"@{ctx.user.display_name} You got it right! "
                                 f"{answer} was the "
                                 f"{name}. "
-                                f"Drake You've won {money} Becky Bucks!")
+                                f"{'Drake ' if 'Drake' in self.emotes[ctx.channel] else ''}"
+                                f"You've won {money} Becky Bucks!")
         if ctx.user.username not in self.gamba_data:
             self.add_new_user(ctx.user.username)
         self.gamba_data[ctx.user.username]["money"] += money
@@ -654,19 +655,19 @@ class Bot:
     @command_manager.command("hint_anime", fargs=["anime"])
     @command_manager.command("hint_al", fargs=["al"])
     async def hint(self, ctx, scramble_type):
-        if not self.scramble_manager.in_progress(scramble_type):
+        if not self.scramble_manager.in_progress(scramble_type, ctx.channel):
             return
-        if not self.scramble_manager.hints_left(scramble_type):
+        if not self.scramble_manager.hints_left(scramble_type, ctx.channel):
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} There are no hints left bruh")
         await self.send_message(ctx.channel,
                                 f"Here's a hint "
                                 f"({self.scramble_manager.get_scramble_name(scramble_type)}): "
-                                f"{self.scramble_manager.get_hint(scramble_type).lower()}")
+                                f"{self.scramble_manager.get_hint(scramble_type, ctx.channel).lower()}")
 
     async def on_scramble_finish(self, channel, scramble_type):
-        answer = self.scramble_manager.get_answer(scramble_type)
+        answer = self.scramble_manager.get_answer(scramble_type, channel)
         name = self.scramble_manager.get_scramble_name(scramble_type)
-        self.scramble_manager.reset(scramble_type, cancel=False)
+        self.scramble_manager.reset(scramble_type, channel, cancel=False)
         await self.send_message(channel, f"Time is up! The {name} was {answer}")
 
     def add_new_user(self, user):
@@ -891,7 +892,7 @@ class Bot:
                                               "sheeppcommands", "sheephelp", "sheepphelp",
                                               "sheep_help", "sheep_help"])
     async def help_command(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheepposubot help (do !commands for StreamElements): https://sheep.sussy.io/index.html (domain kindly supplied by pancakes man)")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheepposubot help (do !commands for StreamElements): https://thighs.moe/OY4Wbn9FYHsW (domain kindly supplied by pancakes man)")
 
     async def on_afk(self, ctx):
         pings = set([word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in ctx.message.lower().split() if word.startswith("@")])

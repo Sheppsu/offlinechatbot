@@ -199,7 +199,8 @@ class ScrambleHintType(IntEnum):
 
 class Scramble:
     banned_words = [
-        # Was originally used to stop this word from being posted for scramble, but since there's a new list with non-tos words it doesn't really do anything
+        # Was originally used to stop this word from being posted for scramble,
+        # but since there's a new list with non-tos words it doesn't really do anything
         "kike"
     ]
 
@@ -209,97 +210,109 @@ class Scramble:
         self.hint_type = hint_type
         self.case_sensitive = case_sensitive
 
-        self.answer = None
-        self.hint = ""
-        self.future = None
+        self.progress = {}
 
         self.generate_answer = answer_generator
 
-    def reset(self, cancel=True):
-        self.answer = None
-        self.hint = ""
-        if self.future is not None and not self.future.cancelled() and not self.future.done() and cancel:
-            print("Cancelling")
-            self.future.cancel()
-        self.future = None
+    def reset(self, channel, cancel=True):
+        future = self.progress[channel]["future"]
+        self.progress[channel] = self.default_progress
+        if cancel and future is not None and not future.cancelled() and not future.done():
+            future.cancel()
 
     def new_answer(self, channel):
+        if channel not in self.progress:
+            self.progress.update({channel: self.default_progress})
+        progress = self.progress[channel]
+
         args = []
         if self.generate_answer.__code__.co_argcount > 0:  # Check whether it takes the channel arg
             args.append(channel)
-        self.answer = self.generate_answer(*args)
+        progress["answer"] = self.generate_answer(*args)
+
         count = 0
-        while self.answer in self.banned_words:
-            self.answer = self.generate_answer(*args)
+        while progress["answer"] in self.banned_words:
+            progress["answer"] = self.generate_answer(*args)
             count += 1
             if count > 100:  # Just in case ig
                 raise Exception("Could not generate an unbanned answer")
-        self.hint = "?" * len(self.answer)
+        progress["hint"] = "?" * len(progress["answer"])
 
-    def update_hint(self):
-        getattr(self, f"{self.hint_type.name.lower()}_hint")()
-        return self.hint
+    def update_hint(self, channel):
+        getattr(self, f"{self.hint_type.name.lower()}_hint")(channel)
+        return self.progress[channel]["hint"]
 
-    def default_hint(self):
-        i = self.hint.index("?")
-        self.hint = self.hint[:i] + self.answer[i] + (len(self.answer) - i - 1) * "?"
+    def default_hint(self, channel):
+        hint = self.progress[channel]["hint"]
+        answer = self.progress[channel]["answer"]
+        i = hint.index("?")
+        self.progress[channel]["hint"] = hint[:i] + answer[i] + hint[i+1:]
 
-    def every_other_hint(self):
+    def every_other_hint(self, channel):
+        hint = self.progress[channel]["hint"]
+        answer = self.progress[channel]["answer"]
         try:
-            i = self.hint.index("??") + 1
-            self.hint = self.hint[:i] + self.answer[i] + (len(self.answer) - i - 1) * "?"
+            i = hint.index("??") + 1
+            self.progress[channel]["hint"] = hint[:i] + answer[i] + (len(answer) - i - 1) * "?"
         except ValueError:  # ValueError thrown when no "??" in hint, so use default hint.
-            self.default_hint()
+            self.default_hint(channel)
+
+    def get_scrambled(self, channel):
+        chars = list(self.progress[channel]["answer"])
+        random.shuffle(chars)
+        return "".join(chars)
 
     @property
-    def hints_left(self):
-        return "?" in self.hint
+    def default_progress(self):
+        return {"answer": None, "hint": "", "future": None}
 
-    @property
-    def in_progress(self):
-        return self.answer is not None
+    def hints_left(self, channel):
+        return channel in self.progress and "?" in self.progress[channel]["hint"]
+
+    def in_progress(self, channel):
+        return channel in self.progress and self.progress[channel]["answer"] is not None
 
 
 class ScrambleManager:
     def __init__(self, scrambles):
         self.scrambles = scrambles
 
-    def in_progress(self, identifier):
-        return self.scrambles[identifier].in_progress
+    def in_progress(self, identifier, channel):
+        return self.scrambles[identifier].in_progress(channel)
 
-    def hints_left(self, identifier):
-        return self.scrambles[identifier].hints_left
+    def hints_left(self, identifier, channel):
+        return self.scrambles[identifier].hints_left(channel)
 
     def get_scramble(self, identifier, channel):
         self.scrambles[identifier].new_answer(channel)
-        scrambled_word = [char for char in self.scrambles[identifier].answer]
-        random.shuffle(scrambled_word)
-        return "".join(scrambled_word)
+        return self.scrambles[identifier].get_scrambled(channel)
 
-    def get_hint(self, identifier):
-        return self.scrambles[identifier].update_hint()
+    def get_hint(self, identifier, channel):
+        return self.scrambles[identifier].update_hint(channel)
 
     def get_scramble_name(self, identifier):
         return self.scrambles[identifier].name
 
-    def get_answer(self, identifier):
-        return self.scrambles[identifier].answer
+    def get_answer(self, identifier, channel):
+        return self.scrambles[identifier].progress[channel]["answer"]
 
-    def check_answer(self, identifier, guess):
+    def check_answer(self, identifier, channel, guess):
         scramble = self.scrambles[identifier]
-        if (guess.lower() == scramble.answer.lower().strip() and not scramble.case_sensitive) or guess == scramble.answer.strip():
+        answer = scramble.progress[channel]["answer"]
+        hint = scramble.progress[channel]["hint"]
+        if (guess.lower() == answer.lower().strip() and not scramble.case_sensitive) or guess == answer.strip():
             return round(
                 random.randint(5, 10) *
-                len(scramble.answer.replace(" ", "")) *
-                scramble.hint.count("?")/len(scramble.answer) *
+                len(answer.replace(" ", "")) *
+                hint.count("?")/len(answer) *
                 scramble.difficulty_multiplier
             )
 
-    def reset(self, identifier, cancel=True):
-        self.scrambles[identifier].reset(cancel)
+    def reset(self, identifier, channel, cancel=True):
+        self.scrambles[identifier].reset(channel, cancel)
 
-    def pass_future(self, identifier, future):
-        self.scrambles[identifier].future = future
+    def pass_future(self, identifier, channel, future):
+        self.scrambles[identifier].progress[channel]["future"] = future
 
 
 class Trivia:
