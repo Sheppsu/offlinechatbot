@@ -1296,9 +1296,9 @@ class Bot:
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no scores on that beatmap.")
 
-        score_format = "{artist} - {title} [{diff}]{mods} ({mapper}) " \
-                       "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
-        message = f"Scores for {username}: "
+        score_format = "{mods} {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
+        message = f"Scores for {username} on {beatmap.beatmapset.artist} - {beatmap.beatmapset.title} " \
+                  f"[{beatmap.version}] ({beatmap.beatmapset.creator}): "
         for score in scores[:5]:
             if score.pp is None and score.passed:
                 score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
@@ -1306,11 +1306,7 @@ class Bot:
             if score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
                 if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
             message += "🌟" + score_format.format(**{
-                "artist": beatmap.beatmapset.artist,
-                "title": beatmap.beatmapset.title,
-                "diff": beatmap.version,
-                "mods": " +"+score.mods.to_readable_string() if score.mods else "",
-                "mapper": beatmap.beatmapset.creator,
+                "mods": score.mods.to_readable_string() if score.mods else "",
                 "acc": round(score.accuracy * 100, 2),
                 "combo": score.max_combo,
                 "max_combo": beatmap_attributes.max_combo,
