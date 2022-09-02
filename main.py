@@ -636,11 +636,12 @@ class Bot:
         answer = self.scramble_manager.get_answer(scramble_type, ctx.channel)
         name = self.scramble_manager.get_scramble_name(scramble_type)
         self.scramble_manager.reset(scramble_type, ctx.channel)
+        emotes = list(map(lambda e: e.name, self.emotes[ctx.channel]))
         await self.send_message(ctx.channel,
                                 f"@{ctx.user.display_name} You got it right! "
                                 f"{answer} was the "
                                 f"{name}. "
-                                f"{'Drake ' if 'Drake' in self.emotes[ctx.channel] else ''}"
+                                f"{'Drake ' if 'Drake' in emotes else ''}"
                                 f"You've won {money} Becky Bucks!")
         if ctx.user.username not in self.gamba_data:
             self.add_new_user(ctx.user.username)
