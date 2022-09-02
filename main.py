@@ -1296,15 +1296,15 @@ class Bot:
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no scores on that beatmap.")
 
-        score_format = "{mods} {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
+        score_format = "{mods} {acc}% {combo}/{max_combo} | ({genki_counts}) | {time_ago} ago"
         message = f"Scores for {username} on {beatmap.beatmapset.artist} - {beatmap.beatmapset.title} " \
                   f"[{beatmap.version}] ({beatmap.beatmapset.creator}): "
         for score in scores[:5]:
-            if score.pp is None and score.passed:
-                score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
-            if_fc_acc, if_fc_pp = None, None
-            if score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
-                if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
+            # if score.pp is None and score.passed:
+            #     score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
+            # if_fc_acc, if_fc_pp = None, None
+            # if score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
+            #     if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
             message += "🌟" + score_format.format(**{
                 "mods": score.mods.to_readable_string() if score.mods else "",
                 "acc": round(score.accuracy * 100, 2),
@@ -1316,9 +1316,9 @@ class Bot:
                     score.statistics.count_50,
                     score.statistics.count_miss
                 ),
-                "pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
-                "if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)"
-                if if_fc_pp is not None else "",
+                #"pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
+                #"if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)"
+                #if if_fc_pp is not None else "",
                 "time_ago": format_date(score.created_at)
             })
         await self.send_message(ctx.channel, message)
