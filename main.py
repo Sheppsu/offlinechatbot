@@ -23,7 +23,7 @@ from util import *
 from constants import *
 from client import Bot as CommunicationClient
 from osu import AsynchronousClient, GameModeStr, Score
-from beatmap_reader import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
+from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
 
