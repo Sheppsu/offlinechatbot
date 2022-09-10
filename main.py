@@ -1339,7 +1339,7 @@ class Bot:
 
         stats = user.statistics
 
-        total_medals = 275
+        total_medals = 280
         profile_layout = "{username}'s profile [{mode}]: #{global_rank} ({country}#{country_rank}) - {pp}pp; Peak (last 90 days): #{peak_rank} | " \
                          "{accuracy}% | {play_count} playcount ({play_time} hrs) | Medal count: {medal_count}/{total_medals} ({medal_completion}%) | " \
                          "Followers: {follower_count} | Mapping subs: {subscriber_count}"
