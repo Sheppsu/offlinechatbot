@@ -336,7 +336,7 @@ class AnimeCompareGame:
         return f"Which anime is more popular? {self.answers['anime1'][0]} or {self.answers['anime2'][0]}"
 
     def get_ranking_string(self):
-        return f"Popularity ranking: {self.answers['anime1'][0]} - #{self.answers['anime1'][1]} | {self.answers['anime2'][0]} - #{self.answers['anime2'][1]}"
+        return f"Popularity ranking: {self.answers['anime1'][0]} - #{self.answers['anime1'][1]+1} | {self.answers['anime2'][0]} - #{self.answers['anime2'][1]+1}"
 
 
 class AnimeCompare:
