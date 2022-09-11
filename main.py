@@ -1140,7 +1140,8 @@ class Bot:
         if len(args) == 0 and ctx.user.username in self.osu_data:  # user did not provide a username, but osu! account is linked
             return self.osu_data[ctx.user.username]['username']
         elif len(args) == 0 or args[0].strip() == "":  # user did not provide a username and osu! account is not linked
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username or link your account with !link.")
+            await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username or "
+                                                 "link your account with !link [username].")
         else:  # username was provided
             return " ".join(args).strip()
 
