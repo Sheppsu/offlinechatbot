@@ -457,7 +457,7 @@ class Bot:
             command = ascii_message.split()[0].lower().replace("!", "")
             await self.cm(command, ctx)  # Automatically checks that the command exists
 
-        # Put it over to maybe stop it from breaking the bot
+        # Put it over here to maybe stop it from breaking the bot
         if self.bomb_party_helper.started:
             await self.on_bomb_party(ctx)
 
@@ -934,7 +934,7 @@ class Bot:
 
     async def close_or_start_game(self, channel):
         if not self.bomb_party_helper.can_start:
-            self.close_bomb_party()
+            self.bomb_party_helper.on_close()
             return await self.send_message(channel, "The bomb party game has closed since there is only one player in the party.")
         await self.start_bomb_party(MessageContext("", channel), True)
 
@@ -1051,7 +1051,8 @@ class Bot:
         return True
 
     def close_bomb_party(self):
-        self.bomb_party_future.cancel()
+        if not self.bomb_party_future.done():
+            self.bomb_party_future.cancel()
         self.bomb_party_future = None
         self.bomb_party_helper.on_close()
 
