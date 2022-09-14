@@ -32,8 +32,8 @@ def future_callback(future):
 def split_message(message):
     messages = []
     while len(message) > 0:
-        messages.append(message[:496])
-        message = message[496:]
+        messages.append(message[:495])
+        message = message[495:]
     return messages
 
 
