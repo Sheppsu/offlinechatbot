@@ -1156,7 +1156,9 @@ class Bot:
         return ("osu", "taiko", "fruits", "mania")[int(arg)]
 
     async def process_index_arg(self, ctx, args, rng=range(1, 101)):
-        arg = self.process_value_arg("-i", args, 1)
+        arg = self.process_value_arg("-i", args, -1)
+        if arg == -1:
+            return -1
         if arg is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify an index with the -i argument. "
                                                         f"Specify a number between {rng[0]} and {rng[-1]}")
@@ -1225,6 +1227,8 @@ class Bot:
         index = await self.process_index_arg(ctx, args)
         if index is None:
             return
+        if index == -1:
+            index = 0
         best = self.process_arg("-b", args)
 
         username = await self.process_osu_username_arg(ctx, args)
@@ -1371,6 +1375,9 @@ class Bot:
         if mode is None:
             return
         recent_tops = self.process_arg("-r", args)
+        index = await self.process_index_arg(ctx, args)
+        if index is None:
+            return
 
         username = await self.process_osu_username_arg(ctx, args)
         if username is None:
@@ -1383,13 +1390,14 @@ class Bot:
         top_scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
         if not top_scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no top scores for {proper_mode_name[mode]}.")
-        if not recent_tops:
-            top_scores = top_scores[:5]
-        else:
-            top_scores = sorted(top_scores, key=lambda x: x.created_at, reverse=True)[:5]
+        if recent_tops:
+            top_scores = sorted(top_scores, key=lambda x: x.created_at, reverse=True)
+        top_scores = top_scores[:5] if index == -1 else [top_scores[index]]
 
         score_format = "{artist} - {title} [{diff}]{mods} {acc}% ({genki_counts}): {pp}pp | {time_ago} ago"
-        message = f"Top{' recent' if recent_tops else ''} {proper_mode_name[mode]} scores for {username}: "
+        message = f"Top{' recent' if recent_tops else ''} {proper_mode_name[mode]} " \
+                  f"scores for {username}: " if index == -1 else f"Top {index+1}{' recent' if recent_tops else ''} " \
+                                                                 f"{proper_mode_name[mode]} score for {username}: "
         for score in top_scores:
             message += "🌟" + score_format.format(**{
                 "artist": score.beatmapset.artist,
