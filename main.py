@@ -1258,7 +1258,10 @@ class Bot:
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
         # Format and send message for recent score
         genkis = (score.statistics.count_300, score.statistics.count_100,
-                  score.statistics.count_50, score.statistics.count_miss)
+                  score.statistics.count_50, score.statistics.count_miss) if mode == GameModeStr.STANDARD else (
+            score.statistics.count_geki, score.statistics.count_300, score.statistics.count_katu,
+            score.statistics.count_100, score.statistics.count_50, score.statistics.count_miss
+        )
         total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
         if score.pp is None and score.passed:
             score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
@@ -1279,7 +1282,7 @@ class Bot:
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
             "max_combo": beatmap_attributes.max_combo,
-            "genki_counts": f"%d/%d/%d/%d" % genkis,
+            "genki_counts": ("%d/%d/%d/%d" if mode == GameModeStr.STANDARD else "%d/%d/%d/%d/%d/%d") % genkis,
             "time_ago": format_date(score.created_at)
         }))
 
