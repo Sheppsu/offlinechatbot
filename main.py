@@ -1258,7 +1258,7 @@ class Bot:
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
         # Format and send message for recent score
         genkis = (score.statistics.count_300, score.statistics.count_100,
-                  score.statistics.count_50, score.statistics.count_miss) if mode == GameModeStr.STANDARD else (
+                  score.statistics.count_50, score.statistics.count_miss) if score.mode == GameModeStr.STANDARD else (
             score.statistics.count_geki, score.statistics.count_300, score.statistics.count_katu,
             score.statistics.count_100, score.statistics.count_50, score.statistics.count_miss
         )
@@ -1268,6 +1268,7 @@ class Bot:
         if_fc_acc, if_fc_pp = None, None
         if score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
             if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
+        print(genkis)
         await self.send_message(ctx.channel, rs_format.format(**{
             "username": score.user.username,
             "passed": "" if score.passed else f"(Failed {round(sum(genkis)/total_objects*100)}%)",
