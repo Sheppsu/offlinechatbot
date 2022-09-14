@@ -1282,7 +1282,7 @@ class Bot:
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
             "max_combo": beatmap_attributes.max_combo,
-            "genki_counts": ("%d/%d/%d/%d" if mode == GameModeStr.STANDARD else "%d/%d/%d/%d/%d/%d") % genkis,
+            "genki_counts": ("%d/%d/%d/%d" if score.mode == GameModeStr.STANDARD else "%d/%d/%d/%d/%d/%d") % genkis,
             "time_ago": format_date(score.created_at)
         }))
 
