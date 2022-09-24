@@ -26,6 +26,7 @@ from osu import AsynchronousClient, GameModeStr, Score
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
+from aiohttp import client_exceptions
 
 
 TESTING = "--test" in sys.argv
@@ -1344,7 +1345,13 @@ class Bot:
         if username is None:
             return
 
-        user = await osu_client.get_user(user=username, mode=mode, key="username")
+        try:
+            user = await osu_client.get_user(user=username, mode=mode, key="username")
+        except client_exceptions.ClientResponseError:
+            return await self.send_message(ctx.channel, f"{ctx.user.display_name} A user with the name {username} "
+                                                        "does not exist. If they did before it's possible they "
+                                                        "got restricted or had their account deleted.")
+
         if user is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
 
