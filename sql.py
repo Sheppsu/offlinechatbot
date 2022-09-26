@@ -79,7 +79,7 @@ class Database:
     def get_userdata(self):
         cursor = self.cursor
         cursor.execute("SELECT * FROM userdata")
-        return {data[0]: {"money": data[1], "settings": {"receive": bool(data[2])}} for data in cursor.fetchall()}
+        return {data[0]: {"money": data[1], "settings": {"receive": bool(data[2]), "autoafk": bool(data[3])}} for data in cursor.fetchall()}
 
     def update_userdata(self, user, column, value):
         self.cursor.execute("UPDATE userdata SET %s = %s WHERE username = '%s'" % (column, "'%s'" % value if type(value) == str else value, user))

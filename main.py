@@ -5,7 +5,7 @@
 #       make decorators for osu arguments
 #       implement rate limit for unverified bot
 #       save bans to database so they can be made with a command and also check via user id
-#       load save data into a local database and interact with that as opposed to using dictionaries and lists
+#       try communicating with the mysql server more instead of saving data locally
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -54,7 +54,7 @@ class Bot:
 
     def __init__(self, cm):
         self.database = Database()
-        channels_to_run_in = [ChannelConfig("sheepposu", 156710598)] if TESTING else self.database.get_channels()
+        channels_to_run_in = [ChannelConfig("sheppsu", 156710598)] if TESTING else self.database.get_channels()
 
         self.cm = cm
         self.cm.init(self, channels_to_run_in)
@@ -676,7 +676,8 @@ class Bot:
         self.gamba_data.update({user: {
             'money': 0,
             'settings': {
-                'receive': True
+                'receive': True,
+                "autoafk": True,
             }
         }})
         self.database.new_user(user.username)
@@ -890,6 +891,13 @@ class Bot:
         self.afk[ctx.user.username] = {"message": message, "time": datetime.now(pytz.UTC).isoformat()}
         self.database.save_afk(ctx.user.username, message)
 
+    @command_manager.command("removeafk", aliases=["rafk", "afkremove", "afkr"])
+    @requires_gamba_data
+    async def afk_remove(self, ctx):
+        if self.gamba_data[ctx.user.username]["settings"]["autoafk"]:
+            return
+        await self.remove_user_afk(ctx)
+
     @command_manager.command("help", aliases=["sheepp_commands", "sheep_commands", "sheepcommands",
                                               "sheeppcommands", "sheephelp", "sheepphelp",
                                               "sheep_help", "sheep_help"])
@@ -904,13 +912,16 @@ class Bot:
                                                       f"({format_date(datetime.fromisoformat(self.afk[ping]['time']))} ago): "
                                                       f"{self.afk[ping]['message']}")
 
-        if ctx.user.username not in self.afk:
+        if ctx.user.username not in self.afk or not self.gamba_data[ctx.user.username]["settings"]["autoafk"]:
             return
         elif (datetime.now(tz=pytz.UTC) - datetime.fromisoformat(self.afk[ctx.user.username]['time']).replace(tzinfo=pytz.UTC)).seconds > 60:
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your afk has been removed. "
-                                                 f"(Afk for {format_date(datetime.fromisoformat(self.afk[ctx.user.username]['time']))}.)")
-            del self.afk[ctx.user.username]
-            self.database.delete_afk(ctx.user.username)
+            await self.remove_user_afk(ctx)
+
+    async def remove_user_afk(self, ctx):
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your afk has been removed. "
+                                             f"(Afk for {format_date(datetime.fromisoformat(self.afk[ctx.user.username]['time']))}.)")
+        del self.afk[ctx.user.username]
+        self.database.delete_afk(ctx.user.username)
 
     async def trivia_category(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} I'll make something more intuitive later but for now, "
