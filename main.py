@@ -679,7 +679,7 @@ class Bot:
                 'receive': True
             }
         }})
-        self.database.new_user(user)
+        self.database.new_user(user.username)
 
     # @command_manager.command("collect")
     @requires_gamba_data
