@@ -891,7 +891,7 @@ class Bot:
         self.afk[ctx.user.username] = {"message": message, "time": datetime.now(pytz.UTC).isoformat()}
         self.database.save_afk(ctx.user.username, message)
 
-    @command_manager.command("removeafk", aliases=["rafk", "afkremove", "afkr"])
+    @command_manager.command("removeafk", aliases=["rafk", "afkremove", "afkr", "unafk"])
     @requires_gamba_data
     async def afk_remove(self, ctx):
         if self.gamba_data[ctx.user.username]["settings"]["autoafk"]:
