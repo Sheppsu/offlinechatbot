@@ -673,7 +673,7 @@ class Bot:
         await self.send_message(channel, f"Time is up! The {name} was {answer}")
 
     def add_new_user(self, user):
-        self.gamba_data.update({user: {
+        self.gamba_data.update({user.username: {
             'money': 0,
             'settings': {
                 'receive': True,
