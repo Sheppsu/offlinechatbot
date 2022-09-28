@@ -904,6 +904,7 @@ class Bot:
     async def help_command(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheepposubot help (do !commands for StreamElements): https://thighs.moe/OY4Wbn9FYHsW (domain kindly supplied by pancakes man)")
 
+    @requires_gamba_data
     async def on_afk(self, ctx):
         pings = set([word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in ctx.message.lower().split() if word.startswith("@")])
         for ping in pings:
