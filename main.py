@@ -1279,7 +1279,7 @@ class Bot:
         if score.pp is None and score.passed:
             score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
         if_fc_acc, if_fc_pp = None, None
-        if score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
+        if beatmap_attributes.type is not None and score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
             if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
         print(genkis)
         await self.send_message(ctx.channel, rs_format.format(**{
