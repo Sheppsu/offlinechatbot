@@ -1219,6 +1219,7 @@ class Bot:
                 'speed_strain': beatmap_attributes.mode_attributes.speed_difficulty,
                 'flashlight_rating': beatmap_attributes.mode_attributes.flashlight_difficulty,
                 'slider_factor': beatmap_attributes.mode_attributes.slider_factor,
+                'speed_note_count': beatmap_attributes.mode_attributes.speed_note_count,
                 'approach_rate': beatmap_attributes.mode_attributes.approach_rate,
                 'overall_difficulty': beatmap_attributes.mode_attributes.overall_difficulty,
                 'max_combo': beatmap_attributes.max_combo,
