@@ -40,6 +40,12 @@ Kujou Sara
 Thoma
 Gorou
 Yun Jin
+Kuki Shinobu
+Shikanoin Heizou
+Collei
+Dori
+Candace
+Layla
 
 
 4* Weapons
@@ -71,15 +77,26 @@ Alley Hunter
 Mitternachts Waltz
 Mouun's Moon
 Wine and Song
+Xiphos' Moonlight
+Makhaira Aquamarine
+Wandering Evenstar
 
 
 5* Characters
 
+Al Haitham
+Scaramouche
+Dehya
+Nilou
+Cyno
+Nahida
+Tighnari
+Yelan
 Kamisato Ayato
 Yae Miko
 Shenhe
 Arataki Itto
-Sangonomia Kokomi
+Sangonomiya Kokomi
 Raiden Shogun
 Yoimiya
 Kamisato Ayaka
@@ -129,4 +146,9 @@ Amos' Bow
 Elegy for the End
 Thundering Pulse
 Polar Star
-
+Haran Geppaku Futsu
+Key of Khai-Nisut
+Staff of the Scarlet Sands
+Aqua Simulacra
+Hunter's Path
+A Thousand Floating Dreams
