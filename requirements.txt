@@ -3,4 +3,4 @@ git+https://github.com/Sheepposu/osu.py.git@793843beb61450f0bf3f6eed900ffc7407d9
 websockets>=10.2
 mysql-connector-python>=8.0.29
 pytz==2022.1
-git+https://github.com/Sheepposu/osu_diff_calc.git@8dcd28d4ae3635b7c746f74f1c41ff7d146600fb
+git+https://github.com/Sheepposu/osu_diff_calc.git@510d3fe820d6861693b329b697605ac3614863ee
