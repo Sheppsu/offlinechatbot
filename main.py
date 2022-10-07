@@ -1316,7 +1316,10 @@ class Bot:
         if user_id is None:
             return
 
-        scores = await osu_client.get_user_beatmap_scores(beatmap.id, user_id)
+        try:
+            scores = await osu_client.get_user_beatmap_scores(beatmap.id, user_id)
+        except client_exceptions.ClientResponseError:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} This map does not have a leaderboard.")
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no scores on that beatmap.")
 
