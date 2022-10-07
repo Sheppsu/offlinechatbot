@@ -412,7 +412,7 @@ class DeniedUsageReason(IntFlag):
 class Command:
     permissions = {
         CommandPermission.NONE: lambda ctx: True,
-        CommandPermission.ADMIN: lambda ctx: ctx.user.username in admins
+        CommandPermission.ADMIN: lambda ctx: ctx.user_id in admins
     }
 
     def __init__(self, func, name, cooldown=Cooldown(3, 5), permission=CommandPermission.NONE, aliases=None,

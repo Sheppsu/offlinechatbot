@@ -21,7 +21,7 @@ fonts = {
 }
 layout = '!"$\\\'(),-./0123456789:;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€'
 admins = [
-    "sheepposu"
+    156710598
 ]
 proper_mode_name = {
     "osu": "osu!standard",
