@@ -46,7 +46,7 @@ command_manager = CommandManager()
 class Bot:
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
-    username = "sheepposubot"
+    username = "sheppsubot"
     oauth = os.getenv("OAUTH")
     uri = "ws://irc-ws.chat.twitch.tv:80"
 
@@ -902,7 +902,7 @@ class Bot:
                                               "sheeppcommands", "sheephelp", "sheepphelp",
                                               "sheep_help", "sheep_help"])
     async def help_command(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheepposubot help (do !commands for StreamElements): https://thighs.moe/OY4Wbn9FYHsW (domain kindly supplied by pancakes man)")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://thighs.moe/OY4Wbn9FYHsW (domain kindly supplied by pancakes man)")
 
     @requires_gamba_data
     async def on_afk(self, ctx):
