@@ -1351,6 +1351,14 @@ class Bot:
             })
         await self.send_message(ctx.channel, message)
 
+    @command_manager.command("map", aliases=["m"])
+    async def send_map(self, ctx):
+        if self.beatmap_cache[ctx.channel] is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
+
+        beatmap, beatmap_attributes = self.beatmap_cache[ctx.channel]
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://osu.ppy.sh/b/{beatmap.id}")
+
     @command_manager.command("osu", cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
         args = ctx.get_args('ascii')
