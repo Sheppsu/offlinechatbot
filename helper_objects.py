@@ -566,6 +566,7 @@ class TriviaHelper:
             params["category"] = category
         resp = requests.get("https://opentdb.com/api.php", params=params)
         if resp.status_code != 200:
+            self.answer = None
             return
 
         results = resp.json()['results'][0]

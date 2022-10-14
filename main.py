@@ -531,6 +531,8 @@ class Bot:
 
         args = ctx.get_args("ascii")
         question = self.trivia_helper.generate_question(args[0] if len(args) > 0 else None)
+        if question is None:
+            return await self.send_message(ctx.channel, "An error occurred when attempting to fetch the question...")
         await self.send_message(ctx.channel, question)
 
         self.trivia_helper.future = self.set_timed_event(20, self.on_trivia_finish, ctx.channel)
