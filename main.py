@@ -108,18 +108,7 @@ class Bot:
         self.number = random.randint(1, 1000)
 
         # Trivia
-        # TODO: move to a class
-        self.answer = None
-        self.guessed_answers = []
-        self.trivia_future = None
-        self.trivia_diff = None
-        self.trivia_info = {
-            "hard": 100,
-            "medium": 40,
-            "easy": 20,
-            "penalty": 0.25,
-            "decrease": 0.5,
-        }
+        self.trivia_helper = TriviaHelper()
 
         self.scrambles = {
             "word": Scramble("word", lambda: random.choice(self.word_list), 1),
@@ -435,10 +424,8 @@ class Bot:
         if ctx.message.startswith("Use code"):
             await asyncio.sleep(1)
             await self.send_message(ctx.channel, "PogU 👆 Use code \"BTMC\" !!!")
-        elif ascii_message.strip() in [str(num) for num in range(1, 5)] and self.trivia_diff is not None:
+        elif self.trivia_helper.is_in_progress and ascii_message.strip() in [str(num) for num in range(1, 5)]:
             message = int(ascii_message)
-            if message in self.guessed_answers:
-                return
             await self.on_answer(ctx, message)
             return
 
@@ -537,60 +524,35 @@ class Bot:
                 "higher" if guess < self.number else "lower") + ". veryPog")
 
     # TODO: consider putting trivia stuff in its own class
-
+    @command_manager.command("trivia")
     async def trivia(self, ctx):
-        # TODO: get this working again
-        if self.answer is not None:
+        if self.trivia_helper.is_in_progress:
             return
-        self.answer = "temp"
-        difficulty = {
-            "easy": "EZ",
-            "medium": "monkaS",
-            "hard": "pepeMeltdown"
-        }
-        args = ctx.get_args()
-        resp = requests.get(f"https://opentdb.com/api.php?amount=1&type=multiple{f'&category={args[0]}' if len(args) > 0 else ''}").json()['results'][0]
 
-        answers = [resp['correct_answer']] + resp['incorrect_answers']
-        random.shuffle(answers)
-        self.answer = answers.index(resp['correct_answer']) + 1
-        answer_string = " ".join([html.unescape(f"[{i + 1}] {answers[i]} ") for i in range(len(answers))])
-        self.trivia_diff = resp['difficulty']
+        args = ctx.get_args("ascii")
+        question = self.trivia_helper.generate_question(args[0] if len(args) > 0 else None)
+        await self.send_message(ctx.channel, question)
 
-        await self.send_message(ctx.channel,
-                                f"Difficulty: {resp['difficulty']} {difficulty[resp['difficulty']]} "
-                                f"Category: {resp['category']} veryPog "
-                                f"Question: {html.unescape(resp['question'])} monkaHmm "
-                                f"Answers: {answer_string}")
-        self.trivia_future = self.set_timed_event(20, self.on_trivia_finish, ctx.channel)
+        self.trivia_helper.future = self.set_timed_event(20, self.on_trivia_finish, ctx.channel)
 
     @requires_gamba_data
     async def on_answer(self, ctx, answer):
-        self.guessed_answers.append(answer)
-        worth = self.trivia_info[self.trivia_diff]
-        if answer == self.answer:
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} {answer} is the correct answer ✅. You gained {worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))} Becky Bucks 5Head Clap")
-            self.gamba_data[ctx.user.username]['money'] += worth * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))
-            self.save_money(ctx.user.username)
-            await self.on_trivia_finish(ctx.channel, timeout=False)
-        else:
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} {answer} is wrong ❌. You lost {worth*self.trivia_info['penalty']} Becky Bucks 3Head Clap")
-            self.gamba_data[ctx.user.username]['money'] -= worth*self.trivia_info['penalty']
-            self.save_money(ctx.user.username)
-            if self.answer not in self.guessed_answers and len(self.guessed_answers) == 3:
-                self.trivia_diff = None  # make sure someone doesn't answer before it can say no one got it right
-                await self.send_message(ctx.channel, f"No one answered correctly! The answer was {self.answer}.")
-                await self.on_trivia_finish(ctx.channel, timeout=False)
+        result = self.trivia_helper.check_guess(ctx, answer)
+        if result is None:
+            return
+        message, amount = result
+        await self.send_message(ctx.channel, message)
+        self.gamba_data[ctx.user.username]["money"] += amount
+        self.save_money(ctx.user.username)
 
-    async def on_trivia_finish(self, channel, timeout=True):
-        if timeout:
-            await self.send_message(channel, f"Time has run out for the trivia! The answer was {self.answer}.")
-        else:
-            self.trivia_future.cancel()
-        self.answer = None
-        self.guessed_answers = []
-        self.trivia_diff = None
-        self.trivia_future = None
+        if self.trivia_helper.answer is None:
+            self.trivia_helper.future.cancel()
+            if amount < 0:
+                await self.send_message(ctx.channel, "No one guessed it correctly.")
+
+    async def on_trivia_finish(self, channel):
+        self.trivia_helper.reset()
+        await self.send_message(channel, "Time has run out for the trivia.")
 
     @command_manager.command("slap")
     async def slap(self, ctx):

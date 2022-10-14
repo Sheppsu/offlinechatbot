@@ -1,5 +1,7 @@
 import json
 import random
+import requests
+import html
 from time import perf_counter
 from enum import IntEnum, IntFlag
 from collections import namedtuple
@@ -531,3 +533,72 @@ class CommandManager:
         for c in self.commands:
             if command in c:
                 return await c(self.bot, ctx)
+
+
+class TriviaHelper:
+    trivia_info = {
+        "hard": 100,
+        "medium": 40,
+        "easy": 20,
+        "penalty": 0.25,
+        "decrease": 0.5,
+    }
+    difficulty_emotes = {
+        "easy": "EZ",
+        "medium": "monkaS",
+        "hard": "pepeMeltdown"
+    }
+
+    def __init__(self):
+        self.guessed_answers = []
+        self.future = None
+        self.difficulty = None
+        self.answer = None
+
+    def generate_question(self, category=None):
+        self.answer = "temp"
+
+        params = {
+            "amount": 1,
+            "type": "multiple",
+        }
+        if category:
+            params["category"] = category
+        resp = requests.get("https://opentdb.com/api.php", params=params)
+        if resp.status_code != 200:
+            return
+
+        results = resp.json()['results'][0]
+        answers = [results['correct_answer']] + results['incorrect_answers']
+        random.shuffle(answers)
+        self.answer = answers.index(results['correct_answer']) + 1
+        self.difficulty = results['difficulty']
+
+        answer_string = " ".join([html.unescape(f"[{i + 1}] {answers[i]} ") for i in range(len(answers))])
+        return f"Difficulty: {self.difficulty} {self.difficulty_emotes[self.difficulty]} "\
+               f"Category: {results['category']} veryPog "\
+               f"Question: {html.unescape(results['question'])} monkaHmm "\
+               f"Answers: {answer_string}"
+
+    def check_guess(self, ctx, guess):
+        if guess in self.guessed_answers:
+            return
+        self.guessed_answers.append(guess)
+        if guess == self.answer:
+            gain = self.trivia_info[self.difficulty] * (self.trivia_info['decrease'] ** (len(self.guessed_answers) - 1))
+            self.reset()
+            return f"@{ctx.user.display_name} ✅ You gained {gain} Becky Bucks 5Head Clap", gain
+        else:
+            loss = self.trivia_info[self.difficulty] * self.trivia_info['penalty']
+            if len(self.guessed_answers) == 3:
+                self.reset()
+            return f"@{ctx.user.display_name} ❌ You lost {loss} Becky Bucks 3Head Clap", -loss
+
+    def reset(self):
+        self.answer = None
+        self.difficulty = None
+        self.guessed_answers = []
+
+    @property
+    def is_in_progress(self):
+        return self.answer is not None
