@@ -569,7 +569,11 @@ class TriviaHelper:
             self.answer = None
             return
 
-        results = resp.json()['results'][0]
+        try:
+            results = resp.json()['results'][0]
+        except IndexError:
+            self.answer = None
+            return
         answers = [results['correct_answer']] + results['incorrect_answers']
         random.shuffle(answers)
         self.answer = answers.index(results['correct_answer']) + 1
