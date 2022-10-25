@@ -1489,6 +1489,10 @@ class Bot:
         return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Time for {username}: "
                                                     f"{datetime.now().astimezone(self.timezones[userid]).strftime('%H:%M (%Z)')}")
 
+    @command_manager.command("oct")
+    async def offlinechattournament(self, ctx):
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Offline Chat Tournament (osu! tournament for offline chat) discord: https://discord.gg/tuE84PX9mx")
+
 
 bot = Bot(command_manager)
 bot.running = True
