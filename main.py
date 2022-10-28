@@ -85,7 +85,7 @@ class Bot:
 
         # Save/load data from files or to/from database
         self.pity = {}
-        self.gamba_data = {}
+        self.userdata = {}
         self.top_players = []
         self.top_maps = []
         self.word_list = []
@@ -97,7 +97,6 @@ class Bot:
         self.osu_data = {}
         self.user_id_cache = {}
         self.timezones = {}
-        self.userinfo = {}
         self.azur_lane = []
 
         # Load save data
@@ -191,14 +190,13 @@ class Bot:
 
     def load_db_data(self):
         self.pity = self.database.get_pity()
-        self.gamba_data = self.database.get_userdata()
+        self.userdata = self.database.get_userdata()
         self.afk = self.database.get_afk()
         self.osu_data = self.database.get_osu_data()
         self.user_id_cache = {}
         for data in self.osu_data.values():
             self.user_id_cache[data["username"]] = data["user_id"]
         self.timezones = self.database.get_timezones()
-        self.userinfo = self.database.get_userinfo()
 
     def reload_db_data(self):
         self.database.close()
@@ -245,7 +243,7 @@ class Bot:
         self.load_db_data()
 
     def save_money(self, user):
-        self.database.update_userdata(user, 'money', round(self.gamba_data[user]['money']))
+        self.database.update_userdata(user, 'money', round(self.userdata[user]['money']))
 
     # Api request stuff
     # TODO: consider moving api stuff to its own class
@@ -410,9 +408,6 @@ class Bot:
         self.beatmap_cache[ctx.channel] = None
 
     async def on_message(self, ctx: MessageContext):
-        if ctx.user.username not in self.userinfo:
-            self.userinfo.update({ctx.user.username: {"userid": ctx.user_id}})
-            self.database.add_userinfo(ctx.user.username, ctx.user_id)
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or ctx.user.username == self.username:
             return
 
@@ -544,7 +539,7 @@ class Bot:
             return
         message, amount = result
         await self.send_message(ctx.channel, message)
-        self.gamba_data[ctx.user.username]["money"] += amount
+        self.userdata[ctx.user.username]["money"] += amount
         self.save_money(ctx.user.username)
 
         if self.trivia_helper.answer is None:
@@ -608,9 +603,9 @@ class Bot:
                                 f"{name}. "
                                 f"{'Drake ' if 'Drake' in emotes else ''}"
                                 f"You've won {money} Becky Bucks!")
-        if ctx.user.username not in self.gamba_data:
+        if ctx.user.username not in self.userdata:
             self.add_new_user(ctx.user.username)
-        self.gamba_data[ctx.user.username]["money"] += money
+        self.userdata[ctx.user.username]["money"] += money
         self.save_money(ctx.user.username)
 
     @command_manager.command("hint", fargs=["word"])
@@ -637,7 +632,7 @@ class Bot:
         await self.send_message(channel, f"Time is up! The {name} was {answer}")
 
     def add_new_user(self, user):
-        self.gamba_data.update({user.username: {
+        self.userdata.update({user.username: {
             'money': 0,
             'settings': {
                 'receive': True,
@@ -650,7 +645,7 @@ class Bot:
     @requires_gamba_data
     async def collect(self, ctx):
         money = random.randint(10, 100)
-        self.gamba_data[ctx.user.username]["money"] += money
+        self.userdata[ctx.user.username]["money"] += money
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} You collected {money} Becky Bucks!")
         self.save_money(ctx.user.username)
 
@@ -666,7 +661,7 @@ class Bot:
                                            f"@{ctx.user.display_name} You must also provide a risk factor. Do !riskfactor to learn more.")
 
         if args[0].lower() == "all":
-            args[0] = self.gamba_data[ctx.user.username]['money']
+            args[0] = self.userdata[ctx.user.username]['money']
         try:
             amount = float(args[0])
             risk_factor = int(args[1])
@@ -675,7 +670,7 @@ class Bot:
                                            f"@{ctx.user.display_name} You must provide a valid number (integer for risk factor) value.")
         if risk_factor not in range(1, 100):
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} The risk factor you provided is outside the range 1-99!")
-        if amount > self.gamba_data[ctx.user.username]["money"]:
+        if amount > self.userdata[ctx.user.username]["money"]:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You don't have enough Becky Bucks to bet that much!")
         if amount == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You can't bet nothing bruh")
@@ -685,12 +680,12 @@ class Bot:
         loss = random.randint(1, 100) in range(risk_factor)
         if loss:
             await self.send_message(ctx.channel, f"@{ctx.user.display_name} YIKES! You lost {amount} Becky Bucks ❌ [LOSE]")
-            self.gamba_data[ctx.user.username]["money"] -= amount
+            self.userdata[ctx.user.username]["money"] -= amount
         else:
             payout = round((1 + risk_factor * 0.01) * amount - amount, 2)
             await self.send_message(ctx.channel, f"@{ctx.user.display_name} You gained {payout} Becky Bucks! ✅ [WIN]")
-            self.gamba_data[ctx.user.username]["money"] += payout
-        self.gamba_data[ctx.user.username]["money"] = round(self.gamba_data[ctx.user.username]["money"], 2)
+            self.userdata[ctx.user.username]["money"] += payout
+        self.userdata[ctx.user.username]["money"] = round(self.userdata[ctx.user.username]["money"], 2)
         self.save_money(ctx.user.username)
 
     @command_manager.command("riskfactor")
@@ -708,13 +703,13 @@ class Bot:
         user_to_check = ctx.user.username
         if args:
             user_to_check = args[0].replace("@", "").lower()
-        if user_to_check not in self.gamba_data:
+        if user_to_check not in self.userdata:
             user_to_check = ctx.user.username
-        await self.send_message(ctx.channel, f"{user_to_check} currently has {round(self.gamba_data[user_to_check]['money'])} Becky Bucks.")
+        await self.send_message(ctx.channel, f"{user_to_check} currently has {round(self.userdata[user_to_check]['money'])} Becky Bucks.")
 
     @command_manager.command("leaderboard", aliases=["lb"])
     async def leaderboard(self, ctx):
-        lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
+        lead = {k: v for k, v in sorted(self.userdata.items(), key=lambda item: item[1]['money'])}
         top_users = list(lead.keys())[-5:]
         top_money = list(lead.values())[-5:]
         output = "Top 5 richest users: "
@@ -725,7 +720,7 @@ class Bot:
     @command_manager.command("ranking")
     @requires_gamba_data
     async def get_ranking(self, ctx):
-        lead = {k: v for k, v in sorted(self.gamba_data.items(), key=lambda item: item[1]['money'])}
+        lead = {k: v for k, v in sorted(self.userdata.items(), key=lambda item: item[1]['money'])}
         users = list(lead.keys())
         users.reverse()
         rank = users.index(ctx.user.username) + 1
@@ -741,9 +736,9 @@ class Bot:
     async def give(self, ctx):
         args = ctx.get_args()
         user_to_give = args[0].lower()
-        if user_to_give not in self.gamba_data:
+        if user_to_give not in self.userdata:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid user to give money to.")
-        if not self.gamba_data[user_to_give]['settings']['receive']:
+        if not self.userdata[user_to_give]['settings']['receive']:
             return await self.send_message(ctx.channel,
                                            f"@{ctx.user.display_name} This user has their receive setting turned off and therefore cannot accept money.")
         amount = args[1]
@@ -751,14 +746,14 @@ class Bot:
             amount = round(float(amount), 2)
         except ValueError:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid number.")
-        if self.gamba_data[ctx.user.username]['money'] < amount:
+        if self.userdata[ctx.user.username]['money'] < amount:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You don't have that much money to give.")
 
         if amount < 0:
             return await self.send_message(ctx.channel, "You can't give someone a negative amount OuttaPocket Tssk")
 
-        self.gamba_data[ctx.user.username]['money'] -= amount
-        self.gamba_data[user_to_give]['money'] += amount
+        self.userdata[ctx.user.username]['money'] -= amount
+        self.userdata[user_to_give]['money'] += amount
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} You have given {user_to_give} {amount} Becky Bucks!")
         self.save_money(ctx.user.username)
         self.save_money(user_to_give)
@@ -770,16 +765,16 @@ class Bot:
         if len(args) < 2:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You must provide a setting name and either on or off")
         setting = args[0].lower()
-        if setting not in self.gamba_data[ctx.user.username]['settings']:
+        if setting not in self.userdata[ctx.user.username]['settings']:
             return await self.send_message(ctx.channel,
                                            f"@{ctx.user.display_name} That's not a valid setting name. The settings consist of the following: " + ", ".join(
-                                               list(self.gamba_data[ctx.user.username]['settings'].keys())))
+                                               list(self.userdata[ctx.user.username]['settings'].keys())))
         try:
             value = {"on": True, "off": False}[args[1].lower()]
         except KeyError:
             return await self.send_message(ctx.channel, "You must specify on or off.")
 
-        self.gamba_data[ctx.user.username]['settings'][setting] = value
+        self.userdata[ctx.user.username]['settings'][setting] = value
         self.database.update_userdata(ctx.user.username, setting, value)
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} The {setting} setting has been turned {args[1]}.")
 
@@ -802,10 +797,10 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I also chose {abbr[com_choice]}! bruh")
         if win[com_choice] == choice:
             await self.send_message(ctx.channel, f"@{ctx.user.display_name} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
-            self.gamba_data[ctx.user.username]['money'] -= 10
+            self.userdata[ctx.user.username]['money'] -= 10
             return self.save_money(ctx.user.username)
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
-        self.gamba_data[ctx.user.username]['money'] += 10
+        self.userdata[ctx.user.username]['money'] += 10
         self.save_money(ctx.user.username)
         
     @command_manager.command("new_name", permission=CommandPermission.ADMIN)
@@ -814,15 +809,15 @@ class Bot:
         args = ctx.get_args()
         old_name = args[0]
         new_name = args[1]
-        if old_name not in self.gamba_data or new_name not in self.gamba_data:
+        if old_name not in self.userdata or new_name not in self.userdata:
             return await self.send_message(ctx.channel, "One of the provided names is not valid.")
-        self.gamba_data[old_name]['money'] += self.gamba_data[new_name]['money']
-        self.gamba_data[new_name] = dict(self.gamba_data[old_name])
-        del self.gamba_data[old_name]
+        self.userdata[old_name]['money'] += self.userdata[new_name]['money']
+        self.userdata[new_name] = dict(self.userdata[old_name])
+        del self.userdata[old_name]
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} The data has been updated for the new name!")
         self.database.delete_user(old_name)
         self.save_money(new_name)
-        for setting, val in self.gamba_data[new_name]["settings"].items():
+        for setting, val in self.userdata[new_name]["settings"].items():
             self.database.update_userdata(new_name, setting, val)
 
     @command_manager.command("scramble_multipliers", aliases=["scramblemultipliers", "scramble_multiplier", "scramblemultiplier"])
@@ -858,7 +853,7 @@ class Bot:
     @command_manager.command("removeafk", aliases=["rafk", "afkremove", "afkr", "unafk"])
     @requires_gamba_data
     async def afk_remove(self, ctx):
-        if self.gamba_data[ctx.user.username]["settings"]["autoafk"]:
+        if self.userdata[ctx.user.username]["settings"]["autoafk"]:
             return
         await self.remove_user_afk(ctx)
 
@@ -877,7 +872,7 @@ class Bot:
                                                       f"({format_date(datetime.fromisoformat(self.afk[ping]['time']))} ago): "
                                                       f"{self.afk[ping]['message']}")
 
-        if ctx.user.username not in self.afk or not self.gamba_data[ctx.user.username]["settings"]["autoafk"]:
+        if ctx.user.username not in self.afk or not self.userdata[ctx.user.username]["settings"]["autoafk"]:
             return
         elif (datetime.now(tz=pytz.UTC) - datetime.fromisoformat(self.afk[ctx.user.username]['time']).replace(tzinfo=pytz.UTC)).seconds > 60:
             await self.remove_user_afk(ctx)
@@ -1018,10 +1013,10 @@ class Bot:
         if winner is None:
             return False
         winner = winner.user
-        if winner not in self.gamba_data:
+        if winner not in self.userdata:
             self.add_new_user(winner)
         money = self.bomb_party_helper.winning_money
-        self.gamba_data[winner]['money'] += money
+        self.userdata[winner]['money'] += money
         self.save_money(winner)
         self.close_bomb_party()
         await self.send_message(channel, f"@{winner} Congratulations on winning the bomb party game! You've won {money} Becky Bucks!")
@@ -1478,9 +1473,9 @@ class Bot:
         else:
             username = args[0].lower().replace("@", "")
 
-        if username not in self.userinfo:
+        if username not in self.userdata:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't recognize the user {username}")
-        userid = self.userinfo[username]["userid"]
+        userid = self.userdata[username]["userid"]
         if userid not in list(self.timezones.keys()):
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} "
                                                         f"{'This user has' if username != ctx.user.username else 'You have'} "

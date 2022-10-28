@@ -79,7 +79,7 @@ class Database:
     def get_userdata(self):
         cursor = self.cursor
         cursor.execute("SELECT * FROM userdata")
-        return {data[0]: {"money": data[1], "settings": {"receive": bool(data[2]), "autoafk": bool(data[3])}} for data in cursor.fetchall()}
+        return {data[0]: {"userid": data[4], "money": data[1], "settings": {"receive": bool(data[2]), "autoafk": bool(data[3])}} for data in cursor.fetchall()}
 
     def update_userdata(self, user, column, value):
         self.cursor.execute("UPDATE userdata SET %s = %s WHERE username = '%s'" % (column, "'%s'" % value if type(value) == str else value, user))
@@ -91,6 +91,7 @@ class Database:
 
     def delete_user(self, user):
         self.cursor.execute(f"DELETE FROM userdata WHERE username = '{user}'")
+        self.database.commit()
 
     def new_animecompare_game(self, user):
         cursor = self.cursor
@@ -157,15 +158,6 @@ class Database:
         cursor = self.cursor
         cursor.execute("SELECT * FROM timezones")
         return {data[0]: timezone(data[1]) for data in cursor.fetchall()}
-
-    def add_userinfo(self, username, userid):
-        self.cursor.execute(f"INSERT INTO userinfo (username, userid) VALUES ({username!r}, {userid})")
-        self.database.commit()
-
-    def get_userinfo(self):
-        cursor = self.cursor
-        cursor.execute("SELECT * FROM userinfo")
-        return {data[0]: {"userid": data[1]} for data in cursor.fetchall()}
 
     @property
     def current_time(self):
