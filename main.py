@@ -254,14 +254,21 @@ class Bot:
         top_plays = resp.json()
 
     def get_access_token(self):
-        resp = requests.post("https://id.twitch.tv/oauth2/token", params={"client_id": self.client_id, "client_secret": self.client_secret, "grant_type": "client_credentials"})
+        params = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "grant_type": "client_credentials"
+        }
+        resp = requests.post("https://id.twitch.tv/oauth2/token", params=params)
         resp.raise_for_status()
         resp = resp.json()
         return resp['access_token'], resp['expires_in']
 
     def get_stream_status(self, channel):
         try:
-            resp = requests.get("https://api.twitch.tv/helix/search/channels", params={"query": channel, "first": 1}, headers={"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id})
+            params = {"query": channel, "first": 1}
+            headers = {"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id}
+            resp = requests.get("https://api.twitch.tv/helix/search/channels", params=params, headers=headers)
             resp.raise_for_status()
             resp = resp.json()
             self.offlines[channel] = not resp['data'][0]['is_live']
