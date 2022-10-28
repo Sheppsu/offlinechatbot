@@ -54,9 +54,9 @@ class Database:
         if time is None:
             time = self.current_time
         if not self.does_user_entry_exist("afk", user):
-            self.cursor.execute(f"INSERT INTO afk (message, time, username) VALUES ('{message}', '{time}', '{user}')")
+            self.cursor.execute(f"INSERT INTO afk (message, time, username) VALUES ({message!r}, '{time}', '{user}')")
         else:
-            self.cursor.execute(f"UPDATE afk SET message = '{message}', time = '{time}' WHERE username = '{user}'")
+            self.cursor.execute(f"UPDATE afk SET message = {message!r}, time = '{time}' WHERE username = '{user}'")
         self.database.commit()
 
     def delete_afk(self, user):
