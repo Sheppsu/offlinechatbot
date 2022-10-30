@@ -152,6 +152,16 @@ class Bot:
         future.add_done_callback(future_callback)
         return future
 
+    async def create_periodic_message(self, channel, message, wait_time, offset):
+        async def send_message():
+            await self.send_message(channel, message)
+            self.set_timed_event(wait_time, send_message)
+
+        if offset == 0:
+            await send_message()
+        else:
+            self.set_timed_event(offset, send_message)
+
     def get_wait_for_channel(self, channel):
         # TODO: make a check for if the bot is a moderator in the channel
         if channel == self.username or (self.own_state is not None and self.own_state.mod):
@@ -413,6 +423,12 @@ class Bot:
         self.last_message[ctx.channel] = ""
         self.emotes[ctx.channel] = self.get_emotes(ctx.channel)
         self.beatmap_cache[ctx.channel] = None
+
+        if ctx.channel == "btmc":
+            await self.create_periodic_message("btmc", "Hello offline chat PogYou Offline Chat Tournament "
+                                                       "(an osu! tournament for offline chat) is looking for more people "
+                                                       "interested in playing or staffing: https://discord.gg/tuE84PX9mx",
+                                               60*60*3, 60*60)
 
     async def on_message(self, ctx: MessageContext):
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or ctx.user.username == self.username:
@@ -1493,7 +1509,8 @@ class Bot:
 
     @command_manager.command("oct")
     async def offlinechattournament(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Offline Chat Tournament (osu! tournament for offline chat) discord: https://discord.gg/tuE84PX9mx")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Offline Chat Tournament "
+                                             "(osu! tournament for offline chat) discord: https://discord.gg/tuE84PX9mx")
 
 
 bot = Bot(command_manager)
