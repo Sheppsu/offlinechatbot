@@ -424,12 +424,6 @@ class Bot:
         self.emotes[ctx.channel] = self.get_emotes(ctx.channel)
         self.beatmap_cache[ctx.channel] = None
 
-        if ctx.channel == "btmc":
-            await self.create_periodic_message("btmc", "Hello offline chat PogYou Offline Chat Tournament "
-                                                       "(an osu! tournament for offline chat) is looking for more people "
-                                                       "interested in playing or staffing: https://discord.gg/tuE84PX9mx",
-                                               60*60*3, 60*60)
-
     async def on_message(self, ctx: MessageContext):
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or ctx.user.username == self.username:
             return
