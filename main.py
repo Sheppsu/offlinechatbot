@@ -978,7 +978,7 @@ class Bot:
                 self.bomb_party_helper.started or \
                 self.bomb_party_helper.host != ctx.user.username:
             return
-        args = ctx.message.content.split()
+        args = ctx.message.split()
         if len(args) < 2:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You must provide a setting name and the value: "
                                                         f"!settings <setting> <value>. Valid settings: "
@@ -1188,7 +1188,7 @@ class Bot:
             return accuracy, Bot.calculate_pp(score, beatmap, beatmap_attributes)
 
     @staticmethod
-    def calculate_pp(score, beatmap, beatmap_attributes):
+    def calculate_pp(score, beatmap, beatmap_attributes, transform=True):
         if score.mode == GameModeStr.STANDARD:
             attributes = OsuDifficultyAttributes.from_attributes({
                 'aim_strain': beatmap_attributes.mode_attributes.aim_difficulty,
@@ -1204,7 +1204,8 @@ class Bot:
                 'slider_count': beatmap.count_sliders,
                 'spinner_count': beatmap.count_spinners,
             })
-            score = OsuScoreAttributes.from_osupy_score(score)
+            if transform:
+                score = OsuScoreAttributes.from_osupy_score(score)
             calculator = OsuPerformanceCalculator(GameModeStr.STANDARD, attributes, score)
             return calculator.calculate()
 
@@ -1449,6 +1450,15 @@ class Bot:
         self.user_id_cache[user.username] = user.id
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {user.username} to your account.")
+
+    # @command_manager.command("simulate", cooldown=Cooldown(0, 2))
+    # async def simulate_score(self, ctx):
+    #     if self.beatmap_cache[ctx.channel] is None:
+    #         return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
+    #     beatmap, beatmap_difficulty = self.beatmap_cache[ctx.channel]
+    #     total_objects = beatmap.count_sliders + beatmap.count_circles + beatmap.count_spinners
+    #     for acc in (1, 0.99, 0.98, 0.97, 0.96, 0.95):
+    #         h2 = (2/3)
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):
