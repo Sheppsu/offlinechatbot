@@ -1214,7 +1214,7 @@ class Bot:
             calculator = OsuPerformanceCalculator(GameModeStr.STANDARD, attributes, score)
             return calculator.calculate()
 
-    async def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
+    def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
         score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
         # Format and send message for recent score
