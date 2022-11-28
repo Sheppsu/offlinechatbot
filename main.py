@@ -126,6 +126,7 @@ class Bot:
         # Bomb party
         self.bomb_party_helper = BombParty()
         self.bomb_party_future = None
+        self.exploding = False
 
         # Anime compare
         self.compare_helper = AnimeCompare(self.anime)
@@ -995,6 +996,7 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Current players playing bomb party: {', '.join(self.bomb_party_helper.player_list)}")
 
     async def bomb_party_timer(self, channel):
+        self.exploding = True
         msg = self.bomb_party_helper.on_explode()
         print(msg)
         await self.send_message(channel, msg)
@@ -1002,6 +1004,7 @@ class Bot:
         if await self.check_win(channel):
             return
         print("next player")
+        self.exploding = False
         await self.next_player(channel)
 
     async def next_player(self, channel):
@@ -1020,6 +1023,8 @@ class Bot:
         return_msg = self.bomb_party_helper.check_message(ctx.message)
         if return_msg is not None:
             return await self.send_message(ctx.channel, f"@{self.bomb_party_helper.current_player} {return_msg}")
+        if self.exploding:
+            return
         self.bomb_party_future.cancel()
         self.bomb_party_helper.on_word_used(ctx.message)
         await self.next_player(ctx.channel)
