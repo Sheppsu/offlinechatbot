@@ -22,7 +22,7 @@ from context import *
 from util import *
 from constants import *
 from client import Bot as CommunicationClient
-from osu import AsynchronousClient, GameModeStr, Score
+from osu import AsynchronousClient, GameModeStr, Score, Mods
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
@@ -979,13 +979,13 @@ class Bot:
                 self.bomb_party_helper.started or \
                 self.bomb_party_helper.host != ctx.user.username:
             return
-        args = ctx.message.split()
+        args = ctx.get_args("ascii")
         if len(args) < 2:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You must provide a setting name and the value: "
                                                         f"!settings <setting> <value>. Valid settings: "
                                                         f"{self.bomb_party_helper.valid_settings_string}")
-        setting = args[0].lower()
-        value = args[1].lower()
+        setting = args[0]
+        value = args[1]
         return_msg = self.bomb_party_helper.set_setting(setting, value)
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} {return_msg}")
 
@@ -1194,7 +1194,7 @@ class Bot:
 
     @staticmethod
     def calculate_pp(score, beatmap, beatmap_attributes, transform=True):
-        if score.mode == GameModeStr.STANDARD:
+        if beatmap.mode == GameModeStr.STANDARD:
             attributes = OsuDifficultyAttributes.from_attributes({
                 'aim_strain': beatmap_attributes.mode_attributes.aim_difficulty,
                 'speed_strain': beatmap_attributes.mode_attributes.speed_difficulty,
@@ -1213,6 +1213,39 @@ class Bot:
                 score = OsuScoreAttributes.from_osupy_score(score)
             calculator = OsuPerformanceCalculator(GameModeStr.STANDARD, attributes, score)
             return calculator.calculate()
+
+    async def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
+        score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
+                    "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
+        # Format and send message for recent score
+        genkis = (score.statistics.count_300, score.statistics.count_100,
+                  score.statistics.count_50, score.statistics.count_miss) if score.mode == GameModeStr.STANDARD else (
+            score.statistics.count_geki, score.statistics.count_300, score.statistics.count_katu,
+            score.statistics.count_100, score.statistics.count_50, score.statistics.count_miss
+        )
+        total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
+        if score.pp is None and score.passed:
+            score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
+        if_fc_acc, if_fc_pp = None, None
+        if beatmap_attributes.type is not None and score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
+            if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
+        return score_format.format(**{
+            "username": score.user.username,
+            "passed": "" if score.passed else f"(Failed {round(sum(genkis) / total_objects * 100)}%)",
+            "artist": score.beatmapset.artist,
+            "title": score.beatmapset.title,
+            "diff": score.beatmap.version,
+            "mods": " +" + score.mods.to_readable_string() if score.mods else "",
+            "mapper": score.beatmapset.creator,
+            "star_rating": round(beatmap_attributes.star_rating, 2),
+            "pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
+            "if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)" if if_fc_pp is not None else "",
+            "acc": round(score.accuracy * 100, 2),
+            "combo": score.max_combo,
+            "max_combo": beatmap_attributes.max_combo,
+            "genki_counts": ("%d/%d/%d/%d" if score.mode == GameModeStr.STANDARD else "%d/%d/%d/%d/%d/%d") % genkis,
+            "time_ago": format_date(score.created_at)
+        })
 
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
@@ -1249,39 +1282,7 @@ class Bot:
         beatmap = await osu_client.get_beatmap(score.beatmap.id)
         beatmap_attributes = await osu_client.get_beatmap_attributes(beatmap.id, score.mods if score.mods else None, score.mode)
         self.beatmap_cache[ctx.channel] = (beatmap, beatmap_attributes)
-
-        rs_format = "Recent score for {username}:{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
-                    "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
-        # Format and send message for recent score
-        genkis = (score.statistics.count_300, score.statistics.count_100,
-                  score.statistics.count_50, score.statistics.count_miss) if score.mode == GameModeStr.STANDARD else (
-            score.statistics.count_geki, score.statistics.count_300, score.statistics.count_katu,
-            score.statistics.count_100, score.statistics.count_50, score.statistics.count_miss
-        )
-        total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
-        if score.pp is None and score.passed:
-            score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
-        if_fc_acc, if_fc_pp = None, None
-        if beatmap_attributes.type is not None and score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
-            if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
-        print(genkis)
-        await self.send_message(ctx.channel, rs_format.format(**{
-            "username": score.user.username,
-            "passed": "" if score.passed else f"(Failed {round(sum(genkis)/total_objects*100)}%)",
-            "artist": score.beatmapset.artist,
-            "title": score.beatmapset.title,
-            "diff": score.beatmap.version,
-            "mods": " +"+score.mods.to_readable_string() if score.mods else "",
-            "mapper": score.beatmapset.creator,
-            "star_rating": round(beatmap_attributes.star_rating, 2),
-            "pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
-            "if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)" if if_fc_pp is not None else "",
-            "acc": round(score.accuracy * 100, 2),
-            "combo": score.max_combo,
-            "max_combo": beatmap_attributes.max_combo,
-            "genki_counts": ("%d/%d/%d/%d" if score.mode == GameModeStr.STANDARD else "%d/%d/%d/%d/%d/%d") % genkis,
-            "time_ago": format_date(score.created_at)
-        }))
+        await self.send_message(ctx.channel, self.get_score_message(score, beatmap, beatmap_attributes))
 
     @command_manager.command("c", aliases=['compare'], cooldown=Cooldown(0, 3))
     async def compare_score(self, ctx):
@@ -1456,14 +1457,55 @@ class Bot:
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {user.username} to your account.")
 
-    # @command_manager.command("simulate", cooldown=Cooldown(0, 2))
-    # async def simulate_score(self, ctx):
-    #     if self.beatmap_cache[ctx.channel] is None:
-    #         return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
-    #     beatmap, beatmap_difficulty = self.beatmap_cache[ctx.channel]
-    #     total_objects = beatmap.count_sliders + beatmap.count_circles + beatmap.count_spinners
-    #     for acc in (1, 0.99, 0.98, 0.97, 0.96, 0.95):
-    #         h2 = (2/3)
+    @command_manager.command("simulate", cooldown=Cooldown(0, 2), aliases=["s"])
+    async def simulate_score(self, ctx):
+        if self.beatmap_cache[ctx.channel] is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
+        beatmap = self.beatmap_cache[ctx.channel][0]
+        if beatmap.mode != GameModeStr.STANDARD:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Sorry, but I only support pp calculation for osu!std at the moment.")
+
+        args = ctx.get_args("ascii")
+        if len(args) == 0:
+            mods = None
+        else:
+            mods = args[0]
+            if mods.startswith("+"):
+                mods = mods[1:]
+            mods = [mods[i*2:i*2+2] for i in range(len(mods)//2)]
+            try:
+                mods = list(map(Mods.get_from_abbreviation, mods))
+            except KeyError:
+                return await self.send_message(ctx.channel, f"{ctx.user.display_name} The mod combination you gave is invalid.")
+            mods = Mods.get_from_list(mods)
+
+        beatmap_difficulty = await osu_client.get_beatmap_attributes(beatmap.id, mods)
+
+        pp_values = []
+        total_objects = beatmap.count_sliders + beatmap.count_circles + beatmap.count_spinners
+        for acc in (1, 0.99, 0.98, 0.97, 0.96, 0.95):
+            h2 = round((3/2)*total_objects*(1-acc))
+            h1 = total_objects - h2
+            actual_acc = (300*h1 + 100*h2)/(300*total_objects)
+            score = OsuScoreAttributes()
+            score.set_attributes({
+                "mods": mods,
+                "accuracy": actual_acc,
+                "score_max_combo": beatmap_difficulty.max_combo,
+                "count_great": h1,
+                "count_ok": h2,
+                "count_meh": 0,
+                "count_miss": 0,
+            })
+            pp = self.calculate_pp(score, beatmap, beatmap_difficulty, False)
+            pp_values.append(f"{int(acc*100)}% - {round(pp, 2)}")
+
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} {mods.to_readable_string() if mods is not None else 'NM'}: {' | '.join(pp_values)}")
+
+    @command_manager.command("score", aliases=["s"])
+    async def osu_score(self, ctx):
+        args = ctx.get_args()
+        # TODO
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):
