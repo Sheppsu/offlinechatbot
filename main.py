@@ -108,6 +108,7 @@ class Bot:
 
         # Trivia
         self.trivia_helper = TriviaHelper()
+        self.trivia_cancelling = False
 
         self.scrambles = {
             "word": Scramble("word", lambda: random.choice(self.word_list), 1),
@@ -561,13 +562,16 @@ class Bot:
         self.save_money(ctx.user.username)
 
         if self.trivia_helper.answer is None:
-            self.trivia_helper.future.cancel()
+            if not self.trivia_cancelling:
+                self.trivia_helper.future.cancel()
             if amount < 0:
                 await self.send_message(ctx.channel, "No one guessed it correctly.")
 
     async def on_trivia_finish(self, channel):
+        self.trivia_cancelling = True
         self.trivia_helper.reset()
         await self.send_message(channel, "Time has run out for the trivia.")
+        self.trivia_cancelling = False
 
     @command_manager.command("slap")
     async def slap(self, ctx):
