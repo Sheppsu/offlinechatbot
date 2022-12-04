@@ -557,15 +557,14 @@ class Bot:
         if result is None:
             return
         message, amount = result
+        if not self.trivia_cancelling:
+            self.trivia_helper.future.cancel()
         await self.send_message(ctx.channel, message)
         self.userdata[ctx.user.username]["money"] += amount
         self.save_money(ctx.user.username)
 
-        if self.trivia_helper.answer is None:
-            if not self.trivia_cancelling:
-                self.trivia_helper.future.cancel()
-            if amount < 0:
-                await self.send_message(ctx.channel, "No one guessed it correctly.")
+        if self.trivia_helper.answer is None and amount < 0:
+            await self.send_message(ctx.channel, "No one guessed it correctly.")
 
     async def on_trivia_finish(self, channel):
         self.trivia_cancelling = True
@@ -883,7 +882,7 @@ class Bot:
                                               "sheeppcommands", "sheephelp", "sheepphelp",
                                               "sheep_help", "sheep_help"])
     async def help_command(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://thighs.moe/OY4Wbn9FYHsW (domain kindly supplied by pancakes man)")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://bit.ly/3P0N8aR (domain kindly supplied by pancakes man)")
 
     @requires_gamba_data
     async def on_afk(self, ctx):

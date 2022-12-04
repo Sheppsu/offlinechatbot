@@ -220,6 +220,7 @@ class Scramble:
         future = self.progress[channel]["future"]
         self.progress[channel] = self.default_progress
         if cancel and future is not None and not future.cancelled() and not future.done():
+            print(f"Cancelling future for {self.name} scramble")
             future.cancel()
 
     def new_answer(self, channel):
