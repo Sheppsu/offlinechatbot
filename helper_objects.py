@@ -565,7 +565,12 @@ class TriviaHelper:
         }
         if category:
             params["category"] = category
-        resp = requests.get("https://opentdb.com/api.php", params=params)
+        try:
+            resp = requests.get("https://opentdb.com/api.php", params=params)
+        except Exception as e:
+            print(e)
+            self.answer = None
+            return
         if resp.status_code != 200:
             self.answer = None
             return
