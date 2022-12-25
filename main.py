@@ -658,7 +658,8 @@ class Bot:
             'settings': {
                 'receive': True,
                 "autoafk": True,
-            }
+            },
+            'userid': user.id,
         }})
         self.database.new_user(user.username)
 
