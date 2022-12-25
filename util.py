@@ -7,7 +7,7 @@ import pytz
 def requires_gamba_data(func):
     async def check(self, ctx, *args, **kwargs):
         if ctx.user.username not in self.userdata:
-            self.add_new_user(ctx.user)
+            self.add_new_user(ctx.user, ctx.user_id)
         return await func(self, ctx, *args, **kwargs)
 
     return check

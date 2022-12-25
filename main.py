@@ -625,7 +625,7 @@ class Bot:
                                 f"{'Drake ' if 'Drake' in emotes else ''}"
                                 f"You've won {money} Becky Bucks!")
         if ctx.user.username not in self.userdata:
-            self.add_new_user(ctx.user.username)
+            self.add_new_user(ctx.user.username, ctx.user_id)
         self.userdata[ctx.user.username]["money"] += money
         self.save_money(ctx.user.username)
 
@@ -652,14 +652,14 @@ class Bot:
         self.scramble_manager.reset(scramble_type, channel, cancel=False)
         await self.send_message(channel, f"Time is up! The {name} was {answer}")
 
-    def add_new_user(self, user):
+    def add_new_user(self, user, user_id):
         self.userdata.update({user.username: {
             'money': 0,
             'settings': {
                 'receive': True,
                 "autoafk": True,
             },
-            'userid': user.id,
+            'userid': user_id,
         }})
         self.database.new_user(user.username)
 
