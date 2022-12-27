@@ -1228,7 +1228,7 @@ class Bot:
             score.statistics.count_100, score.statistics.count_50, score.statistics.count_miss
         )
         total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
-        if score.pp is None and score.passed:
+        if score.pp is None and score.passed and score.mode == GameModeStr.STANDARD:
             score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
         if_fc_acc, if_fc_pp = None, None
         if beatmap_attributes.type is not None and score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
