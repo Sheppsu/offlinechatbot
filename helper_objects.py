@@ -528,11 +528,11 @@ class CommandManager:
     async def __call__(self, command, ctx):
         if self.bot is None:
             raise Exception("CommandHandler must be initialized before being used to call commands.")
-        if ctx.channel not in self.channels or command not in self.channels[ctx.channel]:
+        if ctx.channel not in self.channels:
             return
 
         for c in self.commands:
-            if command in c:
+            if command in c and c.name in self.channels[ctx.channel]:
                 return await c(self.bot, ctx)
 
 
