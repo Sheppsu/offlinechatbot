@@ -1219,7 +1219,10 @@ class Bot:
             if transform:
                 score = OsuScoreAttributes.from_osupy_score(score)
             calculator = OsuPerformanceCalculator(GameModeStr.STANDARD, attributes, score)
-            return calculator.calculate()
+            try:
+                return calculator.calculate()
+            except:
+                traceback.print_exc()
 
     def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
         score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
@@ -1257,7 +1260,6 @@ class Bot:
     async def make_osu_request(self, request, use_lazer=False):
         await self.osu_lock.acquire()
         self.osu_client.http.use_lazer = use_lazer
-        print(self.osu_client.http.use_lazer)
         result = await request
         self.osu_lock.release()
         return result
