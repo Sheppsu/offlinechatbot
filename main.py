@@ -39,7 +39,6 @@ if not TESTING or not os.path.exists("data/azur_lane.json"):
     from azur_lane import download_azur_lane_ship_names
     download_azur_lane_ship_names()
 
-osu_client = AsynchronousClient.from_client_credentials(int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), "http://127.0.0.1:8080")
 command_manager = CommandManager()
 
 
@@ -146,6 +145,10 @@ class Bot:
                 if name in self.tz_abbreviations[abbr]:
                     continue
                 self.tz_abbreviations[abbr].append(name)
+
+        self.osu_client = AsynchronousClient.from_client_credentials(
+            int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), "http://127.0.0.1:8080")
+        self.osu_lock = asyncio.Lock()
 
     # Util
 
@@ -1168,8 +1171,8 @@ class Bot:
     async def get_osu_user_id_from_osu_username(self, ctx, username):
         if username not in self.user_id_cache:
             try:
-                user = await osu_client.get_user(user=username, key="username")
-            except requests.exceptions.HTTPError:
+                user = await self.make_osu_request(self.osu_client.get_user(user=username, key="username"))
+            except client_exceptions.ClientResponseError:
                 return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
             self.user_id_cache[username] = user.id
         return self.user_id_cache[username]
@@ -1251,6 +1254,14 @@ class Bot:
             "time_ago": format_date(score.created_at)
         })
 
+    async def make_osu_request(self, request, use_lazer=False):
+        await self.osu_lock.acquire()
+        self.osu_client.http.use_lazer = use_lazer
+        print(self.osu_client.http.use_lazer)
+        result = await request
+        self.osu_lock.release()
+        return result
+
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
         args = ctx.get_args('ascii')
@@ -1274,17 +1285,22 @@ class Bot:
 
         # Get recent score
         if not best:
-            scores = await osu_client.get_user_scores(user_id, "recent", include_fails=1, mode=mode, limit=1, offset=index)
+            scores = await self.make_osu_request(
+                self.osu_client.get_user_scores(
+                    user_id, "recent", include_fails=1, mode=mode, limit=1, offset=index))
         else:
-            scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
+            scores = await self.make_osu_request(
+                self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100))
             scores = sorted(scores, key=lambda x: x.created_at, reverse=True)
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no recent scores for {proper_mode_name[mode]} "
                                                         f"or the index you specified is out of range.")
 
         score = scores[0 if not best else index]
-        beatmap = await osu_client.get_beatmap(score.beatmap.id)
-        beatmap_attributes = await osu_client.get_beatmap_attributes(beatmap.id, score.mods if score.mods else None, score.mode)
+        beatmap = await self.make_osu_request(
+            self.osu_client.get_beatmap(score.beatmap.id))
+        beatmap_attributes = await self.make_osu_request(
+            self.osu_client.get_beatmap_attributes(beatmap.id, score.mods if score.mods else None, score.mode))
         self.beatmap_cache[ctx.channel] = (beatmap, beatmap_attributes)
         await self.send_message(ctx.channel, self.get_score_message(score, beatmap, beatmap_attributes))
 
@@ -1304,7 +1320,8 @@ class Bot:
             return
 
         try:
-            scores = await osu_client.get_user_beatmap_scores(beatmap.id, user_id)
+            scores = await self.make_osu_request(
+                self.osu_client.get_user_beatmap_scores(beatmap.id, user_id))
         except client_exceptions.ClientResponseError:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} This map does not have a leaderboard.")
         if not scores:
@@ -1349,6 +1366,7 @@ class Bot:
     @command_manager.command("osu", cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
         args = ctx.get_args('ascii')
+        use_lazer = self.process_arg('-l', args)
         mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
@@ -1357,7 +1375,8 @@ class Bot:
             return
 
         try:
-            user = await osu_client.get_user(user=username, mode=mode, key="username")
+            user = await self.make_osu_request(
+                self.osu_client.get_user(user=username, mode=mode, key="username"), use_lazer)
         except client_exceptions.ClientResponseError:
             return await self.send_message(ctx.channel, f"{ctx.user.display_name} A user with the name {username} "
                                                         "does not exist. If they did before it's possible they "
@@ -1394,6 +1413,7 @@ class Bot:
     async def osu_top(self, ctx):
         args = ctx.get_args('ascii')
 
+        use_lazer = self.process_arg('-l', args)
         mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
@@ -1410,7 +1430,8 @@ class Bot:
         if user_id is None:
             return
 
-        top_scores = await osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
+        top_scores = await self.make_osu_request(
+            self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100), use_lazer)
         if not top_scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no top scores for {proper_mode_name[mode]}.")
         if recent_tops:
@@ -1447,7 +1468,8 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username.")
 
         username = " ".join(args).strip()
-        user = await osu_client.get_user(user=username, key="username")
+        user = await self.make_osu_request(
+            self.osu_client.get_user(user=username, key="username"))
 
         if user is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
@@ -1483,7 +1505,8 @@ class Bot:
                 return await self.send_message(ctx.channel, f"{ctx.user.display_name} The mod combination you gave is invalid.")
             mods = Mods.get_from_list(mods)
 
-        beatmap_difficulty = await osu_client.get_beatmap_attributes(beatmap.id, mods)
+        beatmap_difficulty = await self.make_osu_request(
+            self.osu_client.get_beatmap_attributes(beatmap.id, mods))
 
         pp_values = []
         total_objects = beatmap.count_sliders + beatmap.count_circles + beatmap.count_spinners
@@ -1506,7 +1529,7 @@ class Bot:
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} {mods.to_readable_string() if mods is not None else 'NM'}: {' | '.join(pp_values)}")
 
-    @command_manager.command("score", aliases=["s"])
+    @command_manager.command("score", aliases=["sc"])
     async def osu_score(self, ctx):
         args = ctx.get_args()
         # TODO
