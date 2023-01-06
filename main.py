@@ -664,7 +664,7 @@ class Bot:
             },
             'userid': user_id,
         }})
-        self.database.new_user(user.username)
+        self.database.new_user(user.username, user_id)
 
     # @command_manager.command("collect")
     @requires_gamba_data
@@ -1137,9 +1137,9 @@ class Bot:
             return True
         return False
 
-    async def process_osu_username_arg(self, ctx, args):
+    async def process_osu_user_arg(self, ctx, args):
         if len(args) == 0 and ctx.user.username in self.osu_data:  # user did not provide a username, but osu! account is linked
-            return self.osu_data[ctx.user.username]['username']
+            return self.osu_data[ctx.user.username]['user_id']
         elif len(args) == 0 or args[0].strip() == "":  # user did not provide a username and osu! account is not linked
             await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username or "
                                                  "link your account with !link [username].")
@@ -1170,9 +1170,8 @@ class Bot:
 
     async def get_osu_user_id_from_osu_username(self, ctx, username):
         if username not in self.user_id_cache:
-            try:
-                user = await self.make_osu_request(self.osu_client.get_user(user=username, key="username"))
-            except client_exceptions.ClientResponseError:
+            user = await self.make_osu_request(self.osu_client.get_user(user=username, key="username"))
+            if user is None:
                 return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
             self.user_id_cache[username] = user.id
         return self.user_id_cache[username]
@@ -1257,6 +1256,17 @@ class Bot:
             "time_ago": format_date(score.created_at)
         })
 
+    async def get_osu_user_id_from_args(self, ctx, args):
+        user = await self.process_osu_user_arg(ctx, args)
+        if user is None:
+            return
+        elif type(user) == str:
+            return await self.get_osu_user_id_from_osu_username(ctx, user)
+        return user
+
+    def osu_username_from_id(self, user_id):
+        return dict(map(reversed, self.user_id_cache.items()))[user_id]
+
     async def make_osu_request(self, request, use_lazer=False):
         await self.osu_lock.acquire()
         self.osu_client.http.use_lazer = use_lazer
@@ -1281,13 +1291,10 @@ class Bot:
             index = 0
         best = self.process_arg("-b", args)
 
-        username = await self.process_osu_username_arg(ctx, args)
-        if username is None:
-            return
-
-        user_id = await self.get_osu_user_id_from_osu_username(ctx, username)
+        user_id = await self.get_osu_user_id_from_args(ctx, args)
         if user_id is None:
             return
+        username = self.osu_username_from_id(user_id)
 
         # Get recent score
         if not best:
@@ -1299,8 +1306,9 @@ class Bot:
                 self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100))
             scores = sorted(scores, key=lambda x: x.created_at, reverse=True)
         if not scores:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no recent scores for {proper_mode_name[mode]} "
-                                                        f"or the index you specified is out of range.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} "
+                                                        f"has no recent scores for {proper_mode_name[mode]} "
+                                                        "or the index you specified is out of range.")
 
         score = scores[0 if not best else index]
         beatmap = await self.make_osu_request(
@@ -1312,26 +1320,44 @@ class Bot:
 
     @command_manager.command("c", aliases=['compare'], cooldown=Cooldown(0, 3))
     async def compare_score(self, ctx):
+        # So that the functionality can be used with osu_score
+        # without triggering the decorator attached to a command function.
+        await self.compare_score_func(ctx)
+
+    async def compare_score_func(self, ctx):
         if self.beatmap_cache[ctx.channel] is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
 
         beatmap, beatmap_attributes = self.beatmap_cache[ctx.channel]
+        args = ctx.get_args('ascii')
+        if '-m' not in map(str.lower, args):
+            mode = None
+        else:
+            mode = await self.process_osu_mode_args(ctx, args)
+            if mode is None:
+                return
 
-        username = await self.process_osu_username_arg(ctx, ctx.get_args('ascii'))
-        if username is None:
-            return
-
-        user_id = await self.get_osu_user_id_from_osu_username(ctx, username)
+        user_id = await self.get_osu_user_id_from_args(ctx, args)
         if user_id is None:
             return
+        username = self.osu_username_from_id(user_id)
+
+        update_beatmap_attributes = mode is not None and mode != beatmap.mode.value
+        if mode is None:
+            mode = beatmap.mode.value
 
         try:
             scores = await self.make_osu_request(
-                self.osu_client.get_user_beatmap_scores(beatmap.id, user_id))
+                self.osu_client.get_user_beatmap_scores(beatmap.id, user_id, mode))
         except client_exceptions.ClientResponseError:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} This map does not have a leaderboard.")
         if not scores:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no scores on that beatmap.")
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no "
+                                                        f"scores on that beatmap for mode {proper_mode_name[mode]}.")
+
+        # For max_combo attribute
+        if update_beatmap_attributes:
+            beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap.id, ruleset=mode))
 
         score_format = "{mods} {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp} | {time_ago} ago"
         message = f"Scores for {username} on {beatmap.beatmapset.artist} - {beatmap.beatmapset.title} " \
@@ -1376,13 +1402,14 @@ class Bot:
         mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
-        username = await self.process_osu_username_arg(ctx, args)
-        if username is None:
+        user = await self.get_osu_user_id_from_args(ctx, args)
+        if user is None:
             return
+        username = self.osu_username_from_id(user)
 
         try:
             user = await self.make_osu_request(
-                self.osu_client.get_user(user=username, mode=mode, key="username"), use_lazer)
+                self.osu_client.get_user(user=user, mode=mode, key="username" if type(user) == str else "id"), use_lazer)
         except client_exceptions.ClientResponseError:
             return await self.send_message(ctx.channel, f"{ctx.user.display_name} A user with the name {username} "
                                                         "does not exist. If they did before it's possible they "
@@ -1428,13 +1455,10 @@ class Bot:
         if index is None:
             return
 
-        username = await self.process_osu_username_arg(ctx, args)
-        if username is None:
-            return
-
-        user_id = await self.get_osu_user_id_from_osu_username(ctx, username)
+        user_id = await self.get_osu_user_id_from_args(ctx, args)
         if user_id is None:
             return
+        username = self.osu_username_from_id(user_id)
 
         top_scores = await self.make_osu_request(
             self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100), use_lazer)
@@ -1537,8 +1561,22 @@ class Bot:
 
     @command_manager.command("score", aliases=["sc"])
     async def osu_score(self, ctx):
-        args = ctx.get_args()
-        # TODO
+        args = ctx.get_args('ascii')
+
+        if len(args) < 1:
+            return await self.send_message(ctx.channel, "Must give a beatmap link or beatmap id.")
+        beatmap_link = args[0]
+        beatmap_id = tuple(filter(lambda s: len(s.strip()) > 0, beatmap_link.split("/")))[-1]
+        beatmap = await self.make_osu_request(self.osu_client.get_beatmap(beatmap_id))
+        if beatmap is None:
+            return await self.send_message(ctx.channel, "Failed to get beatmap from the provided link/id.")
+        beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap_id))
+        self.beatmap_cache[ctx.channel] = (beatmap, beatmap_attributes)
+
+        i = ctx.message.index(args[0])
+        ctx.message = (ctx.message[:i] + ctx.message[i+len(args[0])+1:]).strip()
+
+        await self.compare_score_func(ctx)
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):

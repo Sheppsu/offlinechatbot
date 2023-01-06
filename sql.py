@@ -85,8 +85,8 @@ class Database:
         self.cursor.execute("UPDATE userdata SET %s = %s WHERE username = '%s'" % (column, "'%s'" % value if type(value) == str else value, user))
         self.database.commit()
 
-    def new_user(self, user, money=0, receive=True):
-        self.cursor.execute(f"INSERT INTO userdata (username, money, receive) VALUES ('{user}', {money}, {receive})")
+    def new_user(self, user, userid, money=0, receive=True):
+        self.cursor.execute(f"INSERT INTO userdata (username, money, receive, userid) VALUES ('{user}', {money}, {receive}, {userid})")
         self.database.commit()
 
     def delete_user(self, user):
