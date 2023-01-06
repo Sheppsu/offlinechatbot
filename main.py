@@ -428,6 +428,7 @@ class Bot:
         self.last_message[ctx.channel] = ""
         self.emotes[ctx.channel] = self.get_emotes(ctx.channel)
         self.beatmap_cache[ctx.channel] = None
+        self.offlines[ctx.channel] = True
 
     async def on_message(self, ctx: MessageContext):
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or ctx.user.username == self.username:
