@@ -385,6 +385,7 @@ class Bot:
                         future.add_done_callback(future_callback)
 
     async def join(self, channel):
+        channel = channel.lower()
         await self.ws.send(f"JOIN #{channel}")
         print(f"> JOIN #{channel}")
 
