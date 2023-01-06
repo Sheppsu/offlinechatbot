@@ -1260,7 +1260,11 @@ class Bot:
     async def make_osu_request(self, request, use_lazer=False):
         await self.osu_lock.acquire()
         self.osu_client.http.use_lazer = use_lazer
-        result = await request
+        try:
+            result = await request
+        except:
+            traceback.print_exc()
+            result = None
         self.osu_lock.release()
         return result
 
