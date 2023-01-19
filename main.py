@@ -133,7 +133,7 @@ class Bot:
         self.anime_compare_future = {}
 
         # osu! stuff
-        self.beatmap_cache = {}
+        self.recent_score_cache = {}
 
         # timezone stuff
         self.tz_abbreviations = {}
@@ -399,18 +399,25 @@ class Bot:
         print(f"< CAP REQ :{caps}\r\n")
 
     async def send_message(self, channel, message):
+        message = message.strip()
+        while (i := message.find("  ")) != -1:
+            message = message[:i] + message[i+1:]
+
         # TODO: fix rate limit handling shit
         if channel in self.offlines and not self.offlines[channel]:
             return
         await self.message_locks[channel].acquire()
         messages = split_message(message)
+        sent_messages = []
         for msg in messages:
             msg = msg + (" \U000e0000" if self.last_message[channel] == msg else "")
             await self.ws.send(f"PRIVMSG #{channel} :/me {msg}")
             self.last_message[channel] = msg
             print(f"> PRIVMSG #{channel} :/me {msg}")
+            sent_messages.append(msg.strip())
             await asyncio.sleep(self.get_wait_for_channel(channel))  # Avoid going over ratelimits
         self.message_locks[channel].release()
+        return sent_messages
 
     # IRC command handlers
 
@@ -428,8 +435,8 @@ class Bot:
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
         self.emotes[ctx.channel] = self.get_emotes(ctx.channel)
-        self.beatmap_cache[ctx.channel] = None
         self.offlines[ctx.channel] = True
+        self.recent_score_cache[ctx.channel] = {}
 
     async def on_message(self, ctx: MessageContext):
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or ctx.user.username == self.username:
@@ -460,7 +467,11 @@ class Bot:
 
         await self.on_afk(ctx)
 
-        if ctx.message.startswith("!"):
+        if ctx.reply:
+            ascii_message = " ".join(ascii_message.split()[1:])
+            ctx.message = " ".join(ctx.message.split()[1:])
+
+        if ascii_message.startswith("!"):
             command = ascii_message.split()[0].lower().replace("!", "")
             await self.cm(command, ctx)  # Automatically checks that the command exists
 
@@ -1280,6 +1291,21 @@ class Bot:
         self.osu_lock.release()
         return result
 
+    def get_map_cache(self, ctx):
+        if ctx.reply:
+            print(ctx.reply.msg_body)
+            if ctx.reply.msg_body in self.recent_score_cache[ctx.channel]:
+                return self.recent_score_cache[ctx.channel][ctx.reply.msg_body]
+            return
+        return list(self.recent_score_cache[ctx.channel].values())[-1]
+
+    def add_recent_map(self, ctx, sent_message, beatmap, attributes):
+        msg = " ".join(sent_message)
+        if msg in self.recent_score_cache[ctx.channel]: del self.recent_score_cache[ctx.channel][msg]
+        self.recent_score_cache[ctx.channel].update({msg: (beatmap, attributes)})
+        while len(self.recent_score_cache) > 50:
+            del self.recent_score_cache[ctx.channel][list(self.recent_score_cache[ctx.channel].keys())[0]]
+
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
         args = ctx.get_args('ascii')
@@ -1317,20 +1343,22 @@ class Bot:
             self.osu_client.get_beatmap(score.beatmap.id))
         beatmap_attributes = await self.make_osu_request(
             self.osu_client.get_beatmap_attributes(beatmap.id, score.mods if score.mods else None, score.mode))
-        self.beatmap_cache[ctx.channel] = (beatmap, beatmap_attributes)
-        await self.send_message(ctx.channel, self.get_score_message(score, beatmap, beatmap_attributes))
+        sent_message = await self.send_message(ctx.channel, self.get_score_message(score, beatmap, beatmap_attributes))
+        self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
     @command_manager.command("c", aliases=['compare'], cooldown=Cooldown(0, 3))
     async def compare_score(self, ctx):
         # So that the functionality can be used with osu_score
         # without triggering the decorator attached to a command function.
-        await self.compare_score_func(ctx)
-
-    async def compare_score_func(self, ctx):
-        if self.beatmap_cache[ctx.channel] is None:
+        print("aaa")
+        if not len(self.recent_score_cache[ctx.channel]):
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
+        cache = self.get_map_cache(ctx)
+        if cache is None: return
+        await self.compare_score_func(ctx, False, cache)
 
-        beatmap, beatmap_attributes = self.beatmap_cache[ctx.channel]
+    async def compare_score_func(self, ctx, most_recent=True, cache=None):
+        beatmap, beatmap_attributes = list(self.recent_score_cache[ctx.channel].values())[-1] if most_recent else cache
         args = ctx.get_args('ascii')
         if '-m' not in map(str.lower, args):
             mode = None
@@ -1387,15 +1415,17 @@ class Bot:
                 #if if_fc_pp is not None else "",
                 "time_ago": format_date(score.created_at)
             })
-        await self.send_message(ctx.channel, message)
+        sent_message = await self.send_message(ctx.channel, message)
+        self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
     @command_manager.command("map", aliases=["m"])
     async def send_map(self, ctx):
-        if self.beatmap_cache[ctx.channel] is None:
+        if len(self.recent_score_cache[ctx.channel]) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
 
-        beatmap, beatmap_attributes = self.beatmap_cache[ctx.channel]
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://osu.ppy.sh/b/{beatmap.id}")
+        cache = self.get_map_cache(ctx)
+        if cache is None: return
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://osu.ppy.sh/b/{cache[0].id}")
 
     @command_manager.command("osu", cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):

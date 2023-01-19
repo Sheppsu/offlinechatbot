@@ -59,3 +59,7 @@ def format_date(date):
     used_info.reverse()
 
     return " ".join(f"{int(info[label])} {label}" for label in used_info)
+
+
+def parse_irc_string(string):
+    return string.replace(r"\s", " ").replace(r"\:", ";").replace("\\\\", "\\")

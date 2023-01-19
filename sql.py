@@ -159,6 +159,11 @@ class Database:
         cursor.execute("SELECT * FROM timezones")
         return {data[0]: timezone(data[1]) for data in cursor.fetchall()}
 
+    def add_channel(self, name, user_id, channel_inclusion, offlineonly, commands):
+        self.cursor.execute("INSERT INTO channels (name, id, channel_inclusion, offlineonly, commands) "
+                            f"VALUES ({name!r}, {user_id}, {channel_inclusion}, {offlineonly}, {commands!r})")
+        self.database.commit()
+
     @property
     def current_time(self):
         return datetime.now().isoformat()

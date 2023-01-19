@@ -1,5 +1,6 @@
 from enum import Enum
 from datetime import datetime
+from util import parse_irc_string
 import pytz
 
 
@@ -54,7 +55,7 @@ class Context:
 
     @staticmethod
     def parse_tags_string(string):
-        return {tag.split("=")[0]: tag.split("=")[1] for tag in string[1:].split(";")}
+        return dict(map(lambda item: item.split("="), string.split(";")))
 
 
 class JoinContext:
@@ -81,7 +82,7 @@ class MessageContext:
     __slots__ = (
         "tags", "source", "message_type", "channel", "message", "user", "action", "time_created",
         "emotes", "first_msg", "flags", "id", "returning_chatter", "room_id", "tmi_sent_ts",
-        "turbo", "user_id", "user_type", "sending_user"
+        "turbo", "user_id", "user_type", "sending_user", "reply"
     )
     type = ContextType.PRIVMSG
 
@@ -106,6 +107,7 @@ class MessageContext:
         self.turbo = bool(int(tags.get("turbo", 0)))
         self.user_id = int(tags.get("user-id", -1))
         self.user_type = tags.get("user-type", None)
+        self.reply = ReplyContext(tags) if tags.get("reply-parent-msg-id") else None
 
     def get_args(self, char_acceptance="unicode"):
         if char_acceptance.lower() == "ascii":
@@ -124,6 +126,19 @@ class MessageContext:
                 continue
             msg[-1].append(word)
         return list(map(" ".join, msg))
+
+
+class ReplyContext:
+    __slots__ = (
+        "display_name", "user_login", "user_id", "msg_body", "msg_id"
+    )
+
+    def __init__(self, tags):
+        self.display_name = parse_irc_string(tags.get("reply-parent-display-name", ""))
+        self.user_login = tags.get("reply-parent-user-login")
+        self.user_id = tags.get("reply-parent-user-id")
+        self.msg_body = parse_irc_string(tags.get("reply-parent-msg-body", ""))
+        self.msg_id = tags.get("reply-parent-msg-id")
 
 
 class RoomStateContext:
