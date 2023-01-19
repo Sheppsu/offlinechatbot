@@ -1609,8 +1609,7 @@ class Bot:
         i = ctx.message.index(args[0])
         ctx.message = (ctx.message[:i] + ctx.message[i+len(args[0])+1:]).strip()
 
-        sent_message = await self.compare_score_func(ctx)
-        self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
+        sent_message = await self.compare_score_func(ctx, False, (beatmap, beatmap_attributes))
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):
