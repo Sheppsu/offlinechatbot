@@ -1547,9 +1547,11 @@ class Bot:
 
     @command_manager.command("simulate", cooldown=Cooldown(0, 2), aliases=["s"])
     async def simulate_score(self, ctx):
-        if self.beatmap_cache[ctx.channel] is None:
+        if len(self.recent_score_cache[ctx.channel]) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
-        beatmap = self.beatmap_cache[ctx.channel][0]
+        beatmap = self.get_map_cache(ctx)
+        if beatmap is None: return
+        beatmap = beatmap[0]
         if beatmap.mode != GameModeStr.STANDARD:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Sorry, but I only support pp calculation for osu!std at the moment.")
 
@@ -1603,12 +1605,12 @@ class Bot:
         if beatmap is None:
             return await self.send_message(ctx.channel, "Failed to get beatmap from the provided link/id.")
         beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap_id))
-        self.beatmap_cache[ctx.channel] = (beatmap, beatmap_attributes)
 
         i = ctx.message.index(args[0])
         ctx.message = (ctx.message[:i] + ctx.message[i+len(args[0])+1:]).strip()
 
-        await self.compare_score_func(ctx)
+        sent_message = await self.compare_score_func(ctx)
+        self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):
