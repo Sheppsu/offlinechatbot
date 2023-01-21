@@ -55,7 +55,8 @@ class Context:
 
     @staticmethod
     def parse_tags_string(string):
-        return dict(map(lambda item: item.split("="), string.split(";")))
+        return dict(map(lambda item: (item[:(i := item.index("="))], item[i+1:]),
+                        string.replace("@").split(";")))
 
 
 class JoinContext:
