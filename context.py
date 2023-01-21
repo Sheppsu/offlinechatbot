@@ -24,7 +24,7 @@ class Context:
                 continue
             tags = None
             if data[0].startswith("@"):
-                tags = Context.parse_tags_string(data[0])
+                tags = Context.parse_tags_string(data[0][1:])
             offset = 1 if tags is not None else 0
             source = data[0 + offset]
             try:
@@ -55,8 +55,7 @@ class Context:
 
     @staticmethod
     def parse_tags_string(string):
-        return dict(map(lambda item: (item[:(i := item.index("="))], item[i+1:]),
-                        string.replace("@").split(";")))
+        return dict(map(lambda item: (item[:(i := item.index("="))], item[i+1:]), string.split(";")))
 
 
 class JoinContext:
