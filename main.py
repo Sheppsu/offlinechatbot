@@ -899,7 +899,7 @@ class Bot:
                                               "sheeppcommands", "sheephelp", "sheepphelp",
                                               "sheep_help", "sheep_help"])
     async def help_command(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://bit.ly/3P0N8aR (domain kindly supplied by pancakes man)")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://bot.sheppsu.me/")
 
     @requires_gamba_data
     async def on_afk(self, ctx):
