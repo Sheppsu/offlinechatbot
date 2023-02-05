@@ -218,7 +218,7 @@ class EmoteRequester:
         return list(map(SevenTVEmote, self.http.get(Path.get_7tv_global_emotes(), return_on_fail=[])))
 
     def get_bttv_channel_emotes(self, channel):
-        return list(map(BetterTVEmote, self.http.get(Path.get_bttv_channel_emotes(self.http.get_user_id(channel)), return_on_fail=[])["channelEmotes"]))
+        return list(map(BetterTVEmote, self.http.get(Path.get_bttv_channel_emotes(self.http.get_user_id(channel)), return_on_fail={"channelEmotes": []})["channelEmotes"]))
 
     def get_bttv_global_emotes(self):
         return list(map(BetterTVEmote, self.http.get(Path.get_bttv_global_emotes(), return_on_fail=[])))
