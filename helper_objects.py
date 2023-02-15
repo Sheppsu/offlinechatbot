@@ -318,11 +318,6 @@ class ScrambleManager:
         self.scrambles[identifier].progress[channel]["future"] = future
 
 
-class Trivia:
-    def __init__(self):
-        pass
-
-
 class AnimeCompareGame:
     def __init__(self, user, answers, score=0):
         self.id = None
@@ -555,6 +550,7 @@ class TriviaHelper:
         self.future = None
         self.difficulty = None
         self.answer = None
+        self.cancelling = False
 
     def generate_question(self, category=None):
         self.answer = "temp"
@@ -601,9 +597,18 @@ class TriviaHelper:
             return f"@{ctx.user.display_name} ✅ You gained {gain} Becky Bucks 5Head Clap", gain
         else:
             loss = self.trivia_info[self.difficulty] * self.trivia_info['penalty']
+            message = f"@{ctx.user.display_name} ❌ You lost {loss} Becky Bucks 3Head Clap"
             if len(self.guessed_answers) == 3:
                 self.reset()
-            return f"@{ctx.user.display_name} ❌ You lost {loss} Becky Bucks 3Head Clap", -loss
+                message += " No one guessed correctly."
+            return message, -loss
+
+    def start_cancelling(self):
+        self.cancelling = True
+        self.reset()
+
+    def finish_cancelling(self):
+        self.cancelling = False
 
     def reset(self):
         self.answer = None

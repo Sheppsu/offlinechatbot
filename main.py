@@ -106,8 +106,7 @@ class Bot:
         self.number = random.randint(1, 1000)
 
         # Trivia
-        self.trivia_helper = TriviaHelper()
-        self.trivia_cancelling = False
+        self.trivia_helpers = {}
 
         self.scrambles = {
             "word": Scramble("word", lambda: random.choice(self.word_list), 1),
@@ -120,8 +119,10 @@ class Bot:
         }
         self.scramble_manager = ScrambleManager(self.scrambles)
 
-        # Load emotes
-        self.emotes = self.get_all_emotes()
+        # emote stuff
+        self.emote_requester = EmoteRequester(self.client_id, self.client_secret)
+        self.emote_requester.http.set_access_token(self.access_token)
+        self.emotes = {channel: sum(self.emote_requester.get_channel_emotes(channel), []) for channel in self.cm.channels}
 
         # Bomb party
         self.bomb_party_helper = BombParty()
@@ -232,15 +233,6 @@ class Bot:
             elif channel.id in join_channels:
                 await self.join(channel.name)
         self.cm.load_channels(channels)
-
-    def get_emotes(self, channel, er=None):
-        if er is None:
-            er = EmoteRequester(self.client_id, self.client_secret)
-        return sum(er.get_channel_emotes(channel), [])
-
-    def get_all_emotes(self):
-        er = EmoteRequester(self.client_id, self.client_secret)
-        return {channel: self.get_emotes(channel, er) for channel in self.cm.channels}
 
     def load_genshin(self):
         with open("data/genshin.json", "r") as f:
@@ -434,12 +426,14 @@ class Bot:
     async def on_join(self, ctx: JoinContext):
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
-        self.emotes[ctx.channel] = self.get_emotes(ctx.channel)
+        self.emotes[ctx.channel] = sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         self.offlines[ctx.channel] = True
         self.recent_score_cache[ctx.channel] = {}
+        self.trivia_helpers[ctx.channel] = TriviaHelper()
 
     async def on_message(self, ctx: MessageContext):
-        if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or ctx.user.username == self.username:
+        if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or \
+                ctx.user.username == self.username:
             return
 
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
@@ -447,23 +441,23 @@ class Bot:
 
         ascii_message = "".join([char for char in ctx.message if char.isascii()]).strip()
 
-        if ctx.message.startswith("Use code"):
-            await asyncio.sleep(1)
-            await self.send_message(ctx.channel, "PogU 👆 Use code \"BTMC\" !!!")
-        elif self.trivia_helper.is_in_progress and ascii_message.strip() in [str(num) for num in range(1, 5)]:
-            message = int(ascii_message)
-            await self.on_answer(ctx, message)
-            return
-
         for scramble_type, scramble in self.scrambles.items():
             if scramble.in_progress(ctx.channel):
                 await self.on_scramble(ctx, scramble_type)
 
         if ctx.user.username in self.anime_compare_future and self.anime_compare_future[ctx.user.username] is not None and \
-                ascii_message.isdigit() and int(ascii_message.strip()) in [1, 2]:
+                ascii_message.isdigit() and int(ascii_message.strip()) in range(1, 3):
             game = self.compare_helper.get_game(ctx.user.username)
             if game is not None:
                 await self.on_anime_compare(ctx, game)
+
+        elif self.trivia_helpers[ctx.channel].is_in_progress and ascii_message.isdigit() and \
+                int(ascii_message.strip()) in range(1, 5):
+            message = int(ascii_message)
+            await self.on_answer(ctx, message)
+
+        if self.bomb_party_helper.started:
+            await self.on_bomb_party(ctx)
 
         await self.on_afk(ctx)
 
@@ -474,10 +468,6 @@ class Bot:
         if ascii_message.startswith("!"):
             command = ascii_message.split()[0].lower().replace("!", "")
             await self.cm(command, ctx)  # Automatically checks that the command exists
-
-        # Put it over here to maybe stop it from breaking the bot
-        if self.bomb_party_helper.started:
-            await self.on_bomb_party(ctx)
 
     # Commands
 
@@ -556,37 +546,33 @@ class Bot:
     # TODO: consider putting trivia stuff in its own class
     @command_manager.command("trivia")
     async def trivia(self, ctx):
-        if self.trivia_helper.is_in_progress:
+        if self.trivia_helpers[ctx.channel].is_in_progress:
             return
 
         args = ctx.get_args("ascii")
-        question = self.trivia_helper.generate_question(args[0] if len(args) > 0 else None)
+        question = self.trivia_helpers[ctx.channel].generate_question(args[0] if len(args) > 0 else None)
         if question is None:
             return await self.send_message(ctx.channel, "An error occurred when attempting to fetch the question...")
         await self.send_message(ctx.channel, question)
 
-        self.trivia_helper.future = self.set_timed_event(20, self.on_trivia_finish, ctx.channel)
+        self.trivia_helpers[ctx.channel].future = self.set_timed_event(20, self.on_trivia_finish, ctx.channel)
 
     @requires_gamba_data
     async def on_answer(self, ctx, answer):
-        result = self.trivia_helper.check_guess(ctx, answer)
+        result = self.trivia_helpers[ctx.channel].check_guess(ctx, answer)
         if result is None:
             return
         message, amount = result
-        if not self.trivia_cancelling:
-            self.trivia_helper.future.cancel()
+        if not self.trivia_helpers[ctx.channel].answer is None:
+            self.trivia_helpers[ctx.channel].future.cancel()
         await self.send_message(ctx.channel, message)
         self.userdata[ctx.user.username]["money"] += amount
         self.save_money(ctx.user.username)
 
-        if self.trivia_helper.answer is None and amount < 0:
-            await self.send_message(ctx.channel, "No one guessed it correctly.")
-
     async def on_trivia_finish(self, channel):
-        self.trivia_cancelling = True
-        self.trivia_helper.reset()
+        self.trivia_helpers[channel].start_cancelling()
         await self.send_message(channel, "Time has run out for the trivia.")
-        self.trivia_cancelling = False
+        self.trivia_helpers[channel].finish_cancelling()
 
     @command_manager.command("slap")
     async def slap(self, ctx):

@@ -138,15 +138,9 @@ class HTTPHandler:
     def __init__(self, twitch_client_id, twitch_client_secret):
         self.twitch_client_id = twitch_client_id
         self.twitch_client_secret = twitch_client_secret
-        self._access_token, self.expire_time = self.get_access_token()
-        self.expire_time += perf_counter()
+        self.access_token = None
+        self.expire_time = None
         self.user_id_cache = {}
-
-    @property
-    def access_token(self):
-        if self.expire_time <= perf_counter():
-            self._access_token, self.expire_time = self.get_access_token()
-        return self._access_token
 
     @property
     def twitch_auth_header(self):
@@ -154,6 +148,9 @@ class HTTPHandler:
             "Authorization": f"Bearer {self.access_token}",
             "Client-Id": self.twitch_client_id,
         }
+
+    def set_access_token(self, access_token):
+        self.access_token = access_token
 
     def get_access_token(self):
         params = {
@@ -168,7 +165,8 @@ class HTTPHandler:
             print(f"Failed to retrieve access token: {e}")
             return ""
         resp = resp.json()
-        return resp['access_token'], resp['expires_in']
+        self.access_token, self.expire_time = resp['access_token'], resp['expires_in']
+        self.expire_time += perf_counter()
 
     def get(self, path, headers=None, return_on_fail=None, **kwargs):
         headers = {
@@ -189,7 +187,10 @@ class HTTPHandler:
     def get_user_id(self, username):
         if username in self.user_id_cache:
             return self.user_id_cache[username]
-        user_id = self.get(Path.get_user_id(), params={"login": username}, return_on_fail={"data": [{"id": None}]})["data"][0]["id"]
+        data = self.get(Path.get_user_id(), params={"login": username}, return_on_fail={"data": [{"id": None}]})["data"]
+        if not data:
+            return
+        user_id = int(data[0]["id"])
         if user_id is not None:
             self.user_id_cache[username] = user_id
         else:
@@ -202,6 +203,8 @@ class EmoteRequester:
         self.http = HTTPHandler(twitch_client_id, twitch_client_secret)
 
     def get_channel_emotes(self, channel):
+        if channel is None: return [], [], []
+        if type(channel) == str: channel = self.http.get_user_id(channel)
         return self.get_7tv_channel_emotes(channel), \
                self.get_bttv_channel_emotes(channel), \
                self.get_ffz_channel_emotes(channel)
@@ -212,19 +215,28 @@ class EmoteRequester:
                self.get_ffz_global_emotes()
 
     def get_7tv_channel_emotes(self, channel):
+        if channel is None: return []
+        if type(channel) == str: channel = self.http.get_user_id(channel)
+        if channel is None: return []
         return list(map(SevenTVEmote, self.http.get(Path.get_7tv_channel_emotes(channel), return_on_fail=[])))
 
     def get_7tv_global_emotes(self):
         return list(map(SevenTVEmote, self.http.get(Path.get_7tv_global_emotes(), return_on_fail=[])))
 
     def get_bttv_channel_emotes(self, channel):
-        return list(map(BetterTVEmote, self.http.get(Path.get_bttv_channel_emotes(self.http.get_user_id(channel)), return_on_fail={"channelEmotes": []})["channelEmotes"]))
+        if channel is None: return []
+        if type(channel) == str: channel = self.http.get_user_id(channel)
+        if channel is None: return []
+        return list(map(BetterTVEmote, self.http.get(Path.get_bttv_channel_emotes(channel), return_on_fail={"channelEmotes": []})["channelEmotes"]))
 
     def get_bttv_global_emotes(self):
         return list(map(BetterTVEmote, self.http.get(Path.get_bttv_global_emotes(), return_on_fail=[])))
 
     def get_ffz_channel_emotes(self, channel):
-        return list(map(FrankerFaceZEmote, self.http.get(Path.get_ffz_channel_emotes(self.http.get_user_id(channel)), return_on_fail=[])))
+        if channel is None: return []
+        if type(channel) == str: channel = self.http.get_user_id(channel)
+        if channel is None: return []
+        return list(map(FrankerFaceZEmote, self.http.get(Path.get_ffz_channel_emotes(channel), return_on_fail=[])))
 
     def get_ffz_global_emotes(self):
         return list(map(FrankerFaceZEmote, self.http.get(Path.get_ffz_global_emotes(), return_on_fail=[])))
@@ -233,7 +245,8 @@ class EmoteRequester:
 # Testing
 if __name__ == "__main__":
     emote_requester = EmoteRequester(os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET"))
+    emote_requester.http.get_access_token()
     emotes = emote_requester.get_channel_emotes("btmc")
-    print(emotes[0][0])
-    print(emotes[1][0])
-    print(emotes[2][0])
+    print(emotes[0])
+    print(emotes[1])
+    print(emotes[2])
