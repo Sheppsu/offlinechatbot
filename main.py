@@ -1292,6 +1292,14 @@ class Bot:
         while len(self.recent_score_cache) > 50:
             del self.recent_score_cache[ctx.channel][list(self.recent_score_cache[ctx.channel].keys())[0]]
 
+    async def get_beatmap_from_arg(self, ctx, beatmap_link):
+        beatmap_id = tuple(filter(lambda s: len(s.strip()) > 0, beatmap_link.split("/")))[-1]
+        beatmap = await self.make_osu_request(self.osu_client.get_beatmap(beatmap_id))
+        if beatmap is None:
+            return await self.send_message(ctx.channel, "Failed to get beatmap from the provided link/id.")
+        beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap_id))
+        return beatmap, beatmap_attributes
+
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
         args = ctx.get_args('ascii')
@@ -1406,12 +1414,23 @@ class Bot:
 
     @command_manager.command("map", aliases=["m"])
     async def send_map(self, ctx):
-        if len(self.recent_score_cache[ctx.channel]) == 0:
+        args = ctx.get_args('ascii')
+        if len(args) > 0:
+            result = await self.get_beatmap_from_arg(ctx, args[0])
+            if result is None:
+                return
+            beatmap, beatmap_attributes = result
+        elif len(self.recent_score_cache[ctx.channel]) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
+        else:
+            beatmap, beatmap_attributes = self.get_map_cache(ctx)
 
-        cache = self.get_map_cache(ctx)
-        if cache is None: return
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://osu.ppy.sh/b/{cache[0].id}")
+        if beatmap is None or beatmap_attributes is None: return
+
+        text = f"{beatmap.beatmapset.artist} - {beatmap.beatmapset.title} [{beatmap.version}] " \
+               f"({beatmap.beatmapset.creator}, {round(beatmap_attributes.star_rating, 2)}*) https://osu.ppy.sh/b/{beatmap.id}"
+        sent_message = await self.send_message(ctx.channel, f"@{ctx.user.display_name} {text}")
+        self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
     @command_manager.command("osu", cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
@@ -1585,12 +1604,10 @@ class Bot:
 
         if len(args) < 1:
             return await self.send_message(ctx.channel, "Must give a beatmap link or beatmap id.")
-        beatmap_link = args[0]
-        beatmap_id = tuple(filter(lambda s: len(s.strip()) > 0, beatmap_link.split("/")))[-1]
-        beatmap = await self.make_osu_request(self.osu_client.get_beatmap(beatmap_id))
-        if beatmap is None:
-            return await self.send_message(ctx.channel, "Failed to get beatmap from the provided link/id.")
-        beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap_id))
+        result = await self.get_beatmap_from_arg(ctx, args[0])
+        if result is None:
+            return
+        beatmap, beatmap_attributes = result
 
         i = ctx.message.index(args[0])
         ctx.message = (ctx.message[:i] + ctx.message[i+len(args[0])+1:]).strip()
