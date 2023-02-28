@@ -174,6 +174,11 @@ class Bot:
             return 0.3
         return 1.5
 
+    def send_message_in_progress(self):
+        for task in asyncio.all_tasks(self.loop):
+            if id(task.get_coro().cr_code) == id(self.send_message.__code__):
+                return True
+        return False
     # File save/load
 
     def load_top_players(self):
@@ -305,7 +310,15 @@ class Bot:
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other threads to run
 
-                    # Check is channels are live
+                    # code for some problem that I'm not sure exists, but maybe does?
+                    # It doesn't currently work correctly anyways, but I'm just gonna keep
+                    # it here in case I need it later.
+                    # for channel, lock in self.message_locks.items():
+                    #     if lock.locked():
+                    #         if not self.send_message_in_progress():
+                    #             lock.release()
+
+                    # Check if channels are live
                     if perf_counter() - last_check >= 20:
                         for channel in self.cm.channels.values():
                             if not channel.offlineonly:
@@ -322,7 +335,7 @@ class Bot:
                     if perf_counter() - last_ping >= 60*60:
                         self.database.ping()
 
-                    if perf_counter() - last_update >= 60:
+                    if perf_counter() - last_update >= 60*60:
                         import get_popular_anime  # Update popular anime json file
                         self.load_anime()
 
@@ -1042,16 +1055,17 @@ class Bot:
             return False
         winner = winner.user
         if winner not in self.userdata:
-            self.add_new_user(winner)
+            return self.send_message(channel, f"@{winner} Well this is a bit awkward... You aren't yet added to the database and"
+                                              "due to a something I'm too lazy to fix, I cannot create a user from this part in the code...")
         money = self.bomb_party_helper.winning_money
         self.userdata[winner]['money'] += money
         self.save_money(winner)
-        self.close_bomb_party()
+        self.close_bomb_party(False)
         await self.send_message(channel, f"@{winner} Congratulations on winning the bomb party game! You've won {money} Becky Bucks!")
         return True
 
-    def close_bomb_party(self):
-        if not self.bomb_party_future.done():
+    def close_bomb_party(self, cancel=True):
+        if cancel and not self.bomb_party_future.done():
             self.bomb_party_future.cancel()
         self.bomb_party_future = None
         self.bomb_party_helper.on_close()
