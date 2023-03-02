@@ -1035,17 +1035,18 @@ class Bot:
         self.bomb_party_future = self.set_timed_event(self.bomb_party_helper.seconds_left, self.bomb_party_timer, channel)
 
     async def on_bomb_party(self, ctx):
+        word = ctx.message.lower()
         if ctx.user.username != self.bomb_party_helper.current_player.user:
             return
-        if ctx.message not in self.all_words:
+        if word not in self.all_words:
             return
-        return_msg = self.bomb_party_helper.check_message(ctx.message)
+        return_msg = self.bomb_party_helper.check_message(word)
         if return_msg is not None:
             return await self.send_message(ctx.channel, f"@{self.bomb_party_helper.current_player} {return_msg}")
         if self.exploding:
             return
         self.bomb_party_future.cancel()
-        self.bomb_party_helper.on_word_used(ctx.message)
+        self.bomb_party_helper.on_word_used(word)
         await self.next_player(ctx.channel)
 
     async def check_win(self, channel):
