@@ -46,16 +46,17 @@ def get_userid_from_username(access_token, username):
         print(f"Could not find userid for {username}")
 
 
-access_token = get_twitch_access_token()
 channel = sys.argv[1]
+access_token = get_twitch_access_token()
+inclusion = int(sys.argv[2])
+offlineonly = int(sys.argv[3])
+commands = sys.argv[4].replace("'", "\"")
+print(commands)
+
 channel_id = get_userid_from_username(access_token, channel)
 if channel_id is None:
     print("Could not resolve channel name to channel id")
     quit()
-inclusion = int(sys.argv[2])
-offlineonly = int(sys.argv[3])
-commands = sys.argv[4]
-print(commands)
 
 
 from sql import Database
