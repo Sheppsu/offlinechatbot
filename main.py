@@ -1685,6 +1685,12 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Offline Chat Tournament "
                                              "(osu! tournament for offline chat) discord: https://discord.gg/tuE84PX9mx")
 
+    @command_manager.command("refresh_emotes", cooldown=Cooldown(60, 0))
+    async def refresh_emotes(self, ctx):
+        self.emotes[ctx.channel] = sum(self.emote_requester.get_channel_emotes(channel), [])
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Emotes have been refreshed "
+                                             f"(this command has a 1 minute cooldown).")
+
 
 bot = Bot(command_manager)
 bot.running = True
