@@ -2,6 +2,7 @@ import json
 import random
 import requests
 import html
+import math
 from time import perf_counter
 from enum import IntEnum, IntFlag
 from collections import namedtuple
@@ -199,6 +200,40 @@ class ScrambleHintType(IntEnum):
     EVERY_OTHER = 1
 
 
+class ScrambleRewardType(IntEnum):
+    LINEAR = 0
+    LOGARITHM = 1
+
+
+class ScrambleRewardCalculator:
+    @classmethod
+    def calculate(cls, reward_type, answer, hint, multiplier=1):
+        if reward_type == ScrambleRewardType.LINEAR:
+            return cls.linear(answer, hint, multiplier)
+        return cls.logarithm(answer, hint, multiplier)
+
+    @staticmethod
+    def get_difficulty(answer, hint):
+        answer = answer.replace(" ", "")
+        return len(answer) * hint.count("?") / len(answer)
+
+    @classmethod
+    def linear(cls, answer, hint, multiplier=1):
+        return round(
+            random.randint(5, 10) *
+            cls.get_difficulty(answer, hint) *
+            multiplier
+        )
+
+    @classmethod
+    def logarithm(cls, answer, hint, multiplier=1):
+        return round(
+            random.randint(10, 15) *
+            math.log2(cls.get_difficulty(answer, hint)) *
+            multiplier
+        )
+
+
 class Scramble:
     banned_words = [
         # Was originally used to stop this word from being posted for scramble,
@@ -206,11 +241,13 @@ class Scramble:
         "kike"
     ]
 
-    def __init__(self, name, answer_generator, difficulty_multiplier=1, hint_type=ScrambleHintType.DEFAULT, case_sensitive=False):
+    def __init__(self, name, answer_generator, difficulty_multiplier=1, hint_type=ScrambleHintType.DEFAULT,
+                 case_sensitive=False, reward_type=ScrambleRewardType.LINEAR):
         self.name = name
         self.difficulty_multiplier = difficulty_multiplier
         self.hint_type = hint_type
         self.case_sensitive = case_sensitive
+        self.reward_type = reward_type
 
         self.progress = {}
 
@@ -304,12 +341,7 @@ class ScrambleManager:
         answer = scramble.progress[channel]["answer"]
         hint = scramble.progress[channel]["hint"]
         if (guess.lower() == answer.lower().strip() and not scramble.case_sensitive) or guess == answer.strip():
-            return round(
-                random.randint(5, 10) *
-                len(answer.replace(" ", "")) *
-                hint.count("?")/len(answer) *
-                scramble.difficulty_multiplier
-            )
+            return ScrambleRewardCalculator.calculate(scramble.reward_type, answer, hint, scramble.difficulty_multiplier)
 
     def reset(self, identifier, channel, cancel=True):
         self.scrambles[identifier].reset(channel, cancel)
