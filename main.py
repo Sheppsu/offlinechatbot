@@ -152,6 +152,8 @@ class Bot:
             int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), "http://127.0.0.1:8080")
         self.osu_lock = asyncio.Lock()
 
+        self.message_buffer = []
+
     # Util
 
     def set_timed_event(self, wait, callback, *args, **kwargs):
@@ -449,6 +451,13 @@ class Bot:
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or \
                 ctx.user.username == self.username:
             return
+
+        if ctx.channel == "btmc":
+            self.message_buffer.append(ctx)
+            if len(self.message_buffer) > 10:
+                self.message_buffer.pop(0)
+                if ctx.user_id == 148930825:
+                    self.database.save_messages(ctx, self.message_buffer)
 
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
             ctx.message = ctx.message[8:]

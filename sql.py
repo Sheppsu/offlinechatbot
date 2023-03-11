@@ -164,6 +164,12 @@ class Database:
                             f"VALUES ({name!r}, {user_id}, {channel_inclusion}, {offlineonly}, {commands!r})")
         self.database.commit()
 
+    def save_messages(self, ctx, buffer):
+        context = "\n".join(map(lambda ctx: f"{ctx.user.display_name}: {ctx.message}", buffer))
+        self.cursor.execute("INSERT INTO messages (userid, username, message, context) "
+                            f"VALUES ({ctx.user_id}, {ctx.user.display_name!r}, {ctx.message!r}, {context!r})")
+        self.database.commit()
+
     @property
     def current_time(self):
         return datetime.now().isoformat()
