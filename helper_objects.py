@@ -83,6 +83,8 @@ class BombParty:
     def remove_player(self, user):
         if user in self.party:
             del self.party[user]
+            if self.started:
+                self.turn_order.remove(user)
 
     def on_in_progress(self):
         self.in_progress = True
