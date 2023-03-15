@@ -82,10 +82,7 @@ class BombParty:
 
     def remove_player(self, user):
         if user in self.party:
-            if self.started:
-                self.party[user].lives = 0
-            else:
-                del self.party[user]
+            del self.party[user]
 
     def on_in_progress(self):
         self.in_progress = True
@@ -180,7 +177,7 @@ class BombParty:
 
     @property
     def winning_money(self):
-        return len(self.party) * 100
+        return (len(self.party)-1) * 100
 
     @property
     def seconds_left(self):
