@@ -452,12 +452,12 @@ class Bot:
                 ctx.user.username == self.username:
             return
 
-        if ctx.channel == "btmc":
+        if ctx.channel == "btmc" and not ctx.message.startswith("!"):
             self.message_buffer.append(ctx)
-            if len(self.message_buffer) > 10:
+            if len(self.message_buffer) > 11:
                 self.message_buffer.pop(0)
                 if ctx.user_id == 148930825:
-                    self.database.save_messages(ctx, self.message_buffer)
+                    self.database.save_messages(ctx, self.message_buffer[:10])
 
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
             ctx.message = ctx.message[8:]
