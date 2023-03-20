@@ -159,6 +159,11 @@ class BombParty:
         if len(message) == len(self.current_letters):
             return "You cannot answer with the string of letters itself."
 
+    def get_overall_multiplier(self):
+        defaults = self.default_settings
+        difficulties = self.valid_bomb_settings["difficulty"]
+        return difficulties.index(defaults["difficulty"])/difficulties.index(self.bomb_settings["difficulty"])
+
     @property
     def current_player(self):
         if len(self.turn_order) == 0:
@@ -206,29 +211,24 @@ class ScrambleRewardType(IntEnum):
 
 class ScrambleRewardCalculator:
     @classmethod
-    def calculate(cls, reward_type, answer, hint, multiplier=1):
+    def calculate(cls, reward_type, hint, multiplier=1):
         if reward_type == ScrambleRewardType.LINEAR:
-            return cls.linear(answer, hint, multiplier)
-        return cls.logarithm(answer, hint, multiplier)
-
-    @staticmethod
-    def get_difficulty(answer, hint):
-        answer = answer.replace(" ", "")
-        return len(answer) * hint.count("?") / len(answer)
+            return cls.linear(hint, multiplier)
+        return cls.logarithm(hint, multiplier)
 
     @classmethod
-    def linear(cls, answer, hint, multiplier=1):
+    def linear(cls, hint, multiplier=1):
         return round(
             random.randint(5, 10) *
-            cls.get_difficulty(answer, hint) *
+            hint.count("?") *
             multiplier
         )
 
     @classmethod
-    def logarithm(cls, answer, hint, multiplier=1):
+    def logarithm(cls, hint, multiplier=1):
         return round(
             random.randint(10, 15) *
-            math.log2(cls.get_difficulty(answer, hint)) *
+            math.log2(hint.count("?") ) *
             multiplier
         )
 
@@ -297,9 +297,13 @@ class Scramble:
             self.default_hint(channel)
 
     def get_scrambled(self, channel):
-        chars = list(self.progress[channel]["answer"])
-        random.shuffle(chars)
-        return "".join(chars)
+        answer = self.progress[channel]["answer"]
+        spaces = answer.count(" ")
+        answer = list(answer.replace(" ", ""))
+        random.shuffle(answer)
+        for _ in range(spaces):
+            answer.insert(random.randint(1, len(answer)-2), " ")
+        return "".join(answer)
 
     @property
     def default_progress(self):
@@ -340,7 +344,7 @@ class ScrambleManager:
         answer = scramble.progress[channel]["answer"]
         hint = scramble.progress[channel]["hint"]
         if (guess.lower() == answer.lower().strip() and not scramble.case_sensitive) or guess == answer.strip():
-            return ScrambleRewardCalculator.calculate(scramble.reward_type, answer, hint, scramble.difficulty_multiplier)
+            return ScrambleRewardCalculator.calculate(scramble.reward_type, hint, scramble.difficulty_multiplier)
 
     def reset(self, identifier, channel, cancel=True):
         self.scrambles[identifier].reset(channel, cancel)
