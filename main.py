@@ -115,7 +115,7 @@ class Bot:
             "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
             "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.7,
                               ScrambleHintType.EVERY_OTHER, True, ScrambleRewardType.LOGARITHM),
-            "anime": Scramble("anime", lambda: random.choice(self.anime[:200]), 1.1),
+            "anime": Scramble("anime", lambda: random.choice(self.anime[:250]), 1.1),
             "al": Scramble("azurlane ship", lambda: random.choice(self.azur_lane), 0.9),
         }
         self.scramble_manager = ScrambleManager(self.scrambles)
