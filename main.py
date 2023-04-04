@@ -313,14 +313,6 @@ class Bot:
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other threads to run
 
-                    # code for some problem that I'm not sure exists, but maybe does?
-                    # It doesn't currently work correctly anyways, but I'm just gonna keep
-                    # it here in case I need it later.
-                    # for channel, lock in self.message_locks.items():
-                    #     if lock.locked():
-                    #         if not self.send_message_in_progress():
-                    #             lock.release()
-
                     # Check if channels are live
                     if perf_counter() - last_check >= 20:
                         for channel in self.cm.channels.values():
@@ -451,13 +443,6 @@ class Bot:
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or \
                 ctx.user.username == self.username:
             return
-
-        if ctx.channel == "btmc" and not ctx.message.startswith("!"):
-            self.message_buffer.append(ctx)
-            if len(self.message_buffer) > 11:
-                self.message_buffer.pop(0)
-                if ctx.user_id == 148930825:
-                    self.database.save_messages(ctx, self.message_buffer[:10])
 
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
             ctx.message = ctx.message[8:]
