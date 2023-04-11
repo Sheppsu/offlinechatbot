@@ -486,7 +486,6 @@ class Bot:
         if user not in self.pity:
             self.pity.update({user: {4: 0, 5: 0}})
             self.database.new_pity(user, 0, 0)
-
         pity = False
         self.pity[user][4] += 1
         self.pity[user][5] += 1
@@ -499,7 +498,7 @@ class Bot:
         else:
             num = random.randint(1, 1000)
             pull = 3
-            if num <= 6:
+            if num <= max(300 - 20 * (self.pity[user][5] - 76), 6):
                 pull = 5
             elif num <= 57:
                 pull = 4
