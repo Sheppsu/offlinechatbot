@@ -498,7 +498,7 @@ class Bot:
         else:
             num = random.randint(1, 1000)
             pull = 3
-            if num <= 300 - 20 * (self.pity[user][5] - 76) if self.pity[user][5] >= 76 else 6:
+            if num <= (300 - 20 * (self.pity[user][5] - 76) if self.pity[user][5] >= 76 else 6):
                 pull = 5
             elif num <= 57:
                 pull = 4
