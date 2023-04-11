@@ -486,17 +486,9 @@ class Bot:
         if user not in self.pity:
             self.pity.update({user: {4: 0, 5: 0}})
             self.database.new_pity(user, 0, 0)
-
-        chance5 = 6 #set pity to 0.6% when not soft pity
         pity = False
         self.pity[user][4] += 1
         self.pity[user][5] += 1
-
-        if self.pity[user][5]>75:
-            if self.pity[user][5] == 76:
-                chance5 = 300 #setting chance to 30% at 76th pull
-            else:
-                chance5 -= 20 #decrementing chance by 2% per pull after 76
         if self.pity[user][4] == 10 and self.pity[user][5] != 90:
             pull = 4
             pity = True
@@ -506,7 +498,7 @@ class Bot:
         else:
             num = random.randint(1, 1000)
             pull = 3
-            if num <= chance5:
+            if num <= max(300 - 20 * (self.pity[user][5] - 76), 6):
                 pull = 5
             elif num <= 57:
                 pull = 4
