@@ -148,8 +148,11 @@ class Bot:
                     continue
                 self.tz_abbreviations[abbr].append(name)
 
-        self.osu_client = AsynchronousClient.from_client_credentials(
-            int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), "http://127.0.0.1:8080")
+        self.osu_client = AsynchronousClient.from_osu_credentials(
+            os.getenv("OSU_USERNAME"), os.getenv("OSU_PASSWORD"),
+            request_wait_time=0, limit_per_minute=1200
+        )
+        self.osu_client.http.use_lazer = False
         self.osu_lock = asyncio.Lock()
 
         self.message_buffer = []
