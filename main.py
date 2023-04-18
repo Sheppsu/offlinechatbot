@@ -1264,6 +1264,27 @@ class Bot:
             "time_ago": format_date(score.created_at)
         })
 
+    def get_compact_scores_message(self, scores):
+        score_format = "{artist} - {title} [{diff}]{mods} {acc}% ({genki_counts}): {pp}pp | {time_ago} ago"
+        message = ""
+        for score in scores:
+            message += "🌟" + score_format.format(**{
+                "artist": score.beatmapset.artist,
+                "title": score.beatmapset.title,
+                "diff": score.beatmap.version,
+                "mods": " +" + score.mods.to_readable_string() if score.mods else "",
+                "acc": round(score.accuracy * 100, 2),
+                "genki_counts": f"%d/%d/%d/%d" % (
+                    score.statistics.count_300,
+                    score.statistics.count_100,
+                    score.statistics.count_50,
+                    score.statistics.count_miss
+                ),
+                "pp": 0 if score.pp is None else round(score.pp, 2),
+                "time_ago": format_date(score.created_at),
+            })
+        return message
+
     async def get_osu_user_id_from_args(self, ctx, args):
         user = await self.process_osu_user_arg(ctx, args)
         if user is None:
@@ -1351,9 +1372,6 @@ class Bot:
 
     @command_manager.command("c", aliases=['compare'], cooldown=Cooldown(0, 3))
     async def compare_score(self, ctx):
-        # So that the functionality can be used with osu_score
-        # without triggering the decorator attached to a command function.
-        print("aaa")
         if not len(self.recent_score_cache[ctx.channel]):
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
         cache = self.get_map_cache(ctx)
@@ -1513,29 +1531,25 @@ class Bot:
         if recent_tops:
             top_scores = sorted(top_scores, key=lambda x: x.created_at, reverse=True)
         top_scores = top_scores[:5] if index == -1 else [top_scores[index]]
+        username = top_scores[0].user.username
 
-        score_format = "{artist} - {title} [{diff}]{mods} {acc}% ({genki_counts}): {pp}pp | {time_ago} ago"
-        message = f"Top{' recent' if recent_tops else ''} {proper_mode_name[mode]} " \
-                  f"scores for {username}: " if index == -1 else f"Top {index+1}{' recent' if recent_tops else ''} " \
-                                                                 f"{proper_mode_name[mode]} score for {username}: "
-        for score in top_scores:
-            message += "🌟" + score_format.format(**{
-                "artist": score.beatmapset.artist,
-                "title": score.beatmapset.title,
-                "diff": score.beatmap.version,
-                "mods": " +"+score.mods.to_readable_string() if score.mods else "",
-                "acc": round(score.accuracy * 100, 2),
-                "genki_counts": f"%d/%d/%d/%d" % (
-                    score.statistics.count_300,
-                    score.statistics.count_100,
-                    score.statistics.count_50,
-                    score.statistics.count_miss
-                ),
-                "pp": 0 if score.pp is None else round(score.pp, 2),
-                "time_ago": format_date(score.created_at),
-            })
+        beatmap = None
+        beatmap_attributes = None
+        if len(top_scores) > 1:
+            message = f"Top{' recent' if recent_tops else ''} {proper_mode_name[mode]} " \
+                      f"scores for {username}: " if index == -1 else f"Top {index+1}{' recent' if recent_tops else ''} " \
+                                                                     f"{proper_mode_name[mode]} score for {username}: "
+            message += self.get_compact_scores_message(top_scores)
+        else:
+            score = top_scores[0]
+            beatmap = await self.make_osu_request(self.osu_client.get_beatmap(score.beatmap.id))
+            beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap.id, score.mods, score.mode))
+            message = self.get_score_message(score, beatmap, beatmap_attributes,
+                                             prefix=f"Top {index+1} score for {username}")
 
-        await self.send_message(ctx.channel, message)
+        sent_message = await self.send_message(ctx.channel, message)
+        if beatmap_attributes is not None:
+            self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
     @command_manager.command("link", cooldown=Cooldown(0, 2))
     async def link_osu_account(self, ctx):
