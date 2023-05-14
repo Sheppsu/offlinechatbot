@@ -298,11 +298,12 @@ class Scramble:
 
     def get_scrambled(self, channel):
         answer = self.progress[channel]["answer"]
-        spaces = answer.count(" ")
+        nspaces = answer.count(" ")
         answer = list(answer.replace(" ", ""))
         random.shuffle(answer)
-        for _ in range(spaces):
-            answer.insert(random.randint(1, len(answer)-2), " ")
+        for _ in range(nspaces):
+            while answer[(i := random.randint(1, len(answer)-2))] != " " and answer[i-1] != " ":
+                answer.insert(i, " ")
         return "".join(answer)
 
     @property
