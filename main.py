@@ -332,12 +332,13 @@ class Bot:
 
                     # Ping database once an hour for keepalive
                     if perf_counter() - last_ping >= 60*60:
+                        last_ping = perf_counter()
                         self.database.ping()
 
                     if perf_counter() - last_update >= 60*60:
+                        last_update = perf_counter()
                         import get_popular_anime  # Update popular anime json file
                         self.load_anime()
-                        last_update = perf_counter()
 
                     # Check if poll is no longer running, in which case, the bot is no longer running.
                     if poll.done():
