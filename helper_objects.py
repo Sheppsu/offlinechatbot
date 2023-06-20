@@ -587,7 +587,6 @@ class TriviaHelper:
         self.future = None
         self.difficulty = None
         self.answer = None
-        self.cancelling = False
 
     def generate_question(self, category=None):
         self.answer = "temp"
@@ -640,17 +639,12 @@ class TriviaHelper:
                 message += " No one guessed correctly."
             return message, -loss
 
-    def start_cancelling(self):
-        self.cancelling = True
-        self.reset()
-
-    def finish_cancelling(self):
-        self.cancelling = False
-
-    def reset(self):
+    def reset(self, cancel=True):
         self.answer = None
         self.difficulty = None
         self.guessed_answers = []
+        if cancel:
+            self.future.cancel()
 
     @property
     def is_in_progress(self):

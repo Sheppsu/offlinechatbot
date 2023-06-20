@@ -576,16 +576,13 @@ class Bot:
         if result is None:
             return
         message, amount = result
-        if not self.trivia_helpers[ctx.channel].answer is None:
-            self.trivia_helpers[ctx.channel].future.cancel()
         await self.send_message(ctx.channel, message)
         self.userdata[ctx.user.username]["money"] += amount
         self.save_money(ctx.user.username)
 
     async def on_trivia_finish(self, channel):
-        self.trivia_helpers[channel].start_cancelling()
+        self.trivia_helpers[channel].reset(cancel=False)
         await self.send_message(channel, "Time has run out for the trivia.")
-        self.trivia_helpers[channel].finish_cancelling()
 
     @command_manager.command("slap")
     async def slap(self, ctx):
