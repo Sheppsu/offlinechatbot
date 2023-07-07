@@ -249,7 +249,6 @@ class Bot:
         self.load_top_players()
         self.load_top_maps()
         self.load_words()
-        self.load_facts()
         self.load_all_words()
         self.load_genshin()
         self.load_anime()
