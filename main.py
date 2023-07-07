@@ -89,7 +89,6 @@ class Bot:
         self.top_players = []
         self.top_maps = []
         self.word_list = []
-        self.facts = []
         self.pull_options = {}
         self.afk = {}
         self.all_words = []
@@ -199,10 +198,6 @@ class Bot:
     def load_words(self):
         with open("data/words.json", "r") as f:
             self.word_list = json.load(f)
-
-    def load_facts(self):
-        with open("data/facts.json", "r") as f:
-            self.facts = json.load(f)
 
     def load_all_words(self):
         with open("data/all_words.json", "r") as f:
@@ -871,10 +866,6 @@ class Bot:
                                              f"multiplier for that specific scramble. To see the difficulty multipliers, "
                                              f"do !scramble_multiplier. Hint reduction is the length of the word minus the "
                                              f"amount of hints used divided by the length of the word.")
-
-    @command_manager.command("cumfact", aliases=["cum_fact"])
-    async def fact(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} {random.choice(self.facts)}")
 
     @command_manager.command("afk")
     async def afk(self, ctx):
