@@ -1616,7 +1616,10 @@ class Bot:
             pp = self.calculate_pp(score, beatmap, beatmap_difficulty, False)
             pp_values.append(f"{int(acc*100)}% - {round(pp, 2)}")
 
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} {mods.to_readable_string() if mods is not None else 'NM'}: {' | '.join(pp_values)}")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} {beatmap.beatmapset.artist} - "
+                                             f"{beatmap.beatmapset.title} [{beatmap.version}] "
+                                             f"{mods.to_readable_string() if mods is not None else 'NM'}: "
+                                             f"{' | '.join(pp_values)}")
 
     @command_manager.command("score", aliases=["sc"])
     async def osu_score(self, ctx):
