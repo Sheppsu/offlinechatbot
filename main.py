@@ -1446,6 +1446,8 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
         else:
             beatmap, beatmap_attributes = self.get_map_cache(ctx)
+            # TODO: make less scuffed lole
+            beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap.id, ruleset=beatmap.mode))
 
         if beatmap is None or beatmap_attributes is None: return
 
