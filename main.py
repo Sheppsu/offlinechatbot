@@ -1164,6 +1164,8 @@ class Bot:
         if arg is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify an index with the -i argument. "
                                                         f"Specify a number between {rng[0]} and {rng[-1]}")
+        if arg.lower() == "random":
+            return random.choice(rng)-1
         if type(arg) != int and (not arg.isdigit() or int(arg) not in rng):
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify a number between "
                                                         f"{rng[0]} and {rng[-1]} for the -i argument.")
