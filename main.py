@@ -440,7 +440,7 @@ class Bot:
         self.trivia_helpers[ctx.channel] = TriviaHelper()
         
         if ctx.channel.lower() == "btmc":
-            await create_periodic_message(ctx.channel, "Offline chat osu! tournament starts on the 22nd PogU "
+            await self.create_periodic_message(ctx.channel, "Offline chat osu! tournament starts on the 22nd PogU "
                                                        "You can register now on the site https://oct.sheppsu.me", 
                                           3*60*60, 60*60)
 
