@@ -440,7 +440,7 @@ class Bot:
         self.trivia_helpers[ctx.channel] = TriviaHelper()
         
         if ctx.channel.lower() == "btmc":
-            await self.create_periodic_message(ctx.channel, "Offline chat osu! tournament starts on the 22nd PogU "
+            await self.create_periodic_message(ctx.channel, "Offline chat osu! tournament starts on the 28th PogU "
                                                        "You can register now on the site https://oct.sheppsu.me", 
                                           3*60*60, 60*60)
 
@@ -1696,7 +1696,7 @@ class Bot:
     @command_manager.command("oct")
     async def offlinechattournament(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Offline Chat Tournament "
-                                             "(osu! tournament for offline chat) discord: https://discord.gg/tuE84PX9mx")
+                                             "(osu! tournament for offline chat) https://oct.sheppsu.me")
 
     @command_manager.command("refresh_emotes", cooldown=Cooldown(60, 0))
     async def refresh_emotes(self, ctx):
