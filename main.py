@@ -20,7 +20,7 @@ from context import *
 from util import *
 from constants import *
 from client import Bot as CommunicationClient
-from osu import AsynchronousClient, GameModeStr, Mods, GameModeInt, SoloScore, LegacyScore
+from osu import AsynchronousClient, GameModeStr, Mods, GameModeInt, SoloScore, LegacyScore, ScoreDataStatistics
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
@@ -1190,29 +1190,47 @@ class Bot:
 
     @staticmethod
     def get_hit_data(statistics, ruleset_id):
-        if ruleset_id == GameModeInt.STANDARD.value:
-            hit_string = "%d/%d/%d/%d" % (hits := (
-                statistics.great or 0,
-                statistics.ok or 0,
-                statistics.meh or 0,
-                statistics.miss or 0
-            ))
+        if isinstance(statistics, ScoreDataStatistics):
+            if ruleset_id == GameModeInt.STANDARD.value:
+                hit_string = "%d/%d/%d/%d" % (hits := (
+                    statistics.great or 0,
+                    statistics.ok or 0,
+                    statistics.meh or 0,
+                    statistics.miss or 0
+                ))
+            else:
+                hit_string = "%d/%d/%d/%d/%d/%d" % (hits := (
+                    statistics.perfect or 0,
+                    statistics.great or 0,
+                    statistics.good or 0,
+                    statistics.ok or 0,
+                    statistics.meh or 0,
+                    statistics.miss or 0
+                ))
         else:
-            hit_string = "%d/%d/%d/%d/%d/%d" % (hits := (
-                statistics.perfect or 0,
-                statistics.great or 0,
-                statistics.good or 0,
-                statistics.ok or 0,
-                statistics.meh or 0,
-                statistics.miss or 0
-            ))
+            if ruleset_id == GameModeInt.STANDARD.value:
+                hit_string = "%d/%d/%d/%d" % (hits := (
+                    statistics.count_300,
+                    statistics.count_100,
+                    statistics.count_50,
+                    statistics.count_miss
+                ))
+            else:
+                hit_string = "%d/%d/%d/%d/%d/%d" % (hits := (
+                    statistics.count_geki,
+                    statistics.count_300,
+                    statistics.count_katu,
+                    statistics.count_100,
+                    statistics.count_50,
+                    statistics.count_miss
+                ))
         return hit_string, sum(hits)
 
     def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
         score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
         # Format and send message for recent score
-        hit_string, total_hits = self.get_hit_data(score.statistics, score.ruleset_id)
+        hit_string, total_hits = self.get_hit_data(score.statistics, self.parse_score_mode_int(score))
         total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
         if score.pp is None and score.passed and score.ruleset_id == GameModeInt.STANDARD.value and beatmap_attributes.type is not None:
             score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
