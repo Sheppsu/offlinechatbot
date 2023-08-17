@@ -817,7 +817,6 @@ class Bot:
     async def afk(self, ctx):
         args = ctx.get_args()
         message = " ".join(args)
-        self.afk[ctx.user.username] = {"message": message, "time": datetime.now(pytz.UTC).isoformat()}
         self.database.save_afk(ctx.user.username, message)
         self.afks.append(ctx.sending_user)
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your afk has been set.")
@@ -854,15 +853,15 @@ class Bot:
             return
         afk = self.database.get_afk(user.username)
         if (datetime.now(tz=tz.utc) - afk.time.replace(tzinfo=tz.utc)).seconds > 60:
-            await self.remove_user_afk(ctx)
+            await self.remove_user_afk(ctx, afk)
 
-    async def remove_user_afk(self, ctx):
+    async def remove_user_afk(self, ctx, afk):
         self.afks.remove(ctx.sending_user)
         self.database.delete_afk(ctx.user.username)
         await self.send_message(
             ctx.channel,
             f"@{ctx.user.display_name} Your afk has been removed. "
-            f"(Afk for {format_date(datetime.fromisoformat(self.afk[ctx.user.username]['time']))}.)"
+            f"(Afk for {format_date(afk.time)}.)"
         )
 
     async def trivia_category(self, ctx):
