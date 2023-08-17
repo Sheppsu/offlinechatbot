@@ -120,7 +120,7 @@ class Database:
 
     def insert_user_and_do(self, ctx, line):
         cursor = self.get_cursor()
-        cursor.execute(f"INSERT IGNORE INTO userdata (username, userid) VALUES ({ctx.sending_user}, {ctx.user_id}); "+line)
+        cursor.execute(f"INSERT IGNORE INTO userdata (username, userid) VALUES ({ctx.sending_user!r}, {ctx.user_id}); "+line)
         self.database.commit()
         return cursor
 
@@ -133,7 +133,7 @@ class Database:
     def get_balance(self, ctx, username=None):
         if username is not None:
             cursor = self.get_cursor()
-            cursor.execute(f"SELECT money FROM userdata WHERE username = {username}")
+            cursor.execute(f"SELECT money FROM userdata WHERE username = {username!r}")
         else:
             cursor = self.insert_user_and_do(ctx, f"SELECT money FROM userdata WHERE userid = {ctx.user_id}")
         return cursor.fetchone()[0]
