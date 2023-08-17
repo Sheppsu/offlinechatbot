@@ -118,10 +118,11 @@ class Database:
 
     # user data
 
-    def insert_user_and_do(self, ctx, line):
+    def insert_user_and_do(self, ctx, line, commit=True):
         cursor = self.get_cursor()
         cursor.execute(f"INSERT IGNORE INTO userdata (username, userid) VALUES ({ctx.sending_user!r}, {ctx.user_id}); "+line)
-        self.database.commit()
+        if commit:
+            self.database.commit()
         return cursor
 
     def update_userdata(self, ctx, column, value):
@@ -135,7 +136,7 @@ class Database:
             cursor = self.get_cursor()
             cursor.execute(f"SELECT money FROM userdata WHERE username = {username!r}")
         else:
-            cursor = self.insert_user_and_do(ctx, f"SELECT money FROM userdata WHERE userid = {ctx.user_id}")
+            cursor = self.insert_user_and_do(ctx, f"SELECT money FROM userdata WHERE userid = {ctx.user_id}", commit=False)
         return cursor.fetchone()[0]
 
     def delete_user(self, user_id):
@@ -161,7 +162,7 @@ class Database:
         return User(*user) if user else None
 
     def get_current_user(self, ctx):
-        cursor = self.insert_user_and_do(ctx, f"SELECT * FROM userdata WHERE userid = {ctx.user_id}")
+        cursor = self.insert_user_and_do(ctx, f"SELECT * FROM userdata WHERE userid = {ctx.user_id}", commit=False)
         return User(*cursor.fetchone())
 
     def get_and_delete_old_user(self, username):
