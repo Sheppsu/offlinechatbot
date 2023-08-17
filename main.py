@@ -10,23 +10,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import websockets
-import requests
-import html
 import os
 import sys
 from get_top_players import Client
-from sql import Database
+from sql import Database, USER_SETTINGS
 from emotes import EmoteRequester
 from helper_objects import *
 from context import *
 from util import *
 from constants import *
 from client import Bot as CommunicationClient
-from osu import AsynchronousClient, GameModeStr, Score, Mods
+from osu import AsynchronousClient, GameModeStr, Mods, GameModeInt
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
 from aiohttp import client_exceptions
+from datetime import datetime, timezone as tz
 
 
 TESTING = "--test" in sys.argv
@@ -83,20 +82,18 @@ class Bot:
         self.message_send_cd = 1.5
         self.message_locks = {}
 
-        # Save/load data from files or to/from database
-        self.pity = {}
-        self.userdata = {}
+        # Data from files
         self.top_players = []
         self.top_maps = []
         self.word_list = []
         self.pull_options = {}
-        self.afk = {}
         self.all_words = []
         self.anime = []
-        self.osu_data = {}
-        self.user_id_cache = {}
-        self.timezones = {}
         self.azur_lane = []
+
+        # cache data
+        self.afks = []
+        self.osu_user_id_cache = {}
 
         # Load save data
         self.load_data()
@@ -185,6 +182,11 @@ class Bot:
             if id(task.get_coro().cr_code) == id(self.send_message.__code__):
                 return True
         return False
+
+    @staticmethod
+    def get_partial_ctx(username, user_id):
+        return namedtuple("PartialMessageContext", ("sending_user", "user_id"))(username, user_id)
+
     # File save/load
 
     def load_top_players(self):
@@ -210,21 +212,6 @@ class Bot:
     def load_azur_lane(self):
         with open("data/azur_lane.json", "r") as f:
             self.azur_lane = json.load(f)
-
-    def load_db_data(self):
-        self.pity = self.database.get_pity()
-        self.userdata = self.database.get_userdata()
-        self.afk = self.database.get_afk()
-        self.osu_data = self.database.get_osu_data()
-        self.user_id_cache = {}
-        for data in self.osu_data.values():
-            self.user_id_cache[data["username"]] = data["user_id"]
-        self.timezones = self.database.get_timezones()
-
-    def reload_db_data(self):
-        self.database.close()
-        self.database.create_connection()
-        self.load_db_data()
 
     async def reload_channels(self):
         if TESTING:
@@ -253,10 +240,7 @@ class Bot:
         self.load_genshin()
         self.load_anime()
         self.load_azur_lane()
-        self.load_db_data()
-
-    def save_money(self, user):
-        self.database.update_userdata(user, 'money', round(self.userdata[user]['money']))
+        self.afks = list(self.database.get_afks())
 
     # Api request stuff
     # TODO: consider moving api stuff to its own class
@@ -483,22 +467,22 @@ class Bot:
     async def pull(self, ctx):
         # TODO: Try and make this look more clean
         user = ctx.user.username
-        if user not in self.pity:
-            self.pity.update({user: {4: 0, 5: 0}})
+        pity = self.database.get_user_pity(user)
+        if pity is None:
+            pity = (0, 0)
             self.database.new_pity(user, 0, 0)
-        pity = False
-        self.pity[user][4] += 1
-        self.pity[user][5] += 1
-        if self.pity[user][4] == 10 and self.pity[user][5] != 90:
+        hit_pity = False
+        pity = (pity[0]+1, pity[1]+1)
+        if pity[0] == 10 and pity[1] != 90:
             pull = 4
-            pity = True
-        elif self.pity[user][5] == 90:
+            hit_pity = True
+        elif pity[1] == 90:
             pull = 5
-            pity = True
+            hit_pity = True
         else:
             num = random.randint(1, 1000)
             pull = 3
-            if num <= (300 - 20 * (self.pity[user][5] - 76) if self.pity[user][5] >= 76 else 6):
+            if num <= (300 - 20 * (pity[1] - 76) if pity[1] >= 76 else 6):
                 pull = 5
             elif num <= 57:
                 pull = 4
@@ -507,14 +491,13 @@ class Bot:
                                 ("\u2B50\u2B50\u2B50" if pull == 3 else '🌟' * pull) +
                                 {3: ". 😔", 4: "! Pog", 5: "! PogYou"}[pull] +
                                 ((" Rolls in: " + str(
-                                    self.pity[user][pull] if not pity else {4: 10, 5: 90}[pull])) if pull != 3 else "")
+                                   pity[pull-4] if hit_pity else {4: 10, 5: 90}[pull])) if pull != 3 else "")
                                 )
         if pull == 5:
-            self.pity[user][5] = 0
-            self.pity[user][4] = 0
+            pity = (0, 0)
         elif pull == 4:
-            self.pity[user][4] = 0
-        self.database.save_pity(user, self.pity[user][4], self.pity[user][5])
+            pity = (0, pity[1])
+        self.database.save_pity(user, pity[0], pity[1])
 
     @command_manager.command("font")
     async def font(self, ctx):
@@ -564,15 +547,13 @@ class Bot:
 
         self.trivia_helpers[ctx.channel].future = self.set_timed_event(20, self.on_trivia_finish, ctx.channel)
 
-    @requires_gamba_data
     async def on_answer(self, ctx, answer):
         result = self.trivia_helpers[ctx.channel].check_guess(ctx, answer)
         if result is None:
             return
         message, amount = result
         await self.send_message(ctx.channel, message)
-        self.userdata[ctx.user.username]["money"] += amount
-        self.save_money(ctx.user.username)
+        self.database.add_money(ctx.user_id, amount)
 
     async def on_trivia_finish(self, channel):
         self.trivia_helpers[channel].reset(cancel=False)
@@ -590,10 +571,11 @@ class Bot:
 
     @command_manager.command("pity")
     async def pity(self, ctx):
-        if ctx.user.username not in self.pity:
+        pity = self.database.get_user_pity(ctx.sending_user)
+        if pity is None:
             return await self.send_message(ctx.channel, "You haven't rolled yet (from the time the bot started up).")
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} 4* pity in {10 - self.pity[ctx.user.username][4]} rolls; "
-                                             f"5* pity in {90 - self.pity[ctx.user.username][5]} rolls.")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} 4* pity in {10 - pity[0]} rolls; "
+                                             f"5* pity in {90 - pity[1]} rolls.")
 
     @command_manager.command("scramble", fargs=["word"])
     @command_manager.command("scramble_osu", fargs=["osu"])
@@ -630,10 +612,7 @@ class Bot:
                                 f"{name}. "
                                 f"{'Drake ' if 'Drake' in emotes else ''}"
                                 f"You've won {money} Becky Bucks!")
-        if ctx.user.username not in self.userdata:
-            self.add_new_user(ctx.user.username, ctx.user_id)
-        self.userdata[ctx.user.username]["money"] += money
-        self.save_money(ctx.user.username)
+        self.database.add_money(ctx, money)
 
     @command_manager.command("hint", fargs=["word"])
     @command_manager.command("hint_osu", fargs=["osu"])
@@ -658,165 +637,122 @@ class Bot:
         self.scramble_manager.reset(scramble_type, channel, cancel=False)
         await self.send_message(channel, f"Time is up! The {name} was {answer}")
 
-    def add_new_user(self, user, user_id):
-        self.userdata.update({user.username: {
-            'money': 0,
-            'settings': {
-                'receive': True,
-                "autoafk": True,
-            },
-            'userid': user_id,
-        }})
-        self.database.new_user(user.username, user_id)
-
-    # @command_manager.command("collect")
-    @requires_gamba_data
-    async def collect(self, ctx):
-        money = random.randint(10, 100)
-        self.userdata[ctx.user.username]["money"] += money
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} You collected {money} Becky Bucks!")
-        self.save_money(ctx.user.username)
-
-    # @command_manager.command("gamba")
-    @requires_gamba_data
-    async def gamba(self, ctx):
-        args = ctx.get_args()
-        if not args:
-            return await self.send_message(ctx.channel,
-                                           f"@{ctx.user.display_name} You must provide an amount to bet and a risk factor. Do !riskfactor to learn more")
-        if len(args) < 2:
-            return await self.send_message(ctx.channel,
-                                           f"@{ctx.user.display_name} You must also provide a risk factor. Do !riskfactor to learn more.")
-
-        if args[0].lower() == "all":
-            args[0] = self.userdata[ctx.user.username]['money']
-        try:
-            amount = float(args[0])
-            risk_factor = int(args[1])
-        except ValueError:
-            return await self.send_message(ctx.channel,
-                                           f"@{ctx.user.display_name} You must provide a valid number (integer for risk factor) value.")
-        if risk_factor not in range(1, 100):
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} The risk factor you provided is outside the range 1-99!")
-        if amount > self.userdata[ctx.user.username]["money"]:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You don't have enough Becky Bucks to bet that much!")
-        if amount == 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You can't bet nothing bruh")
-        if amount < 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a positive integer bruh")
-
-        loss = random.randint(1, 100) in range(risk_factor)
-        if loss:
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} YIKES! You lost {amount} Becky Bucks ❌ [LOSE]")
-            self.userdata[ctx.user.username]["money"] -= amount
-        else:
-            payout = round((1 + risk_factor * 0.01) * amount - amount, 2)
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} You gained {payout} Becky Bucks! ✅ [WIN]")
-            self.userdata[ctx.user.username]["money"] += payout
-        self.userdata[ctx.user.username]["money"] = round(self.userdata[ctx.user.username]["money"], 2)
-        self.save_money(ctx.user.username)
-
-    @command_manager.command("riskfactor")
-    async def risk_factor(self, ctx):
-        await self.send_message(ctx.channel,
-                                f"@{ctx.user.display_name} The risk factor determines your chances of losing the bet and your payout. "
-                                f"The chance of you winning the bet is 100 minus the risk factor. "
-                                f"Your payout is (1 + riskfactor*0.01)) * amount bet "
-                                f"(basically says more risk = better payout)")
-
     @command_manager.command("bal", Cooldown(2, 10), aliases=["balance"])
-    @requires_gamba_data
     async def balance(self, ctx):
         args = ctx.get_args()
-        user_to_check = ctx.user.username
-        if args:
-            user_to_check = args[0].replace("@", "").lower()
-        if user_to_check not in self.userdata:
-            user_to_check = ctx.user.username
-        await self.send_message(ctx.channel, f"{user_to_check} currently has {round(self.userdata[user_to_check]['money'])} Becky Bucks.")
+        user_to_check = args[0].replace("@", "").lower() if args else None
+        await self.send_message(
+            ctx.channel,
+            f"{user_to_check} currently has {self.database.get_balance(ctx, user_to_check)} Becky Bucks."
+        )
 
     @command_manager.command("leaderboard", aliases=["lb"])
     async def leaderboard(self, ctx):
-        lead = {k: v for k, v in sorted(self.userdata.items(), key=lambda item: item[1]['money'])}
-        top_users = list(lead.keys())[-5:]
-        top_money = list(lead.values())[-5:]
+        top_users = self.database.get_top_users()
         output = "Top 5 richest users: "
         for i in range(5):
-            output += f'{i + 1}. {top_users[4 - i]}_${round(top_money[4 - i]["money"], 2)} '
+            output += f'{i + 1}. {top_users[4 - i][0]}_${round(top_users[4 - i][1])} '
         await self.send_message(ctx.channel, output)
 
     @command_manager.command("ranking")
-    @requires_gamba_data
     async def get_ranking(self, ctx):
-        lead = {k: v for k, v in sorted(self.userdata.items(), key=lambda item: item[1]['money'])}
-        users = list(lead.keys())
-        users.reverse()
-        rank = users.index(ctx.user.username) + 1
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are currently rank {rank} in terms of Becky Bucks!")
+        rank = self.database.get_user_ranking(ctx)
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are currently rank "
+                                             f"{rank} in terms of Becky Bucks!")
 
     @command_manager.command("sheepp_filter", aliases=["sheep_filter"])
     async def filter(self, ctx):
-        await self.send_message(ctx.channel,
-                                "Here's a filter that applies to me and any user that uses my commands: https://pastebin.com/nyBX5jbb")
+        await self.send_message(
+            ctx.channel,
+            "Here's a filter that applies to me and any user that uses my commands: https://pastebin.com/nyBX5jbb"
+        )
 
     @command_manager.command("give")
-    @requires_gamba_data
     async def give(self, ctx):
         args = ctx.get_args()
+        if len(args) < 2:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Must say the user and amount of money to give"
+            )
         user_to_give = args[0].lower()
-        if user_to_give not in self.userdata:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid user to give money to.")
-        if not self.userdata[user_to_give]['settings']['receive']:
-            return await self.send_message(ctx.channel,
-                                           f"@{ctx.user.display_name} This user has their receive setting turned off and therefore cannot accept money.")
+        user = self.database.get_user_from_username(user_to_give)
+        if user is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} That user does not exist in the database"
+            )
+        if not user.receive:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} This user has their receive setting "
+                "turned off and therefore cannot accept money."
+            )
         amount = args[1]
         try:
-            amount = round(float(amount), 2)
+            amount = round(int(amount), 2)
         except ValueError:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid number.")
-        if self.userdata[ctx.user.username]['money'] < amount:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You don't have that much money to give.")
 
         if amount < 0:
             return await self.send_message(ctx.channel, "You can't give someone a negative amount OuttaPocket Tssk")
 
-        self.userdata[ctx.user.username]['money'] -= amount
-        self.userdata[user_to_give]['money'] += amount
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} You have given {user_to_give} {amount} Becky Bucks!")
-        self.save_money(ctx.user.username)
-        self.save_money(user_to_give)
+        giving_user = self.database.get_current_user(ctx)
+        if giving_user.money < amount:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} You don't have that much money to give."
+            )
+
+        self.database.add_money(ctx, -amount)
+        self.database.add_money(self.get_partial_ctx(user.username, user.userid), amount)
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} You have given {user.username} {amount} Becky Bucks!"
+        )
 
     @command_manager.command("toggle")
-    @requires_gamba_data
     async def toggle(self, ctx):
         args = ctx.get_args()
         if len(args) < 2:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You must provide a setting name and either on or off")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} You must provide a setting name and either on or off"
+            )
         setting = args[0].lower()
-        if setting not in self.userdata[ctx.user.username]['settings']:
-            return await self.send_message(ctx.channel,
-                                           f"@{ctx.user.display_name} That's not a valid setting name. The settings consist of the following: " + ", ".join(
-                                               list(self.userdata[ctx.user.username]['settings'].keys())))
+        if setting not in USER_SETTINGS:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} That's not a valid setting name. "
+                f"The settings consist of the following: " +
+                ", ".join(USER_SETTINGS)
+            )
         try:
             value = {"on": True, "off": False}[args[1].lower()]
         except KeyError:
             return await self.send_message(ctx.channel, "You must specify on or off.")
 
-        self.userdata[ctx.user.username]['settings'][setting] = value
-        self.database.update_userdata(ctx.user.username, setting, value)
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} The {setting} setting has been turned {args[1]}.")
+        self.database.update_userdata(ctx, setting, value)
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} The {setting} setting has been turned {args[1]}."
+        )
 
     @command_manager.command("rps", Cooldown(2, 4))
-    @requires_gamba_data
     async def rps(self, ctx):
         args = ctx.get_args()
         if not args:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You must say either rock, paper, or scissors. "
-                                                        f"(You can also use the first letter for short)")
+            return await self.send_message(
+                ctx.channel, f"@{ctx.user.display_name} You must say either rock, paper, or scissors. "
+                             f"(You can also use the first letter for short)"
+            )
         choice = args[0][0].lower()
         if choice not in ('r', 'p', 's'):
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid move. You must say either rock, paper, or scissors. "
-                                                        f"(You can also use the first letter for short)")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} That's not a valid move. You must say either rock, paper, or scissors. "
+                f"(You can also use the first letter for short)"
+            )
 
         com_choice = random.choice(('r', 'p', 's'))
         win = {"r": "s", "s": "p", "p": "r"}
@@ -824,29 +760,40 @@ class Bot:
         if com_choice == choice:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I also chose {abbr[com_choice]}! bruh")
         if win[com_choice] == choice:
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. You lose 10 Becky Bucks!")
-            self.userdata[ctx.user.username]['money'] -= 10
-            return self.save_money(ctx.user.username)
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. You win 10 Becky Bucks!")
-        self.userdata[ctx.user.username]['money'] += 10
-        self.save_money(ctx.user.username)
+            self.database.add_money(ctx, -10)
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} LETSGO I won, {abbr[com_choice]} beats {abbr[choice]}. "
+                "You lose 10 Becky Bucks!"
+            )
+        self.database.add_money(ctx, 10)
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} IMDONEMAN I lost, {abbr[choice]} beats {abbr[com_choice]}. "
+            "You win 10 Becky Bucks!"
+        )
         
     @command_manager.command("new_name", permission=CommandPermission.ADMIN)
     async def new_name(self, ctx):
-        # TODO: save to db
         args = ctx.get_args()
+        if len(args) < 2:
+            return await self.send_message(ctx.channel, "Must provide an old and new username")
         old_name = args[0]
         new_name = args[1]
-        if old_name not in self.userdata or new_name not in self.userdata:
-            return await self.send_message(ctx.channel, "One of the provided names is not valid.")
-        self.userdata[old_name]['money'] += self.userdata[new_name]['money']
-        self.userdata[new_name] = dict(self.userdata[old_name])
-        del self.userdata[old_name]
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} The data has been updated for the new name!")
-        self.database.delete_user(old_name)
-        self.save_money(new_name)
-        for setting, val in self.userdata[new_name]["settings"].items():
-            self.database.update_userdata(new_name, setting, val)
+        user = self.database.get_user_from_username(new_name)
+        if user is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} New name (second argument) is not valid"
+            )
+        money = self.database.get_and_delete_old_user(old_name)
+        if money is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Old name (first argument) is not valid"
+            )
+        self.database.add_money(self.get_partial_ctx(user.username, user.userid), money)
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your becky bucks have been transferred!")
 
     @command_manager.command("scramble_multipliers", aliases=["scramblemultipliers", "scramble_multiplier", "scramblemultiplier"])
     async def scramble_difficulties(self, ctx):
@@ -869,43 +816,54 @@ class Bot:
     @command_manager.command("afk")
     async def afk(self, ctx):
         args = ctx.get_args()
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your afk has been set.")
         message = " ".join(args)
         self.afk[ctx.user.username] = {"message": message, "time": datetime.now(pytz.UTC).isoformat()}
         self.database.save_afk(ctx.user.username, message)
+        self.afks.append(ctx.sending_user)
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your afk has been set.")
 
     @command_manager.command("removeafk", aliases=["rafk", "afkremove", "afkr", "unafk"])
-    @requires_gamba_data
     async def afk_remove(self, ctx):
-        if self.userdata[ctx.user.username]["settings"]["autoafk"]:
-            return
+        if ctx.sending_user not in self.afks:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are not afk")
         await self.remove_user_afk(ctx)
 
     @command_manager.command("help", aliases=["sheepp_commands", "sheep_commands", "sheepcommands",
                                               "sheeppcommands", "sheephelp", "sheepphelp",
                                               "sheep_help", "sheep_help"])
     async def help_command(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://bot.sheppsu.me/")
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://bot.sheppsu.me/"
+        )
 
-    @requires_gamba_data
     async def on_afk(self, ctx):
         pings = set([word.replace("@", "").replace(",", "").replace(".", "").replace("-", "") for word in ctx.message.lower().split() if word.startswith("@")])
         for ping in pings:
-            if ping in self.afk:
-                await self.send_message(ctx.channel,  f"@{ctx.user.display_name} {ping} is afk "
-                                                      f"({format_date(datetime.fromisoformat(self.afk[ping]['time']))} ago): "
-                                                      f"{self.afk[ping]['message']}")
+            if ping in self.afks:
+                afk = self.database.get_afk(ping)
+                await self.send_message(
+                    ctx.channel,
+                    f"@{ctx.user.display_name} {ping} is afk ({format_date(afk.time)} ago): {afk.message}"
+                )
 
-        if ctx.user.username not in self.afk or not self.userdata[ctx.user.username]["settings"]["autoafk"]:
+        if ctx.sending_user not in self.afks:
             return
-        elif (datetime.now(tz=pytz.UTC) - datetime.fromisoformat(self.afk[ctx.user.username]['time']).replace(tzinfo=pytz.UTC)).seconds > 60:
+        user = self.database.get_current_user(ctx)
+        if not user.autoafk:
+            return
+        afk = self.database.get_afk(user.username)
+        if (datetime.now(tz=tz.utc) - afk.time.replace(tzinfo=tz.utc)).seconds > 60:
             await self.remove_user_afk(ctx)
 
     async def remove_user_afk(self, ctx):
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your afk has been removed. "
-                                             f"(Afk for {format_date(datetime.fromisoformat(self.afk[ctx.user.username]['time']))}.)")
-        del self.afk[ctx.user.username]
+        self.afks.remove(ctx.sending_user)
         self.database.delete_afk(ctx.user.username)
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} Your afk has been removed. "
+            f"(Afk for {format_date(datetime.fromisoformat(self.afk[ctx.user.username]['time']))}.)"
+        )
 
     async def trivia_category(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} I'll make something more intuitive later but for now, "
@@ -1038,16 +996,16 @@ class Bot:
 
     async def check_win(self, channel):
         winner = self.bomb_party_helper.get_winner()
-        print(winner)
         if winner is None:
             return False
         winner = winner.user
-        if winner not in self.userdata:
-            return self.send_message(channel, f"@{winner} Well this is a bit awkward... You aren't yet added to the database and"
-                                              "due to a something I'm too lazy to fix, I cannot create a user from this part in the code...")
         money = self.bomb_party_helper.winning_money
-        self.userdata[winner]['money'] += money
-        self.save_money(winner)
+        user = self.database.get_user_from_username(winner)
+        # yep you're reading this right
+        # if you don't already exist in the database you get no becky bucks!
+        # why? I need the user's userid and I'm too lazy to fix that problem rn
+        if user is not None:
+            self.database.add_money(self.get_partial_ctx(user.username, user.userid), money)
         self.close_bomb_party(False)
         await self.send_message(channel, f"@{winner} Congratulations on winning the bomb party game! You've won {money} Becky Bucks!")
         return True
@@ -1063,11 +1021,6 @@ class Bot:
         fact = requests.get("https://uselessfacts.jsph.pl/random.json?language=en")
         fact.raise_for_status()
         await self.send_message(ctx.channel, f"Fun fact: {fact.json()['text']}")
-
-    @command_manager.command("reload_db", permission=CommandPermission.ADMIN)
-    async def reload_from_db(self, ctx):
-        self.reload_db_data()
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Local data has been reloaded from database.")
 
     @command_manager.command("anime_compare", aliases=["animecompare", "ac"], cooldown=Cooldown(0, 5),
                              banned=["osuwho"])
@@ -1105,8 +1058,10 @@ class Bot:
 
     @command_manager.command("average_ac", aliases=["acaverage", "ac_avg", "ac_average", "acavg"])
     async def average_anime_compare(self, ctx):
-        games = self.database.get_user_animecompare_games(ctx.user.username)
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your average score is {round(sum([game['score'] for game in games])/len(games), 2)}.")
+        avg_score = self.database.get_ac_user_average(ctx.sending_user)
+        if avg_score is not None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your average score is {avg_score}.")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} You have not played any anime compare games")
 
     @command_manager.command("ac_leaderboard", aliases=["aclb", "ac_lb", "acleaderboard"])
     async def anime_compare_leaderboard(self, ctx):
@@ -1139,13 +1094,16 @@ class Bot:
         return False
 
     async def process_osu_user_arg(self, ctx, args):
-        if len(args) == 0 and ctx.user.username in self.osu_data:  # user did not provide a username, but osu! account is linked
-            return self.osu_data[ctx.user.username]['user_id']
-        elif len(args) == 0 or args[0].strip() == "":  # user did not provide a username and osu! account is not linked
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username or "
-                                                 "link your account with !link [username].")
-        else:  # username was provided
+        if len(args) > 0:
             return " ".join(args).strip()
+        osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
+        if osu_user is not None:
+            self.osu_user_id_cache[osu_user[1]] = osu_user[0]
+            return osu_user[0]
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} Please specify a username or link your account with !link [username]."
+        )
 
     async def process_osu_mode_args(self, ctx, args):
         arg = self.process_value_arg("-m", args, 0)
@@ -1172,27 +1130,28 @@ class Bot:
         return int(arg)-1
 
     async def get_osu_user_id_from_osu_username(self, ctx, username):
-        if username not in self.user_id_cache:
+        if username not in self.osu_user_id_cache:
             user = await self.make_osu_request(self.osu_client.get_user(user=username, key="username"))
             if user is None:
-                return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
-            self.user_id_cache[username] = user.id
-        return self.user_id_cache[username]
+                await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
+                return
+            self.osu_user_id_cache[username] = user.id
+        return self.osu_user_id_cache[username]
 
     @staticmethod
     def get_if_fc(o_score, beatmap, beatmap_attributes):
         score = deepcopy(o_score)
-        if score.mode == GameModeStr.STANDARD:
-            count_300 = score.statistics.count_300
-            count_100 = score.statistics.count_100
-            count_50 = score.statistics.count_50
-            count_miss = score.statistics.count_miss
+        if score.ruleset_id == GameModeInt.STANDARD.value:
+            count_300 = score.statistics.great if score.statistics.great else 0
+            count_100 = score.statistics.ok if score.statistics.ok else 0
+            count_50 = score.statistics.meh if score.statistics.meh else 0
+            count_miss = score.statistics.miss if score.statistics.miss else 0
             total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
             total_hits = count_300 + count_100 + count_50 + count_miss
 
             count_300 += count_miss + total_objects - total_hits
-            score.statistics.count_300 = count_300
-            score.statistics.count_miss, count_miss = 0, 0
+            score.statistics.great = count_300
+            score.statistics.miss, count_miss = 0, 0
             score.max_combo = beatmap_attributes.max_combo
 
             accuracy = (count_300 * 300 + count_100 * 100 + count_50 * 50) / \
@@ -1226,57 +1185,75 @@ class Bot:
             except:
                 traceback.print_exc()
 
+    @staticmethod
+    def get_hit_data(statistics, ruleset_id):
+        if ruleset_id == GameModeInt.STANDARD.value:
+            hit_string = "%d/%d/%d/%d" % (hits := (
+                statistics.great or 0,
+                statistics.ok or 0,
+                statistics.meh or 0,
+                statistics.miss or 0
+            ))
+        else:
+            hit_string = "%d/%d/%d/%d/%d/%d" % (hits := (
+                statistics.perfect or 0,
+                statistics.great or 0,
+                statistics.good or 0,
+                statistics.ok or 0,
+                statistics.meh or 0,
+                statistics.miss or 0
+            ))
+        return hit_string, sum(hits)
+
+
     def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
         score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
         # Format and send message for recent score
-        genkis = (score.statistics.count_300, score.statistics.count_100,
-                  score.statistics.count_50, score.statistics.count_miss) if score.mode == GameModeStr.STANDARD else (
-            score.statistics.count_geki, score.statistics.count_300, score.statistics.count_katu,
-            score.statistics.count_100, score.statistics.count_50, score.statistics.count_miss
-        )
+        hit_string, total_hits = self.get_hit_data(score.statistics, score.ruleset_id)
         total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
-        if score.pp is None and score.passed and score.mode == GameModeStr.STANDARD and beatmap_attributes.type is not None:
+        if score.pp is None and score.passed and score.ruleset_id == GameModeInt.STANDARD.value and beatmap_attributes.type is not None:
             score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
         if_fc_acc, if_fc_pp = None, None
-        if beatmap_attributes.type is not None and score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
+        if beatmap_attributes.type is not None and score.max_combo != beatmap_attributes.max_combo and score.ruleset_id == GameModeInt.STANDARD.value:
             if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
         return score_format.format(**{
             "username": score.user.username,
-            "passed": "" if score.passed else f"(Failed {round(sum(genkis) / total_objects * 100)}%)",
-            "artist": score.beatmapset.artist,
-            "title": score.beatmapset.title,
-            "diff": score.beatmap.version,
-            "mods": " +" + score.mods.to_readable_string() if score.mods else "",
-            "mapper": score.beatmapset.creator,
+            "passed": "" if score.passed else f"(Failed {round(total_hits / total_objects * 100)}%)",
+            "artist": beatmap.beatmapset.artist,
+            "title": beatmap.beatmapset.title,
+            "diff": beatmap.version,
+            "mods": " +" + "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
+            "mapper": beatmap.beatmapset.creator,
             "star_rating": round(beatmap_attributes.star_rating, 2),
             "pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
             "if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)" if if_fc_pp is not None else "",
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
             "max_combo": beatmap_attributes.max_combo,
-            "genki_counts": ("%d/%d/%d/%d" if score.mode == GameModeStr.STANDARD else "%d/%d/%d/%d/%d/%d") % genkis,
-            "time_ago": format_date(score.created_at)
+            "genki_counts": hit_string,
+            "time_ago": format_date(score.ended_at)
         })
 
-    def get_compact_scores_message(self, scores):
+    async def get_compact_scores_message(self, scores):
         score_format = "{artist} - {title} [{diff}]{mods} {acc}% ({genki_counts}): {pp}pp | {time_ago} ago"
         message = ""
-        for score in scores:
+        beatmap_ids = list(map(lambda s: s.beatmap_id, scores))
+        beatmaps = sorted(
+            await self.make_osu_request(self.osu_client.get_beatmaps(beatmap_ids)), key=lambda b: beatmap_ids.index(b.id)
+        )
+        for i, score in enumerate(scores):
+            hit_string, _ = self.get_hit_data(score.statistics, score.ruleset_id)
+            beatmap = beatmaps[i]
             message += "🌟" + score_format.format(**{
-                "artist": score.beatmapset.artist,
-                "title": score.beatmapset.title,
-                "diff": score.beatmap.version,
-                "mods": " +" + score.mods.to_readable_string() if score.mods else "",
+                "artist": beatmap.beatmapset.artist,
+                "title": beatmap.beatmapset.title,
+                "diff": beatmap.version,
+                "mods": " +" + "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
                 "acc": round(score.accuracy * 100, 2),
-                "genki_counts": f"%d/%d/%d/%d" % (
-                    score.statistics.count_300,
-                    score.statistics.count_100,
-                    score.statistics.count_50,
-                    score.statistics.count_miss
-                ),
+                "genki_counts": hit_string,
                 "pp": 0 if score.pp is None else round(score.pp, 2),
-                "time_ago": format_date(score.created_at),
+                "time_ago": format_date(score.ended_at),
             })
         return message
 
@@ -1284,12 +1261,14 @@ class Bot:
         user = await self.process_osu_user_arg(ctx, args)
         if user is None:
             return
-        elif type(user) == str:
+        if type(user) == str:
             return await self.get_osu_user_id_from_osu_username(ctx, user)
         return user
 
     def osu_username_from_id(self, user_id):
-        return dict(map(reversed, self.user_id_cache.items()))[user_id]
+        for username, osu_user_id in self.osu_user_id_cache.items():
+            if osu_user_id == user_id:
+                return username
 
     async def make_osu_request(self, request, use_lazer=False):
         await self.osu_lock.acquire()
@@ -1312,7 +1291,8 @@ class Bot:
 
     def add_recent_map(self, ctx, sent_message, beatmap, attributes):
         msg = " ".join(sent_message)
-        if msg in self.recent_score_cache[ctx.channel]: del self.recent_score_cache[ctx.channel][msg]
+        if msg in self.recent_score_cache[ctx.channel]:
+            del self.recent_score_cache[ctx.channel][msg]
         self.recent_score_cache[ctx.channel].update({msg: (beatmap, attributes)})
         while len(self.recent_score_cache) > 50:
             del self.recent_score_cache[ctx.channel][list(self.recent_score_cache[ctx.channel].keys())[0]]
@@ -1351,7 +1331,7 @@ class Bot:
         else:
             scores = await self.make_osu_request(
                 self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100))
-            scores = sorted(scores, key=lambda x: x.created_at, reverse=True)
+            scores = sorted(scores, key=lambda x: x.ended_at, reverse=True)
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} "
                                                         f"has no recent scores for {proper_mode_name[mode]} "
@@ -1359,9 +1339,9 @@ class Bot:
 
         score = scores[0 if not best else index]
         beatmap = await self.make_osu_request(
-            self.osu_client.get_beatmap(score.beatmap.id))
+            self.osu_client.get_beatmap(score.beatmap_id))
         beatmap_attributes = await self.make_osu_request(
-            self.osu_client.get_beatmap_attributes(beatmap.id, score.mods if score.mods else None, score.mode))
+            self.osu_client.get_beatmap_attributes(beatmap.id, list(map(lambda m: m.mod.value, score.mods)) if score.mods else None, ruleset_id=score.ruleset_id))
         sent_message = await self.send_message(ctx.channel, self.get_score_message(score, beatmap, beatmap_attributes))
         self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
@@ -1409,27 +1389,15 @@ class Bot:
         message = f"Scores for {username} on {beatmap.beatmapset.artist} - {beatmap.beatmapset.title} " \
                   f"[{beatmap.version}] ({beatmap.beatmapset.creator}): "
         for score in scores[:5]:
-            # if score.pp is None and score.passed:
-            #     score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
-            # if_fc_acc, if_fc_pp = None, None
-            # if score.max_combo != beatmap_attributes.max_combo and score.mode == GameModeStr.STANDARD:
-            #     if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
+            hit_string, _ = self.get_hit_data(score.statistics, score.ruleset_id)
             message += "🌟" + score_format.format(**{
-                "mods": score.mods.to_readable_string() if score.mods else "",
+                "mods": "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
                 "acc": round(score.accuracy * 100, 2),
                 "combo": score.max_combo,
                 "max_combo": beatmap_attributes.max_combo,
-                "genki_counts": f"%d/%d/%d/%d" % (
-                    score.statistics.count_300,
-                    score.statistics.count_100,
-                    score.statistics.count_50,
-                    score.statistics.count_miss
-                ),
+                "genki_counts": hit_string,
                 "pp": f"{round(score.pp, 2)}pp" if score.pp else "No pp",
-                #"pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
-                #"if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)"
-                #if if_fc_pp is not None else "",
-                "time_ago": format_date(score.created_at)
+                "time_ago": format_date(score.ended_at)
             })
         sent_message = await self.send_message(ctx.channel, message)
         self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
@@ -1524,9 +1492,12 @@ class Bot:
         top_scores = await self.make_osu_request(
             self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100), use_lazer)
         if not top_scores:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no top scores for {proper_mode_name[mode]}.")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} User {username} has no top scores for {proper_mode_name[mode]}."
+            )
         if recent_tops:
-            top_scores = sorted(top_scores, key=lambda x: x.created_at, reverse=True)
+            top_scores = sorted(top_scores, key=lambda x: x.ended_at, reverse=True)
         top_scores = top_scores[:5] if index == -1 else [top_scores[index]]
         username = top_scores[0].user.username
 
@@ -1536,13 +1507,19 @@ class Bot:
             message = f"Top{' recent' if recent_tops else ''} {proper_mode_name[mode]} " \
                       f"scores for {username}: " if index == -1 else f"Top {index+1}{' recent' if recent_tops else ''} " \
                                                                      f"{proper_mode_name[mode]} score for {username}: "
-            message += self.get_compact_scores_message(top_scores)
+            message += await self.get_compact_scores_message(top_scores)
         else:
             score = top_scores[0]
-            beatmap = await self.make_osu_request(self.osu_client.get_beatmap(score.beatmap.id))
-            beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap.id, score.mods, score.mode))
+            beatmap = await self.make_osu_request(self.osu_client.get_beatmap(score.beatmap_id))
+            beatmap_attributes = await self.make_osu_request(
+                self.osu_client.get_beatmap_attributes(
+                    beatmap.id,
+                    list(map(lambda m: m.mod.value, score.mods)) if score.mods else None,
+                    ruleset_id=score.ruleset_id
+                )
+            )
             message = self.get_score_message(score, beatmap, beatmap_attributes,
-                                             prefix=f"Top {index+1} score for {username}")
+                                             prefix=f"Top {index+1}{' recent' if recent_tops else ''} score for {username}")
 
         sent_message = await self.send_message(ctx.channel, message)
         if beatmap_attributes is not None:
@@ -1561,12 +1538,12 @@ class Bot:
         if user is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
 
-        if ctx.user.username in self.osu_data:
+        osu_id, _ = self.database.get_osu_user_from_username(ctx.sending_user)
+        if osu_id is not None:
             self.database.update_osu_data(ctx.user.username, user.username, user.id)
         else:
             self.database.new_osu_data(ctx.user.username, user.username, user.id)
-        self.osu_data[ctx.user.username] = {"username": user.username, "user_id": user.id}
-        self.user_id_cache[user.username] = user.id
+        self.osu_user_id_cache[user.username] = user.id
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {user.username} to your account.")
 
@@ -1649,23 +1626,25 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a timezone to link.")
 
         tz = args[0].lower().strip()
-        if tz.startswith("gmt"):
-            tz = "Etc/" + tz
-        elif tz.startswith("utc"):
-            tz = "Etc/GMT" + tz[3:]
         lower_timezones = list(map(str.lower, all_timezones))
         if tz not in lower_timezones:
             if tz.upper() in self.tz_abbreviations:
                 tz = self.tz_abbreviations[tz.upper()][0]
             else:
-                return await self.send_message(ctx.channel, f"@{ctx.user.display_name} That's not a valid timezone. Do !validtz if you are having trouble.")
+                return await self.send_message(
+                    ctx.channel,
+                    f"@{ctx.user.display_name} That's not a valid timezone. "
+                    "For setting the tz by UTC or GMT, as an examples: UTC+5 would be Etc/GMT-5. "
+                    "Do !validtz if you are having trouble."
+                )
         else:
             tz = all_timezones[lower_timezones.index(tz)]
-        if ctx.user_id in self.timezones:
+
+        timezone = self.database.get_user_timezone(ctx.user_id)
+        if timezone:
             self.database.update_timezone(ctx.user_id, tz)
         else:
             self.database.add_timezone(ctx.user_id, tz)
-        self.timezones[ctx.user_id] = timezone(tz)
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Timezone has been linked!")
 
@@ -1677,16 +1656,17 @@ class Bot:
         else:
             username = args[0].lower().replace("@", "")
 
-        if username not in self.userdata:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't recognize the user {username}")
-        userid = self.userdata[username]["userid"]
-        if userid not in list(self.timezones.keys()):
+        user = self.database.get_user_from_username(username)
+        if user is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {username} is not in the database")
+        timezone = self.database.get_user_timezone(user.userid)
+        if timezone is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} "
                                                         f"{'This user has' if username != ctx.user.username else 'You have'} "
                                                         f"not linked a timezone, which can be done with !linktz")
 
         return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Time for {username}: "
-                                                    f"{datetime.now().astimezone(self.timezones[userid]).strftime('%H:%M (%Z)')}")
+                                                    f"{datetime.now().astimezone(timezone).strftime('%H:%M (%Z)')}")
 
     @command_manager.command("oct")
     async def offlinechattournament(self, ctx):
@@ -1695,11 +1675,12 @@ class Bot:
 
     @command_manager.command("refresh_emotes", cooldown=Cooldown(60, 0))
     async def refresh_emotes(self, ctx):
-        self.emotes[ctx.channel] = sum(self.emote_requester.get_channel_emotes(channel), [])
+        self.emotes[ctx.channel] = sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Emotes have been refreshed "
                                              f"(this command has a 1 minute cooldown).")
 
 
-bot = Bot(command_manager)
-bot.running = True
-bot.loop.run_until_complete(bot.start())
+if __name__ == "__main__":
+    bot = Bot(command_manager)
+    bot.running = True
+    bot.loop.run_until_complete(bot.start())

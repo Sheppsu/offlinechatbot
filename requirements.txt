@@ -1,6 +1,6 @@
-python-dotenv>=0.20.0
-git+https://github.com/Sheepposu/osu.py@26928bcfaa7a86884f2ab5f68fa68c798ff8e672#egg=osu.py
-websockets>=10.2
-mysql-connector-python>=8.0.29
+python-dotenv==0.20.0
+osu.py==1.0.0
+websockets==11.0.3
+mysql-connector-python==8.0.29
 pytz==2022.1
-git+https://github.com/Sheepposu/osu_diff_calc@fc34b495762703b911434307c9f3472f6a052d8e#egg=osu_diff_calc
+git+https://github.com/Sheepposu/osu_diff_calc@423b06a5e770ce90467ad1d9da0b8e95dc260382#egg=osu_diff_calc
