@@ -817,7 +817,10 @@ class Bot:
     async def afk(self, ctx):
         args = ctx.get_args()
         message = " ".join(args)
-        self.database.save_afk(ctx.user.username, message)
+        if ctx.sending_user in self.afks:
+            self.database.save_afk(ctx.sending_user, message)
+        else:
+            self.database.add_afk(ctx.sending_user, message)
         self.afks.append(ctx.sending_user)
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your afk has been set.")
 
@@ -825,7 +828,8 @@ class Bot:
     async def afk_remove(self, ctx):
         if ctx.sending_user not in self.afks:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are not afk")
-        await self.remove_user_afk(ctx)
+        afk = self.database.get_afk(ctx.sending_user)
+        await self.remove_user_afk(ctx, afk)
 
     @command_manager.command("help", aliases=["sheepp_commands", "sheep_commands", "sheepcommands",
                                               "sheeppcommands", "sheephelp", "sheepphelp",

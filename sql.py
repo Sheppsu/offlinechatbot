@@ -94,7 +94,8 @@ class Database:
     def get_afk(self, username):
         cursor = self.get_cursor()
         cursor.execute(f"SELECT * FROM afk WHERE username = {username!r}")
-        return AFK.from_db_data(cursor.fetchone())
+        afk = cursor.fetchone()
+        return AFK.from_db_data(afk) if afk else None
 
     @property
     def current_time(self):
@@ -118,25 +119,27 @@ class Database:
 
     # user data
 
-    def insert_user_and_do(self, ctx, line, commit=True):
+    def insert_user_and_do(self, ctx, line):
         cursor = self.get_cursor()
-        cursor.execute(f"INSERT IGNORE INTO userdata (username, userid) VALUES ({ctx.sending_user!r}, {ctx.user_id}); "+line)
-        if commit:
-            self.database.commit()
+        cursor.execute(f"INSERT IGNORE INTO userdata (username, userid) VALUES ({ctx.sending_user!r}, {ctx.user_id})")
+        self.database.commit()
+        cursor.execute(line)
         return cursor
 
     def update_userdata(self, ctx, column, value):
         self.insert_user_and_do(ctx, f"UPDATE userdata SET {column} = {value!r} WHERE userid = {ctx.user_id}")
+        self.database.commit()
 
     def add_money(self, ctx, amount):
         self.insert_user_and_do(ctx, f"UPDATE userdata SET money = money + {amount} WHERE userid = {ctx.user_id}")
+        self.database.commit()
 
     def get_balance(self, ctx, username=None):
         if username is not None:
             cursor = self.get_cursor()
             cursor.execute(f"SELECT money FROM userdata WHERE username = {username!r}")
         else:
-            cursor = self.insert_user_and_do(ctx, f"SELECT money FROM userdata WHERE userid = {ctx.user_id}", commit=False)
+            cursor = self.insert_user_and_do(ctx, f"SELECT money FROM userdata WHERE userid = {ctx.user_id}")
         return cursor.fetchone()[0]
 
     def delete_user(self, user_id):
@@ -162,7 +165,7 @@ class Database:
         return User(*user) if user else None
 
     def get_current_user(self, ctx):
-        cursor = self.insert_user_and_do(ctx, f"SELECT * FROM userdata WHERE userid = {ctx.user_id}", commit=False)
+        cursor = self.insert_user_and_do(ctx, f"SELECT * FROM userdata WHERE userid = {ctx.user_id}")
         return User(*cursor.fetchone())
 
     def get_and_delete_old_user(self, username):
