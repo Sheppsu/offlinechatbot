@@ -1208,7 +1208,6 @@ class Bot:
             ))
         return hit_string, sum(hits)
 
-
     def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
         score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
@@ -1308,6 +1307,18 @@ class Bot:
         beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap_id))
         return beatmap, beatmap_attributes
 
+    @staticmethod
+    def parse_score_mods(score):
+        if isinstance(score, SoloScore):
+            return list(map(lambda m: m.mod.value, score.mods)) if score.mods else None
+        return score.mods
+
+    @staticmethod
+    def parse_score_mode_int(score):
+        if isinstance(score, SoloScore):
+            return score.ruleset_id
+        return score.mode_int.value
+
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
         args = ctx.get_args('ascii')
@@ -1347,7 +1358,7 @@ class Bot:
         else:
             beatmap = score.beatmap
         beatmap_attributes = await self.make_osu_request(
-            self.osu_client.get_beatmap_attributes(beatmap.id, list(map(lambda m: m.mod.value, score.mods)) if score.mods else None, ruleset_id=score.ruleset_id))
+            self.osu_client.get_beatmap_attributes(beatmap.id, self.parse_score_mods(score), ruleset_id=self.parse_score_mode_int(score)))
         sent_message = await self.send_message(ctx.channel, self.get_score_message(score, beatmap, beatmap_attributes))
         self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
@@ -1520,8 +1531,8 @@ class Bot:
             beatmap_attributes = await self.make_osu_request(
                 self.osu_client.get_beatmap_attributes(
                     beatmap.id,
-                    list(map(lambda m: m.mod.value, score.mods)) if score.mods else None,
-                    ruleset_id=score.ruleset_id
+                    self.parse_score_mods(score),
+                    ruleset_id=self.parse_score_mode_int(score)
                 )
             )
             message = self.get_score_message(score, beatmap, beatmap_attributes,
