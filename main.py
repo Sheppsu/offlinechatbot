@@ -20,7 +20,7 @@ from context import *
 from util import *
 from constants import *
 from client import Bot as CommunicationClient
-from osu import AsynchronousClient, GameModeStr, Mods, GameModeInt
+from osu import AsynchronousClient, GameModeStr, Mods, GameModeInt, SoloScore, LegacyScore
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
@@ -1341,8 +1341,11 @@ class Bot:
                                                         "or the index you specified is out of range.")
 
         score = scores[0 if not best else index]
-        beatmap = await self.make_osu_request(
-            self.osu_client.get_beatmap(score.beatmap_id))
+        if isinstance(score, SoloScore):
+            beatmap = await self.make_osu_request(
+                self.osu_client.get_beatmap(score.beatmap_id))
+        else:
+            beatmap = score.beatmap
         beatmap_attributes = await self.make_osu_request(
             self.osu_client.get_beatmap_attributes(beatmap.id, list(map(lambda m: m.mod.value, score.mods)) if score.mods else None, ruleset_id=score.ruleset_id))
         sent_message = await self.send_message(ctx.channel, self.get_score_message(score, beatmap, beatmap_attributes))
