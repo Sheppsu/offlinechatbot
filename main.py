@@ -648,7 +648,7 @@ class Bot:
 
     @command_manager.command("leaderboard", aliases=["lb"])
     async def leaderboard(self, ctx):
-        top_users = self.database.get_top_users()
+        top_users = reversed(self.database.get_top_users())
         output = "Top 5 richest users: "
         for i in range(5):
             output += f'{i + 1}. {top_users[4 - i][0]}_${round(top_users[4 - i][1])} '
@@ -1302,6 +1302,8 @@ class Bot:
         return result
 
     def get_map_cache(self, ctx):
+        if len(self.recent_score_cache[ctx.channel]) == 0:
+            return
         if ctx.reply:
             print(ctx.reply.msg_body)
             if ctx.reply.msg_body in self.recent_score_cache[ctx.channel]:
@@ -1648,6 +1650,20 @@ class Bot:
         ctx.message = (ctx.message[:i] + ctx.message[i+len(args[0])+1:]).strip()
 
         await self.compare_score_func(ctx, False, (beatmap, beatmap_attributes))
+        
+    @command_manager.command("send_map", aliases=["sm"])
+    async def send_osu_map(self, ctx):
+        beatmap = self.get_map_cache(ctx)
+        if beatmap is None: return
+        osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
+        if osu_user is None:
+            return await self.send_message("You must have your osu account linked to use this command (use !link)")
+        
+        beatmap = beatmap[0]
+        bms = beatmap.beatmapset
+        bms_title = f"{bms.artist} - {bms.title} [{beatmap.version}] mapped by {bms.creator}"
+        await self.make_osu_request(self.osu_client.create_new_pm(22427012, f"[{bms_title}](https://osu.ppy.sh/b/{beatmap.id})", False))
+        await self.send_message(ctx.channel, "Sent the beatmap to your osu DMs!")
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):
