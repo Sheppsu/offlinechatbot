@@ -1710,14 +1710,14 @@ class Bot:
         user = self.database.get_user_from_username(username)
         if user is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {username} is not in the database")
-        timezone = self.database.get_user_timezone(user.userid)
-        if timezone is None:
+        tz = self.database.get_user_timezone(user.userid)
+        if tz is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} "
                                                         f"{'This user has' if username != ctx.user.username else 'You have'} "
                                                         f"not linked a timezone, which can be done with !linktz")
-
+        tz = timezone(tz)
         return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Time for {username}: "
-                                                    f"{datetime.now().astimezone(timezone).strftime('%H:%M (%Z)')}")
+                                                    f"{datetime.now().astimezone(tz).strftime('%H:%M (%Z)')}")
 
     @command_manager.command("oct")
     async def offlinechattournament(self, ctx):
