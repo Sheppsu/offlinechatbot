@@ -1657,12 +1657,12 @@ class Bot:
         if beatmap is None: return
         osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
         if osu_user is None:
-            return await self.send_message("You must have your osu account linked to use this command (use !link)")
+            return await self.send_message(ctx.channel, "You must have your osu account linked to use this command (use !link)")
         
         beatmap = beatmap[0]
         bms = beatmap.beatmapset
         bms_title = f"{bms.artist} - {bms.title} [{beatmap.version}] mapped by {bms.creator}"
-        await self.make_osu_request(self.osu_client.create_new_pm(22427012, f"[{bms_title}](https://osu.ppy.sh/b/{beatmap.id})", False))
+        await self.make_osu_request(self.osu_client.create_new_pm(osu_user[0], f"[{bms_title}](https://osu.ppy.sh/b/{beatmap.id})", False))
         await self.send_message(ctx.channel, "Sent the beatmap to your osu DMs!")
 
     @command_manager.command("validtz")
