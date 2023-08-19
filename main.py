@@ -1487,17 +1487,18 @@ class Bot:
         stats = user.statistics
 
         total_medals = 280
-        profile_layout = "{username}'s profile [{mode}]: #{global_rank} ({country}#{country_rank}) - {pp}pp; Peak (last 90 days): #{peak_rank} | " \
+        profile_layout = "{username}'s profile [{mode}]: #{global_rank} ({country}#{country_rank}) - {pp}pp; Peak: #{peak_rank} {peak_time_ago} ago | " \
                          "{accuracy}% | {play_count} playcount ({play_time} hrs) | Medal count: {medal_count}/{total_medals} ({medal_completion}%) | " \
                          "Followers: {follower_count} | Mapping subs: {subscriber_count}"
         await self.send_message(ctx.channel, profile_layout.format(**{
             "username": user.username,
             "mode": proper_mode_name[mode],
             "global_rank": stats.global_rank,
-            "country": user.country["code"],
+            "country": user.country.code,
             "country_rank": stats.country_rank,
             "pp": stats.pp,
-            "peak_rank": min(user.rank_history["data"]),
+            "peak_rank": user.rank_highest.rank,
+            "peak_time_ago": format_date(user.rank_highest.updated_at),
             "accuracy": round(stats.hit_accuracy, 2),
             "play_count": stats.play_count,
             "play_time": stats.play_time//3600,
