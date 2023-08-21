@@ -1576,8 +1576,8 @@ class Bot:
         if user is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
 
-        osu_id, _ = self.database.get_osu_user_from_username(ctx.sending_user)
-        if osu_id is not None:
+        osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
+        if osu_user is not None:
             self.database.update_osu_data(ctx.user.username, user.username, user.id)
         else:
             self.database.new_osu_data(ctx.user.username, user.username, user.id)
