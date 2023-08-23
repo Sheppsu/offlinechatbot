@@ -1239,7 +1239,7 @@ class Bot:
             if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
         return score_format.format(**{
             "username": score.user.username,
-            "passed": "" if score.passed else f"(Failed {round(total_hits / total_objects * 100)}%)",
+            "passed": "" if score.passed else f" (Failed {round(total_hits / total_objects * 100)}%)",
             "artist": beatmap.beatmapset.artist,
             "title": beatmap.beatmapset.title,
             "diff": beatmap.version,
@@ -1663,7 +1663,7 @@ class Bot:
         beatmap = beatmap[0]
         bms = beatmap.beatmapset
         bms_title = f"{bms.artist} - {bms.title} [{beatmap.version}] mapped by {bms.creator}"
-        await self.make_osu_request(self.osu_client.create_new_pm(osu_user[0], f"[{bms_title}](https://osu.ppy.sh/b/{beatmap.id})", False))
+        await self.make_osu_request(self.osu_client.create_new_pm(osu_user[0], f"(Automated bot message) [{bms_title}](https://osu.ppy.sh/b/{beatmap.id})", False))
         await self.send_message(ctx.channel, "Sent the beatmap to your osu DMs!")
 
     @command_manager.command("validtz")
