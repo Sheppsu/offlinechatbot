@@ -220,12 +220,12 @@ class Database:
         self.database.commit()
 
     def update_osu_data(self, user, osu_username, osu_user_id):
-        self.get_cursor().execute(f"UPDATE osu_data SET osu_user_id = {osu_user_id}, osu_username = '{osu_username}' WHERE user = '{user}'")
+        self.get_cursor().execute(f"UPDATE osu_data SET osu_user_id = {osu_user_id}, osu_username = '{osu_username}', verified = 0 WHERE user = '{user}'")
         self.database.commit()
 
     def get_osu_user_from_username(self, username):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT osu_user_id, osu_username FROM osu_data WHERE user = {username!r}")
+        cursor.execute(f"SELECT osu_user_id, osu_username, verified FROM osu_data WHERE user = {username!r}")
         osu_user = cursor.fetchone()
         return osu_user if osu_user else None
 

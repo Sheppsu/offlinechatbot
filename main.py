@@ -394,10 +394,10 @@ class Bot:
         messages = split_message(message)
         sent_messages = []
         for msg in messages:
-            msg = msg + (" \U000e0000" if self.last_message[channel] == msg else "")
-            await self.ws.send(f"PRIVMSG #{channel} :/me {msg}")
+            cmd = f"PRIVMSG #{channel} :/me " + msg + (" \U000e0000" if self.last_message[channel] == msg else "")
+            await self.ws.send(cmd)
             self.last_message[channel] = msg
-            print(f"> PRIVMSG #{channel} :/me {msg}")
+            print(f"> "+cmd)
             sent_messages.append(msg.strip())
             await asyncio.sleep(self.get_wait_for_channel(channel))  # Avoid going over ratelimits
         self.message_locks[channel].release()
@@ -1658,7 +1658,18 @@ class Bot:
         if beatmap is None: return
         osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
         if osu_user is None:
-            return await self.send_message(ctx.channel, "You must have your osu account linked to use this command (use !link)")
+            return await self.send_message(
+                ctx.channel,
+                "You must have your osu account linked and verified to use this command. "
+                "You can link and verify by logging in at https://bot.sheppsu.me and "
+                "then going to https://bot.sheppsu.me/osuauth"
+            )
+        if not int(osu_user[2]):
+            return await self.send_message(
+                ctx.channel,
+                "You must have a verified account link to use this command. "
+                "Go to https://bot.sheppsu.me, login, and then go to https://bot.sheppsu.me/osuauth"
+            )
         
         beatmap = beatmap[0]
         bms = beatmap.beatmapset
