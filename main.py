@@ -553,7 +553,7 @@ class Bot:
             return
         message, amount = result
         await self.send_message(ctx.channel, message)
-        self.database.add_money(ctx.user_id, amount)
+        self.database.add_money(ctx, amount)
 
     async def on_trivia_finish(self, channel):
         self.trivia_helpers[channel].reset(cancel=False)
@@ -855,7 +855,7 @@ class Bot:
         user = self.database.get_current_user(ctx)
         if not user.autoafk:
             return
-        afk = self.database.get_afk(user.username)
+        afk = self.database.get_afk(ctx.sending_user)
         if (datetime.now(tz=tz.utc) - afk.time.replace(tzinfo=tz.utc)).seconds > 60:
             await self.remove_user_afk(ctx, afk)
 
