@@ -1662,13 +1662,13 @@ class Bot:
                 ctx.channel,
                 "You must have your osu account linked and verified to use this command. "
                 "You can link and verify by logging in at https://bot.sheppsu.me and "
-                "then going to https://bot.sheppsu.me/osuauth"
+                "then going to https://bot.sheppsu.me/osuauth (will take a few minutes to update)"
             )
         if not int(osu_user[2]):
             return await self.send_message(
                 ctx.channel,
                 "You must have a verified account link to use this command. "
-                "Go to https://bot.sheppsu.me, login, and then go to https://bot.sheppsu.me/osuauth"
+                "Go to https://bot.sheppsu.me, login, and then go to https://bot.sheppsu.me/osuauth (will take a few minutes to update)"
             )
         
         beatmap = beatmap[0]
