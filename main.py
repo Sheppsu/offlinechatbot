@@ -641,6 +641,8 @@ class Bot:
     async def balance(self, ctx):
         args = ctx.get_args()
         user_to_check = args[0].replace("@", "").lower() if args else None
+        if user_to_check is None:
+            user_to_check = self.database.get_current_user(ctx).username
         await self.send_message(
             ctx.channel,
             f"{user_to_check} currently has {self.database.get_balance(ctx, user_to_check)} Becky Bucks."
@@ -856,6 +858,9 @@ class Bot:
         if not user.autoafk:
             return
         afk = self.database.get_afk(ctx.sending_user)
+        if afk is None:
+            self.afks.remove(ctx.sending_user)
+            return
         if (datetime.now(tz=tz.utc) - afk.time.replace(tzinfo=tz.utc)).seconds > 60:
             await self.remove_user_afk(ctx, afk)
 
