@@ -652,8 +652,8 @@ class Bot:
     async def leaderboard(self, ctx):
         top_users = reversed(self.database.get_top_users())
         output = "Top 5 richest users: "
-        for i in range(5):
-            output += f'{i + 1}. {top_users[4 - i][0]}_${round(top_users[4 - i][1])} '
+        for i, user in enumerate(top_users):
+            output += f'{i + 1}. {user[0]}_${round(user[1])} '
         await self.send_message(ctx.channel, output)
 
     @command_manager.command("ranking")
