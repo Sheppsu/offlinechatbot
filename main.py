@@ -650,7 +650,7 @@ class Bot:
 
     @command_manager.command("leaderboard", aliases=["lb"])
     async def leaderboard(self, ctx):
-        top_users = reversed(self.database.get_top_users())
+        top_users = self.database.get_top_users()
         output = "Top 5 richest users: "
         for i, user in enumerate(top_users):
             output += f'{i + 1}. {user[0]}_${round(user[1])} '
@@ -1665,14 +1665,14 @@ class Bot:
         if osu_user is None:
             return await self.send_message(
                 ctx.channel,
-                "You must have your osu account linked and verified to use this command. "
+                f"@{ctx.user.display_name} You must have your osu account linked and verified to use this command. "
                 "You can link and verify by logging in at https://bot.sheppsu.me and "
                 "then going to https://bot.sheppsu.me/osuauth (will take a few minutes to update)"
             )
         if not int(osu_user[2]):
             return await self.send_message(
                 ctx.channel,
-                "You must have a verified account link to use this command. "
+                f"@{ctx.user.display_name} You must have a verified account link to use this command. "
                 "Go to https://bot.sheppsu.me, login, and then go to https://bot.sheppsu.me/osuauth (will take a few minutes to update)"
             )
         
@@ -1680,7 +1680,14 @@ class Bot:
         bms = beatmap.beatmapset
         bms_title = f"{bms.artist} - {bms.title} [{beatmap.version}] mapped by {bms.creator}"
         await self.make_osu_request(self.osu_client.create_new_pm(osu_user[0], f"(Automated bot message) [{bms_title}](https://osu.ppy.sh/b/{beatmap.id})", False))
-        await self.send_message(ctx.channel, "Sent the beatmap to your osu DMs!")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Sent the beatmap to your osu DMs!")
+
+    @command_manager.command("preview", aliases=["p"])
+    async def send_osu_preview(self, ctx):
+        cache = self.get_map_cache(ctx)
+        if cache is None:
+            return
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://preview.tryz.id.vn/?b={cache[0].id}")
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):
