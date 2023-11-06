@@ -93,7 +93,7 @@ class FrankerFaceZEmote:
 class Path:
     providers = {
         "twitch": "https://api.twitch.tv/helix/",
-        "7tv": "https://api.7tv.app/v2/",
+        "7tv": "https://7tv.io/v3/",
         "bttv": "https://api.betterttv.net/3/",
         "ffz": "https://api.betterttv.net/3/",
     }
@@ -108,11 +108,11 @@ class Path:
 
     @classmethod
     def get_7tv_channel_emotes(cls, channel):
-        return cls("7tv", f"users/{channel}/emotes")
+        return cls("7tv", f"users/twitch/{channel}")
 
     @classmethod
     def get_7tv_global_emotes(cls):
-        return cls("7tv", "emotes/global")
+        return cls("7tv", "emote-sets/global")
 
     @classmethod
     def get_bttv_channel_emotes(cls, channel):
