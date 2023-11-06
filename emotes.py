@@ -6,52 +6,91 @@ from time import perf_counter
 load_dotenv()
 
 
-class SevenTVRole:
+class SevenTVFile:
+    __slots__ = ("name", "static_name", "width", "height", "frame_count", "size", "format")
+    
+    def __init__(self, data):
+        self.name = data["name"]
+        self.static_name = data["static_name"]
+        self.width = data["width"]
+        self.height = data["height"]
+        self.frame_count = data["frame_count"]
+        self.size = data["size"]
+        self.format = data["format"]
+
+
+class SevenTVHost:
     __slots__ = (
-        "id", "name", "position", "color", "allowed", "denied", "default"
+        "url",
+        "files",
     )
 
+    def __init__(self, data):
+        self.url = data["url"]
+        self.files = list(map(SevenTVFile, data["files"]))
+        
+        
+class SevenTVUser:
+    __slots__ = (
+        "id",
+        "username",
+        "display_name",
+        "avatar_url",
+        "style",
+        "roles",
+    )
+    
+    def __init__(self, data):
+        self.id = data["id"]
+        self.username = data["username"]
+        self.display_name = data["display_name"]
+        self.avatar_url = data.get("avatar_url")
+        self.style = data["style"]
+        self.roles = data.get("roles")
+
+
+class SevenTVEmoteData:
+    __slots__ = (
+        "id",
+        "name",
+        "flags",
+        "lifecycle",
+        "state",
+        "listed",
+        "animated",
+        "owner",
+        "host"
+    )
+    
     def __init__(self, data):
         self.id = data["id"]
         self.name = data["name"]
-        self.position = data["position"]
-        self.color = data["color"]
-        self.allowed = data["allowed"]
-        self.denied = data["denied"]
-        self.default = data["default"] if "default" in data else False
-
-
-class SevenTVUser:
-    __slots__ = (
-        "id", "twitch_id", "login", "display_name", "role"
-    )
-
-    def __init__(self, data):
-        self.id = data["id"]
-        self.twitch_id = data["twitch_id"]
-        self.login = data["login"]
-        self.display_name = data["display_name"]
-        self.role = SevenTVRole(data["role"])
+        self.flags = data["flags"]
+        self.lifecycle = data["lifecycle"]
+        self.state = data["state"]
+        self.listed = data["listed"]
+        self.animated = data["animated"]
+        self.owner = SevenTVUser(data["owner"])
+        self.host = SevenTVHost(data["host"])
 
 
 class SevenTVEmote:
     __slots__ = (
-        "id", "name", "owner", "visibility", "visibility_simple",
-        "mime", "status", "tags", "width", "height", "urls"
+        "id",
+        "name",
+        "flags",
+        "timestamp",
+        "actor_id",
+        "data",
     )
 
     def __init__(self, data):
         self.id = data["id"]
         self.name = data["name"]
-        self.owner = SevenTVUser(data["owner"])
-        self.visibility = data["visibility"]
-        self.visibility_simple = data["visibility_simple"]
-        self.mime = data["mime"]
-        self.status = data["status"]
-        self.tags = data["tags"]
-        self.width = data["width"]
-        self.height = data["height"]
-        self.urls = data["urls"]
+        self.flags = data["flags"]
+        self.timestamp = data["timestamp"]
+        self.actor_id = data["actor_id"]
+        self.data = SevenTVEmoteData(data["data"])
 
 
 class BetterTVEmote:
@@ -218,10 +257,16 @@ class EmoteRequester:
         if channel is None: return []
         if type(channel) == str: channel = self.http.get_user_id(channel)
         if channel is None: return []
-        return list(map(SevenTVEmote, self.http.get(Path.get_7tv_channel_emotes(channel), return_on_fail=[])))
+        data = self.http.get(Path.get_7tv_channel_emotes(channel), return_on_fail=None)
+        if data is None:
+            return []
+        return list(map(SevenTVEmote, data["emote_set"]["emotes"]))
 
     def get_7tv_global_emotes(self):
-        return list(map(SevenTVEmote, self.http.get(Path.get_7tv_global_emotes(), return_on_fail=[])))
+        data = self.http.get(Path.get_7tv_global_emotes(), return_on_fail=None)
+        if data is None:
+            return []
+        return list(map(SevenTVEmote, data["emotes"]))
 
     def get_bttv_channel_emotes(self, channel):
         if channel is None: return []
