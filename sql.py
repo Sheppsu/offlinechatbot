@@ -35,6 +35,10 @@ USER_SETTINGS = (
 )
 
 
+def sqlstr(s):
+    return "'"+s.replace("'", "''")+"'"
+
+
 class Database:
     name = os.getenv("MYSQLDATABASE")
     host = os.getenv("MYSQLHOST")
@@ -72,13 +76,13 @@ class Database:
 
     def add_afk(self, user, message):
         self.get_cursor().execute(
-            f"INSERT INTO afk (message, time, username) VALUES ({message!r}, {self.current_time!r}, {user!r})"
+            f"INSERT INTO afk (message, time, username) VALUES ({sqlstr(message)}, {sqlstr(self.current_time)}, {sqlstr(user)})"
         )
         self.database.commit()
 
     def save_afk(self, user, message):
         self.get_cursor().execute(
-            f"UPDATE afk SET message = {message!r}, time = {self.current_time!r} WHERE username = {user!r}"
+            f"UPDATE afk SET message = {sqlstr(message)}, time = {sqlstr(self.current_time)} WHERE username = {sqlstr(user)}"
         )
         self.database.commit()
 
@@ -93,7 +97,7 @@ class Database:
 
     def get_afk(self, username):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT * FROM afk WHERE username = {username!r}")
+        cursor.execute(f"SELECT * FROM afk WHERE username = {sqlstr(username)}")
         afk = cursor.fetchone()
         return AFK.from_db_data(afk) if afk else None
 
@@ -113,7 +117,7 @@ class Database:
 
     def get_user_pity(self, username):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT four, five FROM pity WHERE username = {username!r}")
+        cursor.execute(f"SELECT four, five FROM pity WHERE username = {sqlstr(username)}")
         pity = cursor.fetchone()
         return pity if pity else None
 
@@ -121,13 +125,13 @@ class Database:
 
     def insert_user_and_do(self, ctx, line):
         cursor = self.get_cursor()
-        cursor.execute(f"INSERT IGNORE INTO userdata (username, userid) VALUES ({ctx.sending_user!r}, {ctx.user_id})")
+        cursor.execute(f"INSERT IGNORE INTO userdata (username, userid) VALUES ({sqlstr(ctx.sending_user)}, {ctx.user_id})")
         self.database.commit()
         cursor.execute(line)
         return cursor
 
     def update_userdata(self, ctx, column, value):
-        self.insert_user_and_do(ctx, f"UPDATE userdata SET {column} = {value!r} WHERE userid = {ctx.user_id}")
+        self.insert_user_and_do(ctx, f"UPDATE userdata SET {column} = {sqlstr(value)} WHERE userid = {ctx.user_id}")
         self.database.commit()
 
     def add_money(self, ctx, amount):
@@ -137,7 +141,7 @@ class Database:
     def get_balance(self, ctx, username=None):
         if username is not None:
             cursor = self.get_cursor()
-            cursor.execute(f"SELECT money FROM userdata WHERE username = {username!r}")
+            cursor.execute(f"SELECT money FROM userdata WHERE username = {sqlstr(username)}")
         else:
             cursor = self.insert_user_and_do(ctx, f"SELECT money FROM userdata WHERE userid = {ctx.user_id}")
         return cursor.fetchone()[0]
@@ -155,12 +159,12 @@ class Database:
         cursor = self.get_cursor()
         cursor.execute("SELECT rnk FROM "
                        "(SELECT userid, RANK() OVER (ORDER BY money DESC) AS rnk FROM userdata) AS ranks "
-                       f"WHERE ranks.userid = {ctx.userid} LIMIT 1")
+                       f"WHERE ranks.userid = {ctx.user_id} LIMIT 1")
         return cursor.fetchone()[0]
 
     def get_user_from_username(self, username):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT * FROM userdata WHERE username = {username!r}")
+        cursor.execute(f"SELECT * FROM userdata WHERE username = {sqlstr(username)}")
         user = cursor.fetchone()
         return User(*user) if user else None
 
@@ -170,8 +174,8 @@ class Database:
 
     def get_and_delete_old_user(self, username):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT money FROM old_userdata WHERE username = {username!r};"
-                       f"DELETE FROM old_userdata WHERE username = {username!r}")
+        cursor.execute(f"SELECT money FROM old_userdata WHERE username = {sqlstr(username)};"
+                       f"DELETE FROM old_userdata WHERE username = {sqlstr(username)}")
         money = cursor.fetchone()
         return money[0] if money else None
 
@@ -196,7 +200,7 @@ class Database:
 
     def get_top_animecompare_game_for_user(self, user):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT * FROM animecompare_games WHERE finished = 1 AND user = {user!r} ORDER BY score DESC LIMIT 1")
+        cursor.execute(f"SELECT * FROM animecompare_games WHERE finished = 1 AND user = {sqlstr(user)} ORDER BY score DESC LIMIT 1")
         return [{"id": data[0], "user": data[1], "score": data[2]} for data in cursor.fetchall()]
 
     def update_animecompare_game(self, game_id, score):
@@ -209,7 +213,7 @@ class Database:
 
     def get_ac_user_average(self, username):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT AVG(score) FROM animecompare_games WHERE user = {username!r}")
+        cursor.execute(f"SELECT AVG(score) FROM animecompare_games WHERE user = {sqlstr(username)}")
         avg_score = cursor.fetchone()
         return avg_score[0] if avg_score else None
 
@@ -225,7 +229,7 @@ class Database:
 
     def get_osu_user_from_username(self, username):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT osu_user_id, osu_username, verified FROM osu_data WHERE user = {username!r}")
+        cursor.execute(f"SELECT osu_user_id, osu_username, verified FROM osu_data WHERE user = {sqlstr(username)}")
         osu_user = cursor.fetchone()
         return osu_user if osu_user else None
 
@@ -238,17 +242,17 @@ class Database:
 
     def add_channel(self, name, user_id, channel_inclusion, offlineonly, commands):
         self.get_cursor().execute("INSERT INTO channels (name, id, channel_inclusion, offlineonly, commands) "
-                            f"VALUES ({name!r}, {user_id}, {channel_inclusion}, {offlineonly}, {commands!r})")
+                            f"VALUES ({sqlstr(name)}, {user_id}, {channel_inclusion}, {offlineonly}, {sqlstr(commands)})")
         self.database.commit()
 
     # timezones
 
     def add_timezone(self, userid, timezone_name):
-        self.get_cursor().execute(f"INSERT INTO timezones (userid, timezone) VALUES ({userid}, {timezone_name!r})")
+        self.get_cursor().execute(f"INSERT INTO timezones (userid, timezone) VALUES ({userid}, {sqlstr(timezone_name)})")
         self.database.commit()
 
     def update_timezone(self, userid, timezone_name):
-        self.get_cursor().execute(f"UPDATE timezones SET timezone = {timezone_name!r} WHERE userid = {userid}")
+        self.get_cursor().execute(f"UPDATE timezones SET timezone = {sqlstr(timezone_name)} WHERE userid = {userid}")
         self.database.commit()
 
     def get_user_timezone(self, userid):
@@ -262,5 +266,5 @@ class Database:
     def save_messages(self, ctx, buffer):
         context = "\n".join(map(lambda ctx: f"{ctx.user.display_name}: {ctx.message}", buffer))
         self.get_cursor().execute("INSERT INTO messages (userid, username, message, context) "
-                            f"VALUES ({ctx.user_id}, {ctx.user.display_name!r}, {ctx.message!r}, {context!r})")
+                            f"VALUES ({ctx.user_id}, {sqlstr(ctx.user.display_name)}, {sqlstr(ctx.message)}, {sqlstr(context)})")
         self.database.commit()
