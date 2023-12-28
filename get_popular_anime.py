@@ -5,7 +5,7 @@ import json
 import sys
 
 
-if "--test" in sys.argv:
+if "--test" in sys.argv or "--local" in sys.argv:
     from dotenv import load_dotenv
     load_dotenv()
 
@@ -34,9 +34,14 @@ def format_title(anime):
     return "".join([name_formatting[char] if char in name_formatting else char for char in title if char.isascii()])
 
 
-with open("data/anime.json", "w") as f:
-    json.dump(list(map(
-        lambda r: (
-            format_title(r.anime)
-        ),
-        ranking)), f)
+def create_list():
+    with open("data/anime.json", "w") as f:
+        json.dump(list(map(
+            lambda r: (
+                format_title(r.anime)
+            ),
+            ranking)), f)
+
+
+if __name__ == "__main__":
+    create_list()
