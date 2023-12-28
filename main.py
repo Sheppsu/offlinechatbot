@@ -9,18 +9,20 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import websockets
-import os
-import sys
 from get_top_players import Client
+from get_popular_anime import create_list as create_anime_list
 from sql import Database, USER_SETTINGS
 from emotes import EmoteRequester
 from helper_objects import *
 from context import *
 from util import *
 from constants import *
+
+import websockets
+import os
+import sys
 from client import Bot as CommunicationClient
-from osu import AsynchronousClient, GameModeStr, Mods, GameModeInt, SoloScore, LegacyScore, ScoreDataStatistics
+from osu import AsynchronousClient, GameModeStr, Mods, GameModeInt, SoloScore, ScoreDataStatistics
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
@@ -34,7 +36,7 @@ LOCAL = "-local" in sys.argv
 if not TESTING or not os.path.exists("data/top players (200).json"):
     Client().run()  # Update top player json file
 if not TESTING or not os.path.exists("data/anime.json"):
-    import get_popular_anime  # Update popular anime json file
+    create_anime_list()
 if not TESTING or not os.path.exists("data/azur_lane.json"):
     from azur_lane import download_azur_lane_ship_names
     download_azur_lane_ship_names()
@@ -177,12 +179,6 @@ class Bot:
             return 0.3
         return 1.5
 
-    def send_message_in_progress(self):
-        for task in asyncio.all_tasks(self.loop):
-            if id(task.get_coro().cr_code) == id(self.send_message.__code__):
-                return True
-        return False
-
     @staticmethod
     def get_partial_ctx(username, user_id):
         return namedtuple("PartialMessageContext", ("sending_user", "user_id"))(username, user_id)
@@ -273,6 +269,17 @@ class Bot:
             print(traceback.format_exc())
             self.offlines[channel] = False
 
+    def get_streams_test(self):
+        # TODO: finishing later I gtg now...
+        # TODO: account for limit of 100
+        channels = list(map(lambda c: c.id, filter(lambda c: c.offlineonly, self.cm.channels.values())))
+        params = {"user_id": channels}
+        headers = {"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id}
+        print(params)
+        resp = requests.get("https://api.twitch.tv/helix/streams", params=params, headers=headers)
+        data = resp.json()
+        print(data["data"])
+
     # Fundamental
 
     async def start(self):
@@ -293,7 +300,7 @@ class Bot:
                 last_update = perf_counter() - 60
                 comm_done = False
                 while self.running:
-                    await asyncio.sleep(1)  # Leave time for other threads to run
+                    await asyncio.sleep(1)  # Leave time for other stuff to run
 
                     # Check if channels are live
                     if perf_counter() - last_check >= 20:
@@ -315,7 +322,7 @@ class Bot:
 
                     if perf_counter() - last_update >= 60*60:
                         last_update = perf_counter()
-                        import get_popular_anime  # Update popular anime json file
+                        create_anime_list()
                         self.load_anime()
 
                     # Check if poll is no longer running, in which case, the bot is no longer running.
@@ -1433,7 +1440,7 @@ class Bot:
         for score in scores[:5]:
             hit_string, _ = self.get_hit_data(score.statistics, score.ruleset_id)
             message += "🌟" + score_format.format(**{
-                "mods": "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
+                "mods": " +" + "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
                 "acc": round(score.accuracy * 100, 2),
                 "combo": score.max_combo,
                 "max_combo": beatmap_attributes.max_combo,
