@@ -10,7 +10,7 @@ Black Tassel
 Debate Club
 Bloodtainted Greatsword
 Ferrous Shadow
-Skyrider Sword 
+Skyrider Sword
 Harbinger of Dawn
 Cool Steel
 
@@ -46,6 +46,16 @@ Collei
 Dori
 Candace
 Layla
+Faruzan
+Yaoyao
+Mika
+Kaveh
+Kirara
+Lynette
+Freminet
+Charlotte
+Chevreuse
+Gaming
 
 
 4* Weapons
@@ -80,10 +90,15 @@ Wine and Song
 Xiphos' Moonlight
 Makhaira Aquamarine
 Wandering Evenstar
+The Dockhand's Assistant
+Portable Power Saw
+Prospector's Drill
+Range Gauge
 
 
 5* Characters
 
+Baizhu
 Al Haitham
 Scaramouche
 Dehya
@@ -115,6 +130,12 @@ Mona
 Qiqi
 Diluc
 Jean
+Lyney
+Neuvillette
+Wriothesley
+Furina
+Navia
+Xianyun
 
 
 5* Weapons
@@ -152,3 +173,11 @@ Staff of the Scarlet Sands
 Aqua Simulacra
 Hunter's Path
 A Thousand Floating Dreams
+Tulaytullah's Remembrance
+Jadefall's Splendor
+The First Great Magic
+Tomr of the Eternal Flow
+Cashflow Supervision
+Splendor of Tranquil Waters
+Verdict
+Crane's Echoing Call
