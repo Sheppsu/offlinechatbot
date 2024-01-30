@@ -22,7 +22,7 @@ import websockets
 import os
 import sys
 from client import Bot as CommunicationClient
-from osu import AsynchronousClient, GameModeStr, Mods, GameModeInt, SoloScore, ScoreDataStatistics
+from osu import AsynchronousClient, GameModeStr, Mods, Mod, GameModeInt, SoloScore, ScoreDataStatistics
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
@@ -1193,8 +1193,17 @@ class Bot:
                 'spinner_count': beatmap.count_spinners,
             })
             if transform:
-                score = OsuScoreAttributes.from_osupy_score(score)
-            calculator = OsuPerformanceCalculator(GameModeStr.STANDARD, attributes, score)
+                # temporary solution until pp calc accepts other mods
+                all_mods = score.mods
+                limited_mods = list(filter(lambda m: type(m.mod) != str and m.mod.name in Mods._member_names_, score.mods))
+                if len(limited_mods) != len(all_mods):
+                    return
+                score.mods = limited_mods
+                score_attributes = OsuScoreAttributes.from_osupy_score(score)
+                score.mods = all_mods
+            else:
+                score_attributes = score
+            calculator = OsuPerformanceCalculator(GameModeStr.STANDARD, attributes, score_attributes)
             try:
                 return calculator.calculate()
             except:
@@ -1342,6 +1351,8 @@ class Bot:
     @staticmethod
     def parse_score_mods(score):
         if isinstance(score, SoloScore):
+            # temporary solution of removing mods
+            score.mods = list(filter(lambda m: type(m.mod) != str and m.mod.name in Mods._member_names_, score.mods))
             return list(map(lambda m: m.mod.value, score.mods)) if score.mods else None
         return score.mods
 
