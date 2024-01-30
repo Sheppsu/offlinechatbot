@@ -61,7 +61,7 @@ class Bot:
         self.cm.init(self, channels_to_run_in)
 
         self.ws = None
-        self.comm_client = CommunicationClient(self)
+        # self.comm_client = CommunicationClient(self)
         self.running = False
         self.loop = asyncio.get_event_loop()
         self.last_message = {}
@@ -112,17 +112,17 @@ class Bot:
             "osu": Scramble("player name", lambda: random.choice(self.top_players), 0.8),
             "map": Scramble("map name", lambda: random.choice(self.top_maps), 1.3),
             "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
-            "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.7,
-                              ScrambleHintType.EVERY_OTHER, True, ScrambleRewardType.LOGARITHM),
+            # "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.7,
+            #                   ScrambleHintType.EVERY_OTHER, True, ScrambleRewardType.LOGARITHM),
             "anime": Scramble("anime", lambda: random.choice(self.anime[:250]), 1.1),
             "al": Scramble("azurlane ship", lambda: random.choice(self.azur_lane), 0.9),
         }
         self.scramble_manager = ScrambleManager(self.scrambles)
 
         # emote stuff
-        self.emote_requester = EmoteRequester(self.client_id, self.client_secret)
-        self.emote_requester.http.set_access_token(self.access_token)
-        self.emotes = {channel: sum(self.emote_requester.get_channel_emotes(channel), []) for channel in self.cm.channels}
+        # self.emote_requester = EmoteRequester(self.client_id, self.client_secret)
+        # self.emote_requester.http.set_access_token(self.access_token)
+        self.emotes = {channel: [] for channel in self.cm.channels}  # {channel: sum(self.emote_requester.get_channel_emotes(channel), []) for channel in self.cm.channels}
 
         # Bomb party
         self.bomb_party_helper = BombParty()
@@ -291,14 +291,14 @@ class Bot:
                 # Start up
                 await self.connect()  # Connect to the irc server
                 poll = asyncio.run_coroutine_threadsafe(self.poll(), self.loop)  # Begin polling for events sent by the server
-                if not TESTING:
-                    comm = asyncio.run_coroutine_threadsafe(self.comm_client.run(), self.loop)  # Start the client that communicates with remote clients
+                # if not TESTING:
+                #     comm = asyncio.run_coroutine_threadsafe(self.comm_client.run(), self.loop)  # Start the client that communicates with remote clients
 
                 # Running loop
                 last_check = perf_counter() - 20
                 last_ping = perf_counter() - 60*60  # 1 hour
                 last_update = perf_counter() - 60
-                comm_done = False
+                # comm_done = False
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other stuff to run
 
@@ -330,13 +330,13 @@ class Bot:
                         print(poll.result())
                         self.running = False
 
-                    if not TESTING and comm.done() and not comm_done:
-                        comm_done = True
-                        try:
-                            print("Communication client finished")
-                            print(comm.result())
-                        except:
-                            traceback.print_exc()
+                    # if not TESTING and comm.done() and not comm_done:
+                    #     comm_done = True
+                    #     try:
+                    #         print("Communication client finished")
+                    #         print(comm.result())
+                    #     except:
+                    #         traceback.print_exc()
 
             except KeyboardInterrupt:
                 pass
@@ -425,7 +425,7 @@ class Bot:
     async def on_join(self, ctx: JoinContext):
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
-        self.emotes[ctx.channel] = sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
+        self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         self.offlines[ctx.channel] = True
         self.recent_score_cache[ctx.channel] = {}
         self.trivia_helpers[ctx.channel] = TriviaHelper()
@@ -1766,7 +1766,7 @@ class Bot:
 
     @command_manager.command("refresh_emotes", cooldown=Cooldown(60, 0))
     async def refresh_emotes(self, ctx):
-        self.emotes[ctx.channel] = sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
+        self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Emotes have been refreshed "
                                              f"(this command has a 1 minute cooldown).")
 
