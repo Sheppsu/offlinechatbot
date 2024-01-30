@@ -1326,7 +1326,6 @@ class Bot:
         if len(self.recent_score_cache[ctx.channel]) == 0:
             return
         if ctx.reply:
-            print(ctx.reply.msg_body)
             if ctx.reply.msg_body in self.recent_score_cache[ctx.channel]:
                 return self.recent_score_cache[ctx.channel][ctx.reply.msg_body]
             return
@@ -1351,9 +1350,8 @@ class Bot:
     @staticmethod
     def parse_score_mods(score):
         if isinstance(score, SoloScore):
-            # temporary solution of removing mods
-            score.mods = list(filter(lambda m: type(m.mod) != str and m.mod.name in Mods._member_names_, score.mods))
-            return list(map(lambda m: m.mod.value, score.mods)) if score.mods else None
+            # temporary thing until I fix some libraries
+            return list(map(lambda m: m.mod.value, filter(lambda m: type(m.mod) != str and m.mod.name in Mods._member_names_, score.mods))) if score.mods else None
         return score.mods
 
     @staticmethod
