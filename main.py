@@ -1196,7 +1196,7 @@ class Bot:
                 # temporary solution until pp calc accepts other mods
                 all_mods = score.mods
                 limited_mods = list(filter(lambda m: type(m.mod) != str and m.mod.name in Mods._member_names_, score.mods))
-                if len(limited_mods) != len(all_mods):
+                if len(limited_mods) != len(list(filter(lambda m: type(m.mod) != str and m.mod != Mod.Classic, all_mods))):
                     return
                 score.mods = limited_mods
                 score_attributes = OsuScoreAttributes.from_osupy_score(score)
