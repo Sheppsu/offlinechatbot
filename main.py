@@ -1780,18 +1780,18 @@ class Bot:
     
         args = ctx.get_args()
         if len(args) == 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must give a time (10s, 20m, 1h, ...)")
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must give a time (10s, 20m, 1h, ...) Chatting")
             
         suffix = args[0][-1].lower()
         if suffix not in time_multipliers:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} time must end with s, m, or h")
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} the time must end with s, m, or h Awkward")
             
         wait = args[0][:-1]
         if not wait.isdigit():
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number")
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number Nerdge")
         
-        self.set_timed_event(int(wait)*time_multipliers[suffix], self.send_message, ctx.channel, f"@{ctx.user.display_name} Reminder! {' '.join(args[1:])}")
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder set!")
+        self.set_timed_event(int(wait)*time_multipliers[suffix], self.send_message, ctx.channel, f"@{ctx.user.display_name} DinkDonk {' '.join(args[1:])}")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder set! Okayge")
 
 
 if __name__ == "__main__":
