@@ -1769,6 +1769,29 @@ class Bot:
         self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Emotes have been refreshed "
                                              f"(this command has a 1 minute cooldown).")
+                                             
+    @command_manager.command("remind")
+    async def set_reminder(self, ctx):
+        time_multipliers = {
+            "s": 1,
+            "m": 60,
+            "h": 60*60
+        }
+    
+        args = ctx.get_args()
+        if len(args) == 0:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must give a time (10s, 20m, 1h, ...)")
+            
+        suffix = args[0][-1].lower()
+        if suffix not in time_multipliers:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} time must end with s, m, or h")
+            
+        wait = args[0][:-1]
+        if not wait.isdigit():
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number")
+        
+        self.set_timed_event(int(wait)*time_multipliers[suffix], self.send_message, ctx.channel, f"@{ctx.user.display_name} Reminder! {' '.join(args[1:])}")
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder set!")
 
 
 if __name__ == "__main__":
