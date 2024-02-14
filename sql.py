@@ -235,7 +235,7 @@ class Database:
         
     def get_osu_user_from_user_id(self, user_id):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT osu_user_id, osu_username, verified FROM osu_data WHERE user_id = user_id")
+        cursor.execute(f"SELECT osu_user_id, osu_username, verified FROM osu_data WHERE user_id = {user_id}")
         osu_user = cursor.fetchone()
         return osu_user if osu_user else None
 
