@@ -1599,9 +1599,9 @@ class Bot:
 
         osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
         if osu_user is not None:
-            self.database.update_osu_data(ctx.user.username, user.username, user.id)
+            self.database.update_osu_data(ctx.user_id, user.username, user.id)
         else:
-            self.database.new_osu_data(ctx.user.username, user.username, user.id)
+            self.database.new_osu_data(ctx.user_id, user.username, user.id)
         self.osu_user_id_cache[user.username] = user.id
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {user.username} to your account.")

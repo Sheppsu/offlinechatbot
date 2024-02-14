@@ -219,17 +219,17 @@ class Database:
 
     # osu
 
-    def new_osu_data(self, user, osu_username, osu_user_id):
-        self.get_cursor().execute(f"INSERT INTO osu_data (user, osu_user_id, osu_username) VALUES ('{user}', {osu_user_id}, '{osu_username}')")
+    def new_osu_data(self, user_id, osu_username, osu_user_id):
+        self.get_cursor().execute(f"INSERT INTO osu_data (user_id, osu_user_id, osu_username) VALUES ({user_id}, {osu_user_id}, '{osu_username}')")
         self.database.commit()
 
-    def update_osu_data(self, user, osu_username, osu_user_id):
-        self.get_cursor().execute(f"UPDATE osu_data SET osu_user_id = {osu_user_id}, osu_username = '{osu_username}', verified = 0 WHERE user = '{user}'")
+    def update_osu_data(self, user_id, osu_username, osu_user_id):
+        self.get_cursor().execute(f"UPDATE osu_data SET osu_user_id = {osu_user_id}, osu_username = '{osu_username}', verified = 0 WHERE user_id = '{user_id}'")
         self.database.commit()
 
     def get_osu_user_from_username(self, username):
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT osu_user_id, osu_username, verified FROM osu_data WHERE user = {sqlstr(username)}")
+        cursor.execute(f"SELECT osu_user_id, osu_username, verified FROM osu_data INNER JOIN userdata ON (userdata.userid = osu_data.user_id) WHERE userdata.username = {sqlstr(username)}")
         osu_user = cursor.fetchone()
         return osu_user if osu_user else None
 
