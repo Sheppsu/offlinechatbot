@@ -1111,7 +1111,7 @@ class Bot:
     async def process_osu_user_arg(self, ctx, args):
         if len(args) > 0:
             return " ".join(args).strip()
-        osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
+        osu_user = self.database.get_osu_user_from_user_id(ctx.user_id)
         if osu_user is not None:
             self.osu_user_id_cache[osu_user[1]] = osu_user[0]
             return osu_user[0]
@@ -1597,7 +1597,7 @@ class Bot:
         if user is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
 
-        osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
+        osu_user = self.database.get_osu_user_from_user_id(ctx.user_id)
         if osu_user is not None:
             self.database.update_osu_data(ctx.user_id, user.username, user.id)
         else:
@@ -1677,7 +1677,7 @@ class Bot:
     async def send_osu_map(self, ctx):
         beatmap = self.get_map_cache(ctx)
         if beatmap is None: return
-        osu_user = self.database.get_osu_user_from_username(ctx.sending_user)
+        osu_user = self.database.get_osu_user_from_user_id(ctx.user_id)
         if osu_user is None:
             return await self.send_message(
                 ctx.channel,
