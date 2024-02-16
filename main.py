@@ -1794,7 +1794,7 @@ class Bot:
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder set! Okayge")
         
     @command_manager.command("osulb"):
-    async def offline_chat_osu_leaderboard(ctx):
+    async def offline_chat_osu_leaderboard(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://bot.sheppsu.me/osu/")
 
 
