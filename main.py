@@ -1792,6 +1792,10 @@ class Bot:
         
         self.set_timed_event(int(wait)*time_multipliers[suffix], self.send_message, ctx.channel, f"@{ctx.user.display_name} DinkDonk {' '.join(args[1:])}")
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder set! Okayge")
+        
+    @command_manager.command("osulb"):
+    async def offline_chat_osu_leaderboard(ctx):
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://bot.sheppsu.me/osu/")
 
 
 if __name__ == "__main__":
