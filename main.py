@@ -1247,6 +1247,25 @@ class Bot:
                 ))
         return hit_string, sum(hits)
 
+    @staticmethod
+    def get_mod_string(mods):
+        def fmt_settings(m):
+            if m.settings is None:
+                return ""
+
+            if "speed_change" in m.settings:
+                return f"({round(m.settings['speed_change'], 2)}x)"
+
+            if Mod.DifficultyAdjust == m.mod:
+                return f"({'|'.join((''.join(map(lambda s: s[0], k.upper().split('_')))+f'={v}' for k, v in m.settings.items()))})"
+
+            return ""
+
+        return "".join(map(
+            lambda m: m.mod.value+fmt_settings(m),
+            mods
+        ))
+
     def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
         score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
@@ -1264,7 +1283,7 @@ class Bot:
             "artist": beatmap.beatmapset.artist,
             "title": beatmap.beatmapset.title,
             "diff": beatmap.version,
-            "mods": " +" + "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
+            "mods": " +" + self.get_mod_string(score.mods) if score.mods else "",
             "mapper": beatmap.beatmapset.creator,
             "star_rating": round(beatmap_attributes.star_rating, 2),
             "pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
@@ -1290,7 +1309,7 @@ class Bot:
                 "artist": beatmap.beatmapset.artist,
                 "title": beatmap.beatmapset.title,
                 "diff": beatmap.version,
-                "mods": " +" + "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
+                "mods": " +" + self.get_mod_string(score.mods) if score.mods else "",
                 "acc": round(score.accuracy * 100, 2),
                 "genki_counts": hit_string,
                 "pp": 0 if score.pp is None else round(score.pp, 2),
