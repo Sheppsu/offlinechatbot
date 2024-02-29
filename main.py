@@ -257,28 +257,24 @@ class Bot:
         resp = resp.json()
         return resp['access_token'], resp['expires_in']
 
-    def get_stream_status(self, channel):
-        try:
-            params = {"query": channel, "first": 1}
-            headers = {"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id}
-            resp = requests.get("https://api.twitch.tv/helix/search/channels", params=params, headers=headers)
-            resp.raise_for_status()
-            resp = resp.json()
-            self.offlines[channel] = not resp['data'][0]['is_live']
-        except:
-            print(traceback.format_exc())
-            self.offlines[channel] = False
-
     def get_streams_test(self):
-        # TODO: finishing later I gtg now...
         # TODO: account for limit of 100
         channels = list(map(lambda c: c.id, filter(lambda c: c.offlineonly, self.cm.channels.values())))
         params = {"user_id": channels}
         headers = {"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id}
-        print(params)
-        resp = requests.get("https://api.twitch.tv/helix/streams", params=params, headers=headers)
-        data = resp.json()
-        print(data["data"])
+
+        try:
+            resp = requests.get("https://api.twitch.tv/helix/streams", params=params, headers=headers)
+            data = resp.json()["data"]
+            online_streams = [int(user["user_id"]) for user in data]
+            user_logins = {channel.id: channel.name for channel in self.cm.channels.values()}
+        except:
+            for channel in self.offlines:
+                self.offlines[channel] = False
+            return
+        
+        for channel_id in user_logins:
+            self.offlines[user_logins[channel_id]] = channel_id in online_streams
 
     # Fundamental
 
@@ -298,16 +294,14 @@ class Bot:
                 last_check = perf_counter() - 20
                 last_ping = perf_counter() - 60*60  # 1 hour
                 last_update = perf_counter() - 60
+                
                 # comm_done = False
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other stuff to run
 
                     # Check if channels are live
-                    if perf_counter() - last_check >= 20:
-                        for channel in self.cm.channels.values():
-                            if not channel.offlineonly:
-                                continue
-                            self.get_stream_status(channel.name)
+                    if perf_counter() - last_check >= 10:
+                        self.get_streams_test()
                         last_check = perf_counter()
 
                     # Check if access token needs to be renewed
