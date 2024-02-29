@@ -73,8 +73,8 @@ class Bot:
             ContextType.JOIN: self.on_join,
         }
 
-        # Is ed offline or not
-        self.offlines = {channel: True for channel in self.cm.channels}
+        # Is channel offline or not
+        self.offlines = {channel.name: not channel.offlinechat for channel in self.cm.channels.values()}
 
         # Twitch api stuff
         self.access_token, self.expire_time = self.get_access_token()
@@ -257,7 +257,7 @@ class Bot:
         resp = resp.json()
         return resp['access_token'], resp['expires_in']
 
-    def get_streams_test(self):
+    def get_streams_status(self):
         # TODO: account for limit of 100
         channels = list(map(lambda c: c.id, filter(lambda c: c.offlineonly, self.cm.channels.values())))
         params = {"user_id": channels}
@@ -269,8 +269,8 @@ class Bot:
             online_streams = [int(user["user_id"]) for user in data]
             user_logins = {channel.id: channel.name for channel in self.cm.channels.values()}
         except:
-            for channel in self.offlines:
-                self.offlines[channel] = False
+            for channel in self.cm.channels.values():
+                self.offlines[channel.name] = not channel.offlineonly
             return
         
         for channel_id in user_logins:
@@ -301,7 +301,7 @@ class Bot:
 
                     # Check if channels are live
                     if perf_counter() - last_check >= 10:
-                        self.get_streams_test()
+                        self.get_streams_status()
                         last_check = perf_counter()
 
                     # Check if access token needs to be renewed
