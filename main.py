@@ -74,7 +74,7 @@ class Bot:
         }
 
         # Is channel offline or not
-        self.offlines = {channel.name: not channel.offlinechat for channel in self.cm.channels.values()}
+        self.offlines = {channel.name: not channel.offlineonly for channel in self.cm.channels.values()}
 
         # Twitch api stuff
         self.access_token, self.expire_time = self.get_access_token()
@@ -267,14 +267,16 @@ class Bot:
             resp = requests.get("https://api.twitch.tv/helix/streams", params=params, headers=headers)
             data = resp.json()["data"]
             online_streams = [int(user["user_id"]) for user in data]
-            user_logins = {channel.id: channel.name for channel in self.cm.channels.values()}
-        except:
+        except Exception as e:
+            print(e)
             for channel in self.cm.channels.values():
                 self.offlines[channel.name] = not channel.offlineonly
             return
+            
+        user_logins = {channel.id: channel.name for channel in self.cm.channels.values()}
         
-        for channel_id in user_logins:
-            self.offlines[user_logins[channel_id]] = channel_id in online_streams
+        for channel_id in channels:
+            self.offlines[user_logins[channel_id]] = channel_id not in online_streams
 
     # Fundamental
 
@@ -420,7 +422,7 @@ class Bot:
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
         self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
-        self.offlines[ctx.channel] = True
+        self.offlines[ctx.channel] = not self.cm.channels[ctx.channel].offlineonly
         self.recent_score_cache[ctx.channel] = {}
         self.trivia_helpers[ctx.channel] = TriviaHelper()
 
