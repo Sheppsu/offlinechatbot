@@ -51,6 +51,9 @@ class Bot:
     oauth = os.getenv("OAUTH")
     uri = "ws://irc-ws.chat.twitch.tv:80"
 
+    MWD_API_KEY = os.getenv("MWD_API_KEY")
+    MWT_API_KEY = os.getenv("MWT_API_KEY")
+
     restarts = 0
 
     def __init__(self, cm):
@@ -96,6 +99,7 @@ class Bot:
         # cache data
         self.afks = []
         self.osu_user_id_cache = {}
+        self.mw_cache = {"dictionary": {}, "thesaurus": {}}
 
         # Load save data
         self.load_data()
@@ -278,6 +282,19 @@ class Bot:
         for channel_id in channels:
             self.offlines[user_logins[channel_id]] = channel_id not in online_streams
 
+    def make_mw_req(self, endpoint, dictionary=True):
+        cache = self.mw_cache["dictionary" if dictionary else "thesaurus"]
+        if (value := cache.get(endpoint.lower(), None)) is not None:
+            return value
+
+        base, key = ("collegiate", self.MWD_API_KEY) if dictionary else ("thesaurus", self.MWT_API_KEY)
+        resp = requests.get(f"https://www.dictionaryapi.com/api/v3/references/{base}/json/{endpoint}?key={key}")
+        if resp.status_code == 200:
+            cache[endpoint.lower()] = (data := resp.json())
+            return data
+        print(f"mw returned {resp.status_code}: {resp.text}")
+        return
+
     # Fundamental
 
     async def start(self):
@@ -293,9 +310,10 @@ class Bot:
                 #     comm = asyncio.run_coroutine_threadsafe(self.comm_client.run(), self.loop)  # Start the client that communicates with remote clients
 
                 # Running loop
-                last_check = perf_counter() - 20
+                last_check = perf_counter() - 10
                 last_ping = perf_counter() - 60*60  # 1 hour
                 last_update = perf_counter() - 60
+                last_cache_reset = perf_counter()
                 
                 # comm_done = False
                 while self.running:
@@ -320,6 +338,10 @@ class Bot:
                         last_update = perf_counter()
                         create_anime_list()
                         self.load_anime()
+
+                    if perf_counter() - last_cache_reset >= 60*60*24:
+                        self.mw_cache["dictionary"] = {}
+                        self.mw_cache["thesaurus"] = {}
 
                     # Check if poll is no longer running, in which case, the bot is no longer running.
                     if poll.done():
@@ -1811,6 +1833,81 @@ class Bot:
     @command_manager.command("osulb")
     async def offline_chat_osu_leaderboard(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://bot.sheppsu.me/osu/")
+
+    @staticmethod
+    def parse_mw_text(text):
+        def parse_mark(mark):
+            for m in ("a_link", "d_link", "i_link", "et_link", "mat", "sx", "dxt"):
+                if mark.startswith(m):
+                    return mark.split("|")[1]
+            return ""
+
+        while "{" in text:
+            start = text.index("{")
+            end = text.index("}")
+            text = text[:start] + parse_mark(text[start+1:end]) + text[end+1:]
+        return text
+
+    async def parse_mw_args(self, ctx, dictionary=True):
+        args = ctx.get_args()
+        if len(args) == 0:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Specify a word to lookup")
+
+        data = self.make_mw_req(" ".join(args), dictionary=dictionary)
+        if data is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Something went wrong when communicating with the Merriam-Webster api"
+            )
+        if len(data) == 0:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} that word does not exist in the Merriam-Webster collegiate dictionary"
+            )
+
+        return data
+
+    @command_manager.command("define")
+    async def define_word(self, ctx):
+        data = (await self.parse_mw_args(ctx))[0]
+        word = data["meta"]["id"].split(":")[0]
+        fl = data["fl"]
+        definition = self.parse_mw_text(data["def"][0]["sseq"][0][0][1]["dt"][0][1])
+        return await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} {word}: [{fl}] {definition}"
+        )
+
+    @command_manager.command("example")
+    async def example_word(self, ctx):
+        data = (await self.parse_mw_args(ctx))[0]
+        dt = data["def"][0]["sseq"][0][0][1]["dt"]
+        if len(dt) < 2:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} No example available for this word")
+        example = self.parse_mw_text(dt[1][1][0]["t"])
+        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {example}")
+
+    @command_manager.command("synonyms")
+    async def synonyms_word(self, ctx):
+        data = (await self.parse_mw_args(ctx, dictionary=False))
+        if type(data[0]) == str:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no synonym entries")
+
+        syns = sum(data[0]["meta"]["syns"], [])
+        if len(syns) == 0:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no synonym entries")
+        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {', '.join(syns)}")
+
+    @command_manager.command("antonyms")
+    async def antonyms_word(self, ctx):
+        data = (await self.parse_mw_args(ctx, dictionary=False))
+        if type(data[0]) == str:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
+
+        ants = sum(data[0]["meta"]["ants"], [])
+        if len(ants) == 0:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
+        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {', '.join(ants)}")
 
 
 if __name__ == "__main__":
