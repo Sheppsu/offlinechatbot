@@ -1893,7 +1893,7 @@ class Bot:
         if type(data[0]) == str:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no synonym entries")
 
-        syns = sum(data[0]["meta"]["syns"], [])
+        syns = sum(data[0]["meta"]["syns"], [])[:20]
         if len(syns) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no synonym entries")
         return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {', '.join(syns)}")
@@ -1904,7 +1904,7 @@ class Bot:
         if type(data[0]) == str:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
 
-        ants = sum(data[0]["meta"]["ants"], [])
+        ants = sum(data[0]["meta"]["ants"], [])[:20]
         if len(ants) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
         return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {', '.join(ants)}")
