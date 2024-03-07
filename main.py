@@ -1865,6 +1865,12 @@ class Bot:
                 f"@{ctx.user.display_name} that word does not exist in the Merriam-Webster collegiate dictionary"
             )
 
+        if type(data[0]) == str:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Could not find that word. Did you mean one of these words: {', '.join(data)}"
+            )
+
         return data
 
     @command_manager.command("define")
@@ -1890,8 +1896,6 @@ class Bot:
     @command_manager.command("synonyms")
     async def synonyms_word(self, ctx):
         data = (await self.parse_mw_args(ctx, dictionary=False))
-        if type(data[0]) == str:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no synonym entries")
 
         syns = sum(data[0]["meta"]["syns"], [])[:20]
         if len(syns) == 0:
