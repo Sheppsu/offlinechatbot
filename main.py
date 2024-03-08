@@ -1856,12 +1856,15 @@ class Bot:
         index = self.process_value_arg("-i", args, last_args["index"])
         if type(index) == str and not index.isdigit():
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Index must be an integer")
-        index = int(index)
 
         if len(args) == 0 and len(last_args["word"]) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Specify a word to lookup")
+        elif len(args) != 0 and type(index) == int:
+            # default to index 1 when word is specified but not index
+            index = 1
 
         word = " ".join(args) or last_args["word"]
+        index = int(index)
         data = self.make_mw_req(word, dictionary=dictionary)
 
         if data is None:
