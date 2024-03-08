@@ -756,11 +756,11 @@ class Bot:
                 ", ".join(USER_SETTINGS)
             )
         try:
-            value = {"on": True, "off": False}[args[1].lower()]
+            value = {"on": 1, "off": 0}[args[1].lower()]
         except KeyError:
             return await self.send_message(ctx.channel, "You must specify on or off.")
 
-        self.database.update_userdata(ctx, setting, value)
+        self.database.update_userdata(ctx, setting, str(value))
         await self.send_message(
             ctx.channel,
             f"@{ctx.user.display_name} The {setting} setting has been turned {args[1]}."
