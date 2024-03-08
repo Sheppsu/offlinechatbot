@@ -1854,7 +1854,7 @@ class Bot:
         last_args = self.mw_cache["args"][ctx.channel] or {}
 
         index = self.process_value_arg("-i", args, last_args["index"])
-        if index != 1 and not index.isdigit():
+        if type(index) == str and not index.isdigit():
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Index must be an integer")
         index = int(index)
 
