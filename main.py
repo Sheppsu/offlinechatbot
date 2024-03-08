@@ -99,7 +99,7 @@ class Bot:
         # cache data
         self.afks = []
         self.osu_user_id_cache = {}
-        self.mw_cache = {"dictionary": {}, "thesaurus": {}}
+        self.mw_cache = {"dictionary": {}, "thesaurus": {}, "args": {}}
 
         # Load save data
         self.load_data()
@@ -447,6 +447,7 @@ class Bot:
         self.offlines[ctx.channel] = not self.cm.channels[ctx.channel].offlineonly
         self.recent_score_cache[ctx.channel] = {}
         self.trivia_helpers[ctx.channel] = TriviaHelper()
+        self.mw_cache["args"][ctx.channel] = {"word": "",  "index": 1}
 
     async def on_message(self, ctx: MessageContext):
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or \
@@ -1850,15 +1851,25 @@ class Bot:
 
     async def parse_mw_args(self, ctx, dictionary=True):
         args = ctx.get_args()
-        if len(args) == 0:
+        last_args = self.mw_cache["args"][ctx.channel] or {}
+
+        index = self.process_value_arg("-i", args, last_args["index"])
+        if index != 1 and not index.isdigit():
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Index must be an integer")
+        index = int(index)
+
+        if len(args) == 0 and len(last_args["word"]) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Specify a word to lookup")
 
-        data = self.make_mw_req(" ".join(args), dictionary=dictionary)
+        word = " ".join(args) or last_args["word"]
+        data = self.make_mw_req(word, dictionary=dictionary)
+
         if data is None:
             return await self.send_message(
                 ctx.channel,
                 f"@{ctx.user.display_name} Something went wrong when communicating with the Merriam-Webster api"
             )
+
         if len(data) == 0:
             return await self.send_message(
                 ctx.channel,
@@ -1871,47 +1882,127 @@ class Bot:
                 f"@{ctx.user.display_name} Could not find that word. Did you mean one of these words: {', '.join(data)}"
             )
 
-        return data
+        if index not in range(1, len(data)+1):
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Index must be between 1 and {len(data)}"
+            )
 
-    @command_manager.command("define")
+        self.mw_cache["args"][ctx.channel]["word"] = word
+        self.mw_cache["args"][ctx.channel]["index"] = index
+
+        return data[index-1], index, len(data)
+
+    @staticmethod
+    def parse_definition(definition: MWDefinition) -> str:
+        def get_text(definition):
+            return next(filter(lambda item: isinstance(item, MWSenseDefinitionText), definition.items)).content
+
+        seq = definition.sense_sequences[0]
+        sense = seq.senses[0]
+        if isinstance(sense, MWSense):
+            return get_text(sense.definition)
+
+        text = ""
+        for i, sense in enumerate(sense):
+            if isinstance(sense, MWBindingSense):
+                sense = sense.sense
+            if i != 0 and sense.sense_number is not None:
+                text += f"{sense.sense_number} "
+            text += get_text(sense.definition)
+
+        return text
+
+    @staticmethod
+    def parse_example(definition: MWDefinition):
+        def find_example(sense):
+            if isinstance(sense, MWBindingSense):
+                sense = sense.sense
+
+            if sense.definition is not None:
+                for item in sense.definition.items:
+                    print(item)
+                    if isinstance(item, MWSenseVerbalIllustration):
+                        return item.items[0]["t"]
+
+            if sense.divided_sense is not None:
+                return find_example(sense.divided_sense)
+
+        # I love MW response format!!!!!
+        for seq in definition.sense_sequences:
+            for sense in seq.senses:
+                if isinstance(sense, MWSense):
+                    sense = [sense]
+                for sense in sense:
+                    example = find_example(sense)
+                    if example is not None:
+                        return example
+
+    @command_manager.command("define", aliases=["def"])
     async def define_word(self, ctx):
-        data = (await self.parse_mw_args(ctx))[0]
+        ret = await self.parse_mw_args(ctx)
+        if type(ret) != tuple:
+            return
+        data, index, length = ret
+
+        definition = self.parse_mw_text(self.parse_definition(MWDefinition(data["def"][0])))
         word = data["meta"]["id"].split(":")[0]
         fl = data["fl"]
-        definition = self.parse_mw_text(data["def"][0]["sseq"][0][0][1]["dt"][0][1])
+        date = data.get("date")
+        date = f" | from {self.parse_mw_text(date)}" if date is not None else ""
+
         return await self.send_message(
             ctx.channel,
-            f"@{ctx.user.display_name} {word}: [{fl}] {definition}"
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {definition}{date}"
         )
 
     @command_manager.command("example")
     async def example_word(self, ctx):
-        data = (await self.parse_mw_args(ctx))[0]
-        dt = data["def"][0]["sseq"][0][0][1]["dt"]
-        if len(dt) < 2:
+        ret = await self.parse_mw_args(ctx)
+        if type(ret) != tuple:
+            return
+        data, index, length = ret
+
+        word = data["meta"]["id"].split(":")[0]
+        fl = data["fl"]
+        example = self.parse_example(MWDefinition(data["def"][0]))
+        if example is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} No example available for this word")
-        example = self.parse_mw_text(dt[1][1][0]["t"])
-        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {example}")
+        return await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {self.parse_mw_text(example)}"
+        )
 
     @command_manager.command("synonyms")
     async def synonyms_word(self, ctx):
-        data = (await self.parse_mw_args(ctx, dictionary=False))
+        ret = await self.parse_mw_args(ctx, dictionary=False)
+        if type(ret) != tuple:
+            return
+        data, index, length = ret
 
-        syns = sum(data[0]["meta"]["syns"], [])[:20]
+        word = data["meta"]["id"].split(":")[0]
+        fl = data["fl"]
+        syns = sum(data["meta"]["syns"], [])[:20]
         if len(syns) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no synonym entries")
-        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {', '.join(syns)}")
+        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(syns)}")
 
     @command_manager.command("antonyms")
     async def antonyms_word(self, ctx):
-        data = (await self.parse_mw_args(ctx, dictionary=False))
-        if type(data[0]) == str:
+        ret = await self.parse_mw_args(ctx, dictionary=False)
+        if type(ret) != tuple:
+            return
+        data, index, length = ret
+
+        if type(data) == str:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
 
-        ants = sum(data[0]["meta"]["ants"], [])[:20]
+        word = data["meta"]["id"].split(":")[0]
+        fl = data["fl"]
+        ants = sum(data["meta"]["ants"], [])[:20]
         if len(ants) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
-        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} {', '.join(ants)}")
+        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(ants)}")
 
 
 if __name__ == "__main__":
