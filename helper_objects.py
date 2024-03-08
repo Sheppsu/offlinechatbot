@@ -649,3 +649,149 @@ class TriviaHelper:
     @property
     def is_in_progress(self):
         return self.answer is not None
+
+
+def get_obj(data, key, cls, default=None):
+    return default if (value:=data.get(key)) is None else cls(value)
+
+
+class MWSenseCalledAlso:
+    __slots__ = ("intro", "cats")
+
+    def __init__(self, data):
+        self.intro: str | None = data.get("intro")
+        self.cats: list | None = data.get("cats")
+
+
+class MWSenseBiographicalName:
+    __slots__ = ("pname", "sname", "altname", "prs")
+
+    def __init__(self, data):
+        self.pname: str | None = data.get("pname")
+        self.sname: str | None = data.get("sname")
+        self.altname: str | None = data.get("altname")
+        self.prs: list | None = data.get("prs")
+
+
+class MWSenseDefinitionText:
+    __slots__ = ("content",)
+
+    def __init__(self, data):
+        self.content: str = data
+
+
+class MWSenseRunIn:
+    __slots__ = ("items",)
+
+    def __init__(self, data):
+        self.items: list = data
+
+
+class MWSenseSupplementalInfo:
+    __slots__ = ("items",)
+
+    def __init__(self, data):
+        self.items: list = data
+
+
+class MWSenseUsage:
+    __slots__ = ("items",)
+
+    def __init__(self, data):
+        self.items: list = data
+
+
+class MWSenseVerbalIllustration:
+    __slots__ = ("items",)
+
+    def __init__(self, data):
+        self.items: list = data
+
+
+SENSE_DEF_CONTENTS = (
+    MWSenseDefinitionText |
+    MWSenseBiographicalName |
+    MWSenseCalledAlso |
+    MWSenseRunIn |
+    MWSenseSupplementalInfo |
+    MWSenseUsage |
+    MWSenseVerbalIllustration
+)
+
+
+class MWSenseDefinition:
+    __slots__ = ("items",)
+
+    def __init__(self, data):
+        self.items: list[SENSE_DEF_CONTENTS] = list(map(self.parse_content_item, data))
+
+    @staticmethod
+    def parse_content_item(data) -> SENSE_DEF_CONTENTS:
+        return {
+            "text": MWSenseDefinitionText,
+            "bnw": MWSenseBiographicalName,
+            "ca": MWSenseCalledAlso,
+            "ri": MWSenseRunIn,
+            "snote": MWSenseSupplementalInfo,
+            "uns": MWSenseUsage,
+            "vis": MWSenseVerbalIllustration
+        }[data[0]](data[1])
+
+
+class MWSense:
+    __slots__ = (
+        "etymology",
+        "inflections",
+        "labels",
+        "pronunciations",
+        "divided_sense",
+        "grammatical_label",
+        "status_labels",
+        "sense_number",
+        "variants",
+        "definition",
+        "sense_divider"
+    )
+
+    def __init__(self, data):
+        self.etymology: list | None = data.get("et")
+        self.inflections: list | None = data.get("ins")
+        self.labels: list | None = data.get("lbs")
+        self.pronunciations: list | None = data.get("prs")
+        self.divided_sense: MWSense | None = get_obj(data, "sdsense", MWSense)
+        self.grammatical_label: str | None = data.get("sgram")
+        self.status_labels: list | None = data.get("sls")
+        self.sense_number: str | None = data.get("sn")
+        self.variants: list | None = data.get("vrs")
+        self.definition: MWSenseDefinition | None = get_obj(data, "dt", MWSenseDefinition)
+        self.sense_divider: str | None = data.get("sd")
+
+
+class MWBindingSense:
+    __slots__ = ("sense",)
+
+    def __init__(self, data):
+        self.sense: MWSense = MWSense(data["sense"])
+
+
+class MWSequenceSense:
+    __slots__ = ("senses",)
+
+    def __init__(self, data):
+        self.senses: list[MWSense | list[MWSense | MWBindingSense]] = list(map(self.parse_sense, data))
+
+    @staticmethod
+    def parse_sense(data) -> MWSense | list[MWSense | MWBindingSense]:
+        return {
+            "sense": MWSense,
+            "sen": MWSense,
+            "pseq": lambda data: [MWSense(elm[1]) if elm[0] == "sense" else MWBindingSense(elm[1]) for elm in data],
+        }[data[0]](data[1])
+
+
+class MWDefinition:
+    __slots__ = ("verb_divider", "sense_sequences")
+
+    def __init__(self, data):
+        self.verb_divider: str | None = data.get("vd")
+        self.sense_sequences: list[MWSequenceSense] = list(map(MWSequenceSense, data.get("sseq", [])))
