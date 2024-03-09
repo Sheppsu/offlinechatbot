@@ -778,14 +778,16 @@ class MWSequenceSense:
     __slots__ = ("senses",)
 
     def __init__(self, data):
-        self.senses: list[MWSense | list[MWSense | MWBindingSense]] = list(map(self.parse_sense, data))
+        self.senses: list[MWSense | MWBindingSense | list[MWSense | MWBindingSense]] = list(map(self.parse_sense, data))
 
     @staticmethod
-    def parse_sense(data) -> MWSense | list[MWSense | MWBindingSense]:
+    def parse_sense(data) -> MWSense | MWBindingSense | list[MWSense | MWBindingSense]:
+
         return {
             "sense": MWSense,
             "sen": MWSense,
             "pseq": lambda data: [MWSense(elm[1]) if elm[0] == "sense" else MWBindingSense(elm[1]) for elm in data],
+            "bs": MWBindingSense
         }[data[0]](data[1])
 
 

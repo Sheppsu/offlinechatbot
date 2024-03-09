@@ -1841,7 +1841,9 @@ class Bot:
             for m in ("a_link", "d_link", "i_link", "et_link", "mat", "sx", "dxt"):
                 if mark.startswith(m):
                     return mark.split("|")[1]
-            return ""
+            return {
+                "bc": ":"
+            }.get(mark, "")
 
         while "{" in text:
             start = text.index("{")
@@ -1956,7 +1958,7 @@ class Bot:
 
         return await self.send_message(
             ctx.channel,
-            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {definition}{date}"
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {definition}{date}"
         )
 
     @command_manager.command("example")
@@ -1973,7 +1975,7 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} No example available for this word")
         return await self.send_message(
             ctx.channel,
-            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {self.parse_mw_text(example)}"
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {self.parse_mw_text(example)}"
         )
 
     @command_manager.command("synonyms")
