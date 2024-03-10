@@ -1505,7 +1505,7 @@ class Bot:
     async def send_map(self, ctx):
         return await self.send_message(
             ctx.channel,
-            f"@{ctx.user.display_name} Sorry! This comamnd is temporarily disabled."
+            f"@{ctx.user.display_name} Sorry! This command is temporarily disabled."
         )
 
         args = ctx.get_args('ascii')
