@@ -1503,11 +1503,6 @@ class Bot:
 
     @command_manager.command("map", aliases=["m"])
     async def send_map(self, ctx):
-        return await self.send_message(
-            ctx.channel,
-            f"@{ctx.user.display_name} Sorry! This command is temporarily disabled."
-        )
-
         args = ctx.get_args('ascii')
         if len(args) > 0:
             result = await self.get_beatmap_from_arg(ctx, args[0])
@@ -1721,6 +1716,11 @@ class Bot:
         
     @command_manager.command("send_map", aliases=["sm"])
     async def send_osu_map(self, ctx):
+        return await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} Sorry! This command is temporarily disabled."
+        )
+
         beatmap = self.get_map_cache(ctx)
         if beatmap is None: return
         osu_user = self.database.get_osu_user_from_user_id(ctx.user_id)
