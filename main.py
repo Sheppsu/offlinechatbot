@@ -151,9 +151,12 @@ class Bot:
                     continue
                 self.tz_abbreviations[abbr].append(name)
 
-        self.osu_client = AsynchronousClient.from_osu_credentials(
-            os.getenv("OSU_USERNAME"), os.getenv("OSU_PASSWORD"),
-            request_wait_time=0, limit_per_minute=1200
+        # self.osu_client = AsynchronousClient.from_osu_credentials(
+        #     os.getenv("OSU_USERNAME"), os.getenv("OSU_PASSWORD"),
+        #     request_wait_time=0, limit_per_minute=1200
+        # )
+        self.osu_client = AsynchronousClient.from_client_credentials(
+            os.getenv("OSU_CLIENT_ID"), os.getenv("OSU_CLIENT_SECRET"), None
         )
         self.osu_client.http.use_lazer = False
         self.osu_lock = asyncio.Lock()
@@ -1500,6 +1503,11 @@ class Bot:
 
     @command_manager.command("map", aliases=["m"])
     async def send_map(self, ctx):
+        return await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} Sorry! This comamnd is temporarily disabled."
+        )
+
         args = ctx.get_args('ascii')
         if len(args) > 0:
             result = await self.get_beatmap_from_arg(ctx, args[0])
