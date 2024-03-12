@@ -1907,12 +1907,19 @@ class Bot:
         return data[index-1], index, len(data)
 
     @staticmethod
-    def parse_definition(definition: MWDefinition) -> str:
+    def parse_definition(data) -> str:
+        if (definition := data.get("def", None)) is None:
+            return
+
+        definition = MWDefinition(definition[0])
+
         def get_text(definition):
             return next(filter(lambda item: isinstance(item, MWSenseDefinitionText), definition.items)).content
 
         seq = definition.sense_sequences[0]
         sense = seq.senses[0]
+        if isinstance(sense, MWBindingSense):
+            sense = sense.sense
         if isinstance(sense, MWSense):
             return get_text(sense.definition)
 
@@ -1927,7 +1934,12 @@ class Bot:
         return text
 
     @staticmethod
-    def parse_example(definition: MWDefinition):
+    def parse_example(data):
+        if (definition := data.get("def", None)) is None:
+            return
+
+        definition = MWDefinition(definition[0])
+
         def find_example(sense):
             if isinstance(sense, MWBindingSense):
                 sense = sense.sense
@@ -1958,15 +1970,21 @@ class Bot:
             return
         data, index, length = ret
 
-        definition = self.parse_mw_text(self.parse_definition(MWDefinition(data["def"][0])))
         word = data["meta"]["id"].split(":")[0]
+        definition = self.parse_definition(data)
+        if definition is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} ({index}/{length}) {word} :No definition available for this index"
+            )
+
         fl = data["fl"]
         date = data.get("date")
         date = f" | from {self.parse_mw_text(date)}" if date is not None else ""
 
         return await self.send_message(
             ctx.channel,
-            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {definition}{date}"
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {self.parse_mw_text(definition)}{date}"
         )
 
     @command_manager.command("example")
@@ -1977,10 +1995,14 @@ class Bot:
         data, index, length = ret
 
         word = data["meta"]["id"].split(":")[0]
-        fl = data["fl"]
-        example = self.parse_example(MWDefinition(data["def"][0]))
+        example = self.parse_example(data)
         if example is None:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} No example available for this word")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} ({index}/{length}) {word} :No example available for this index"
+            )
+
+        fl = data["fl"]
         return await self.send_message(
             ctx.channel,
             f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {self.parse_mw_text(example)}"
