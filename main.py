@@ -11,8 +11,8 @@ load_dotenv()
 
 from get_top_players import Client
 from get_popular_anime import create_list as create_anime_list
-from sql import Database, USER_SETTINGS
-from emotes import EmoteRequester
+from sql import Database, USER_SETTINGS, Reminder
+# from emotes import EmoteRequester
 from helper_objects import *
 from context import *
 from util import *
@@ -21,13 +21,14 @@ from constants import *
 import websockets
 import os
 import sys
-from client import Bot as CommunicationClient
+# from client import Bot as CommunicationClient
 from osu import AsynchronousClient, GameModeStr, Mods, Mod, GameModeInt, SoloScore, ScoreDataStatistics
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
 from aiohttp import client_exceptions
-from datetime import datetime, timezone as tz
+from datetime import datetime, timezone as tz, timedelta
+from collections import defaultdict
 
 
 TESTING = "--test" in sys.argv
@@ -100,6 +101,7 @@ class Bot:
         self.afks = []
         self.osu_user_id_cache = {}
         self.mw_cache = {"dictionary": {}, "thesaurus": {}, "args": {}}
+        self.old_reminders = defaultdict(list)
 
         # Load save data
         self.load_data()
@@ -244,6 +246,8 @@ class Bot:
         self.load_anime()
         self.load_azur_lane()
         self.afks = list(self.database.get_afks())
+        for reminder in self.database.get_reminders():
+            self.old_reminders[reminder.channel].append(reminder)
 
     # Api request stuff
     # TODO: consider moving api stuff to its own class
@@ -301,6 +305,10 @@ class Bot:
     # Fundamental
 
     async def start(self):
+        # start off by checking stream status of all channels
+        # checking now will prevent some possible bugs
+        self.get_streams_status()
+
         async with websockets.connect(self.uri) as ws:
             self.ws = ws
             self.running = True
@@ -313,7 +321,7 @@ class Bot:
                 #     comm = asyncio.run_coroutine_threadsafe(self.comm_client.run(), self.loop)  # Start the client that communicates with remote clients
 
                 # Running loop
-                last_check = perf_counter() - 10
+                last_check = perf_counter()
                 last_ping = perf_counter() - 60*60  # 1 hour
                 last_update = perf_counter() - 60
                 last_cache_reset = perf_counter()
@@ -343,6 +351,7 @@ class Bot:
                         self.load_anime()
 
                     if perf_counter() - last_cache_reset >= 60*60*24:
+                        # to prevent the cache from growing too large
                         self.mw_cache["dictionary"] = {}
                         self.mw_cache["thesaurus"] = {}
 
@@ -447,10 +456,11 @@ class Bot:
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
         self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
-        self.offlines[ctx.channel] = not self.cm.channels[ctx.channel].offlineonly
         self.recent_score_cache[ctx.channel] = {}
         self.trivia_helpers[ctx.channel] = TriviaHelper()
         self.mw_cache["args"][ctx.channel] = {"word": "",  "index": 1}
+        for reminder in self.old_reminders.get(ctx.channel, []):
+            self.set_reminder_event(reminder)
 
     async def on_message(self, ctx: MessageContext):
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or \
@@ -890,7 +900,7 @@ class Bot:
         if afk is None:
             self.afks.remove(ctx.sending_user)
             return
-        if (datetime.now(tz=tz.utc) - afk.time.replace(tzinfo=tz.utc)).seconds > 60:
+        if (datetime.now(tz=tz.utc) - afk.time.replace(tzinfo=tz.utc)).total_seconds() > 60:
             await self.remove_user_afk(ctx, afk)
 
     async def remove_user_afk(self, ctx, afk):
@@ -1815,29 +1825,59 @@ class Bot:
         self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Emotes have been refreshed "
                                              f"(this command has a 1 minute cooldown).")
-                                             
-    @command_manager.command("remind")
-    async def set_reminder(self, ctx):
+
+    async def send_reminder_msg(self, reminder: Reminder):
+        user = self.database.get_user_from_user_id(reminder.user_id)
+        # this *shouldn't* occur
+        if user is None:
+            return
+
+        await self.send_message(reminder.channel, f"@{user.username} DinkDonk Reminder! {reminder.message}")
+        self.database.finish_reminder(reminder.id)
+
+    def set_reminder_event(self, reminder: Reminder):
+        length = max(0, (reminder.end_time - datetime.now(tz=tz.utc)).total_seconds())
+        self.set_timed_event(length, self.send_reminder_msg, reminder)
+
+    async def time_text_to_timedelta(self, ctx, text) -> timedelta | None:
         time_multipliers = {
             "s": 1,
             "m": 60,
-            "h": 60*60
+            "h": 60 * 60
         }
-    
+
+        suffix = text[-1].lower()
+        if suffix not in time_multipliers:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} the time must end with s, m, or h Awkward"
+            )
+
+        try:
+            return timedelta(seconds=round(float(text[:-1])*time_multipliers[suffix]))
+        except ValueError:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number Nerdge")
+
+    @command_manager.command("remind")
+    async def set_reminder(self, ctx):
         args = ctx.get_args()
         if len(args) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must give a time (10s, 20m, 1h, ...) Chatting")
-            
-        suffix = args[0][-1].lower()
-        if suffix not in time_multipliers:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} the time must end with s, m, or h Awkward")
-            
-        wait = args[0][:-1]
-        if not wait.isdigit():
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number Nerdge")
+
+        now = datetime.now(tz=tz.utc)
+        length = await self.time_text_to_timedelta(ctx, args[0])
+        if length is None:
+            return
+        if length.total_seconds() < 60:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder must be at least a minute")
         
-        self.set_timed_event(int(wait)*time_multipliers[suffix], self.send_message, ctx.channel, f"@{ctx.user.display_name} DinkDonk {' '.join(args[1:])}")
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder set! Okayge")
+        reminder = self.database.create_reminder(ctx, now+length, " ".join(args[1:]))
+        self.set_reminder_event(reminder)
+
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} Set reminder to occur in {format_date(now-length)}"
+        )
         
     @command_manager.command("osulb")
     async def offline_chat_osu_leaderboard(self, ctx):
