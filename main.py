@@ -276,7 +276,10 @@ class Bot:
 
         try:
             resp = requests.get("https://api.twitch.tv/helix/streams", params=params, headers=headers)
-            data = resp.json()["data"]
+            data = resp.json()
+            if "data" not in data:
+                print(resp.text)
+            data = data["data"]
             online_streams = [int(user["user_id"]) for user in data]
         except Exception as e:
             print(e)
