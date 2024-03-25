@@ -266,7 +266,7 @@ class Bot:
         resp = requests.post("https://id.twitch.tv/oauth2/token", params=params)
         resp.raise_for_status()
         resp = resp.json()
-        return resp['access_token'], resp['expires_in']
+        return resp['access_token'], resp['expires_in'] / 1000
 
     def get_streams_status(self):
         # TODO: account for limit of 100
@@ -278,11 +278,11 @@ class Bot:
             resp = requests.get("https://api.twitch.tv/helix/streams", params=params, headers=headers)
             data = resp.json()
             if "data" not in data:
-                print(resp.text)
+                raise Exception(resp.text)
             data = data["data"]
             online_streams = [int(user["user_id"]) for user in data]
         except Exception as e:
-            print(e)
+            print(f"get_stream_status err: {e}")
             for channel in self.cm.channels.values():
                 self.offlines[channel.name] = not channel.offlineonly
             return
@@ -339,7 +339,7 @@ class Bot:
                         last_check = perf_counter()
 
                     # Check if access token needs to be renewed
-                    if perf_counter() >= self.expire_time:
+                    if perf_counter() >= self.expire_time-20:
                         self.access_token, self.expire_time = self.get_access_token()
                         self.expire_time += perf_counter()
 
