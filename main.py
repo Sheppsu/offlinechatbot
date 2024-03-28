@@ -1842,7 +1842,7 @@ class Bot:
         length = max(0, (reminder.end_time - datetime.now(tz=tz.utc)).total_seconds())
         self.set_timed_event(length, self.send_reminder_msg, reminder)
 
-    async def time_text_to_timedelta(self, ctx, text) -> timedelta | None:
+    async def time_text_to_timedelta(self, ctx, text: str) -> timedelta | None:
         time_multipliers = {
             "s": 1,
             "m": 60,
@@ -1851,11 +1851,34 @@ class Bot:
             "w": 60 * 60 * 24 * 7
         }
 
+        if (cc := text.count(":")) > 0:
+            if cc > 1:
+                return await self.send_message(ctx.channel, "Must specify times in XX:XX format Nerdge")
+
+            tz = self.database.get_user_timezone(ctx.user_id)
+            if tz is None:
+                return await self.send_message(
+                    ctx.channel,
+                    "You need to link a timezone with !linktz to use time reminders"
+                )
+
+            try:
+                hour, minute = tuple(map(int, text.split(":")))
+            except ValueError:
+                return await self.send_message(ctx.channel, "Not a valid integer Nerdge")
+
+            tz = timezone(tz)
+            now = datetime.now(tz=tz)
+            future = now.replace(hour=hour, minute=minute)
+            if now >= future:
+                return await self.send_message(ctx.channel, "It's already past that time")
+            return future - now
+
         suffix = text[-1].lower()
         if suffix not in time_multipliers:
             return await self.send_message(
                 ctx.channel,
-                f"@{ctx.user.display_name} the time must end with s, m, h, d, or w Awkward"
+                f"@{ctx.user.display_name} the time must end with s, m, h, d, or w Nerdge"
             )
 
         try:
@@ -1871,7 +1894,7 @@ class Bot:
 
         now = datetime.now(tz=tz.utc)
         length = await self.time_text_to_timedelta(ctx, args[0])
-        if length is None:
+        if not isinstance(length, timedelta):
             return
         if length.total_seconds() < 60:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder must be at least a minute Nerdge")
