@@ -1871,7 +1871,7 @@ class Bot:
             now = datetime.now(tz=tz)
             future = now.replace(hour=hour, minute=minute)
             if now >= future:
-                return await self.send_message(ctx.channel, "It's already past that time")
+                future += timedelta(hours=24)
             return future - now
 
         suffix = text[-1].lower()
@@ -1890,14 +1890,20 @@ class Bot:
     async def set_reminder(self, ctx):
         args = ctx.get_args()
         if len(args) == 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must give a time (10s, 20m, 1.5h, 3.2d, ...) Chatting")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Must give a time (10s, 20m, 1.5h, 3.2d, ...) Chatting"
+            )
 
         now = datetime.now(tz=tz.utc)
         length = await self.time_text_to_timedelta(ctx, args[0])
         if not isinstance(length, timedelta):
             return
         if length.total_seconds() < 60:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder must be at least a minute Nerdge")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Reminder must be at least a minute Nerdge"
+            )
         
         reminder = self.database.create_reminder(ctx, now+length, " ".join(args[1:]))
         self.set_reminder_event(reminder)
