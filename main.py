@@ -1846,14 +1846,16 @@ class Bot:
         time_multipliers = {
             "s": 1,
             "m": 60,
-            "h": 60 * 60
+            "h": 60 * 60,
+            "d": 60 * 60 * 24,
+            "w": 60 * 60 * 24 * 7
         }
 
         suffix = text[-1].lower()
         if suffix not in time_multipliers:
             return await self.send_message(
                 ctx.channel,
-                f"@{ctx.user.display_name} the time must end with s, m, or h Awkward"
+                f"@{ctx.user.display_name} the time must end with s, m, h, d, or w Awkward"
             )
 
         try:
@@ -1865,21 +1867,21 @@ class Bot:
     async def set_reminder(self, ctx):
         args = ctx.get_args()
         if len(args) == 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must give a time (10s, 20m, 1h, ...) Chatting")
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must give a time (10s, 20m, 1.5h, 3.2d, ...) Chatting")
 
         now = datetime.now(tz=tz.utc)
         length = await self.time_text_to_timedelta(ctx, args[0])
         if length is None:
             return
         if length.total_seconds() < 60:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder must be at least a minute")
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder must be at least a minute Nerdge")
         
         reminder = self.database.create_reminder(ctx, now+length, " ".join(args[1:]))
         self.set_reminder_event(reminder)
 
         await self.send_message(
             ctx.channel,
-            f"@{ctx.user.display_name} Set reminder to occur in {format_date(now-length)}"
+            f"@{ctx.user.display_name} Set reminder to occur in {format_date(now-length)} YIPPEE"
         )
         
     @command_manager.command("osulb")
