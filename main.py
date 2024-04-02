@@ -1432,10 +1432,6 @@ class Bot:
             return
         username = self.osu_username_from_id(user_id)
 
-        if user_id == 9970083:
-            time_set = datetime(year=2024, month=4, day=1, hour=19, minute=10, tzinfo=tz.utc)
-            return await self.send_message(ctx.channel, f"Recent score for cloutiful: VINXIS - Sidetracked Day [Infinity Side] +DTHDCL (DendyHere, 10.50*) 97.79% 2259/2261 | (552/51/4/0) | 1793.23pp | {format_date(time_set)}")
-
         # Get recent score
         if not best:
             scores = await self.make_osu_request(
