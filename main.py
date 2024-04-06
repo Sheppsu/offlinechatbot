@@ -1536,7 +1536,7 @@ class Bot:
         sent_message = await self.send_message(ctx.channel, f"@{ctx.user.display_name} {text}")
         self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
-    @command_manager.command("osu", cooldown=Cooldown(0, 5))
+    @command_manager.command("osu", alises=["profile", "o"], cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
         args = ctx.get_args('ascii')
         use_lazer = self.process_arg('-l', args)
