@@ -316,11 +316,11 @@ class Database:
     # lastfm
 
     def new_lastfm_data(self, user_id, lastfm_username):
-        self.get_cursor().execute(f"INSERT INTO lastfm (user_id, lastfm_user) VALUES ({user_id}, '{lastfm_username['user']['name']}')")
+        self.get_cursor().execute(f"INSERT INTO lastfm (user_id, lastfm_user) VALUES ({user_id}, {sqlstr(lastfm_username)})")
         self.database.commit()
 
     def update_lastfm_data(self, user_id, lastfm_username):
-        self.get_cursor().execute(f"UPDATE lastfm SET lastfm_user = '{lastfm_username['user']['name']}' WHERE user_id = '{user_id}'")
+        self.get_cursor().execute(f"UPDATE lastfm SET lastfm_user = {sqlstr(lastfm_username)} WHERE user_id = {user_id}")
         self.database.commit()
 
     def get_lastfm_user_from_user_id(self, user_id):
