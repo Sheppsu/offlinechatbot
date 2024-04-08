@@ -30,6 +30,25 @@ class AFK:
         )
 
 
+@dataclass
+class Reminder:
+    id: int
+    user_id: int
+    end_time: datetime
+    message: str
+    channel: str
+
+    @classmethod
+    def from_db_data(cls, data):
+        return cls(
+            data[0],
+            data[1],
+            datetime.fromisoformat(data[2]),
+            data[3],
+            data[4]
+        )
+
+
 USER_SETTINGS = (
     "receive", "autoafk"
 )
@@ -168,6 +187,12 @@ class Database:
         user = cursor.fetchone()
         return User(*user) if user else None
 
+    def get_user_from_user_id(self, user_id):
+        cursor = self.get_cursor()
+        cursor.execute(f"SELECT * FROM userdata WHERE userid = {user_id}")
+        user = cursor.fetchone()
+        return User(*user) if user else None
+
     def get_current_user(self, ctx):
         cursor = self.insert_user_and_do(ctx, f"SELECT * FROM userdata WHERE userid = {ctx.user_id}")
         return User(*cursor.fetchone())
@@ -267,21 +292,26 @@ class Database:
         timezone = cursor.fetchone()
         return timezone[0] if timezone else None
 
-    # lastfm
+    # reminders
 
-    def new_lastfm_data(self, user_id, lastfm_username):
-        self.get_cursor().execute(f"INSERT INTO lastfm (user_id, lastfm_user) VALUES ({user_id}, '{lastfm_username['user']['name']}')")
-        self.database.commit()
-
-    def update_lastfm_data(self, user_id, lastfm_username):
-        self.get_cursor().execute(f"UPDATE lastfm SET lastfm_user = '{lastfm_username['user']['name']}' WHERE user_id = '{user_id}'")
-        self.database.commit()
-
-    def get_lastfm_user_from_user_id(self, user_id):
+    def get_reminders(self) -> list[Reminder]:
         cursor = self.get_cursor()
-        cursor.execute(f"SELECT lastfm_user FROM lastfm WHERE user_id = {user_id}")
-        lastfm_user = cursor.fetchone()
-        return lastfm_user if lastfm_user else None
+        cursor.execute("SELECT id, user_id, end_time, message, channel FROM reminders")
+        return list(map(Reminder.from_db_data, cursor.fetchall()))
+
+    def create_reminder(self, ctx, end_time, message) -> Reminder:
+        cursor = self.get_cursor()
+        cursor.execute(
+            "INSERT INTO reminders (user_id, end_time, message, channel) "
+            f"VALUES ({ctx.user_id}, {sqlstr(end_time.isoformat())}, {sqlstr(message)}, '{ctx.channel}')"
+        )
+        self.database.commit()
+        cursor.execute("SELECT LAST_INSERT_ID()")
+        return Reminder(cursor.fetchone()[0], ctx.user_id, end_time, message, ctx.channel)
+
+    def finish_reminder(self, reminder_id):
+        self.get_cursor().execute(f"DELETE FROM reminders WHERE id = {reminder_id}")
+        self.database.commit()
 
     # misc
 

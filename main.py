@@ -11,9 +11,8 @@ load_dotenv()
 
 from get_top_players import Client
 from get_popular_anime import create_list as create_anime_list
-from sql import Database, USER_SETTINGS
-from emotes import EmoteRequester
-from lastfm import LastFM
+from sql import Database, USER_SETTINGS, Reminder
+# from emotes import EmoteRequester
 from helper_objects import *
 from context import *
 from util import *
@@ -22,13 +21,14 @@ from constants import *
 import websockets
 import os
 import sys
-from client import Bot as CommunicationClient
+# from client import Bot as CommunicationClient
 from osu import AsynchronousClient, GameModeStr, Mods, Mod, GameModeInt, SoloScore, ScoreDataStatistics
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
 from aiohttp import client_exceptions
-from datetime import datetime, timezone as tz
+from datetime import datetime, timezone as tz, timedelta
+from collections import defaultdict
 
 
 TESTING = "--test" in sys.argv
@@ -51,6 +51,9 @@ class Bot:
     username = "sheppsubot"
     oauth = os.getenv("OAUTH")
     uri = "ws://irc-ws.chat.twitch.tv:80"
+
+    MWD_API_KEY = os.getenv("MWD_API_KEY")
+    MWT_API_KEY = os.getenv("MWT_API_KEY")
 
     restarts = 0
 
@@ -97,6 +100,8 @@ class Bot:
         # cache data
         self.afks = []
         self.osu_user_id_cache = {}
+        self.mw_cache = {"dictionary": {}, "thesaurus": {}, "args": {}}
+        self.old_reminders = defaultdict(list)
 
         # Load save data
         self.load_data()
@@ -148,9 +153,12 @@ class Bot:
                     continue
                 self.tz_abbreviations[abbr].append(name)
 
-        self.osu_client = AsynchronousClient.from_osu_credentials(
-            os.getenv("OSU_USERNAME"), os.getenv("OSU_PASSWORD"),
-            request_wait_time=0, limit_per_minute=1200
+        # self.osu_client = AsynchronousClient.from_osu_credentials(
+        #     os.getenv("OSU_USERNAME"), os.getenv("OSU_PASSWORD"),
+        #     request_wait_time=0, limit_per_minute=1200
+        # )
+        self.osu_client = AsynchronousClient.from_client_credentials(
+            os.getenv("OSU_CLIENT_ID"), os.getenv("OSU_CLIENT_SECRET"), None
         )
         self.osu_client.http.use_lazer = False
         self.osu_lock = asyncio.Lock()
@@ -241,6 +249,8 @@ class Bot:
         self.load_anime()
         self.load_azur_lane()
         self.afks = list(self.database.get_afks())
+        for reminder in self.database.get_reminders():
+            self.old_reminders[reminder.channel].append(reminder)
 
     # Api request stuff
     # TODO: consider moving api stuff to its own class
@@ -259,7 +269,7 @@ class Bot:
         resp = requests.post("https://id.twitch.tv/oauth2/token", params=params)
         resp.raise_for_status()
         resp = resp.json()
-        return resp['access_token'], resp['expires_in']
+        return resp['access_token'], resp['expires_in'] / 1000
 
     def get_streams_status(self):
         # TODO: account for limit of 100
@@ -269,10 +279,13 @@ class Bot:
 
         try:
             resp = requests.get("https://api.twitch.tv/helix/streams", params=params, headers=headers)
-            data = resp.json()["data"]
+            data = resp.json()
+            if "data" not in data:
+                raise Exception(resp.text)
+            data = data["data"]
             online_streams = [int(user["user_id"]) for user in data]
         except Exception as e:
-            print(e)
+            print(f"get_stream_status err: {e}")
             for channel in self.cm.channels.values():
                 self.offlines[channel.name] = not channel.offlineonly
             return
@@ -282,9 +295,26 @@ class Bot:
         for channel_id in channels:
             self.offlines[user_logins[channel_id]] = channel_id not in online_streams
 
+    def make_mw_req(self, endpoint, dictionary=True):
+        cache = self.mw_cache["dictionary" if dictionary else "thesaurus"]
+        if (value := cache.get(endpoint.lower(), None)) is not None:
+            return value
+
+        base, key = ("collegiate", self.MWD_API_KEY) if dictionary else ("thesaurus", self.MWT_API_KEY)
+        resp = requests.get(f"https://www.dictionaryapi.com/api/v3/references/{base}/json/{endpoint}?key={key}")
+        if resp.status_code == 200:
+            cache[endpoint.lower()] = (data := resp.json())
+            return data
+        print(f"mw returned {resp.status_code}: {resp.text}")
+        return
+
     # Fundamental
 
     async def start(self):
+        # start off by checking stream status of all channels
+        # checking now will prevent some possible bugs
+        self.get_streams_status()
+
         async with websockets.connect(self.uri) as ws:
             self.ws = ws
             self.running = True
@@ -297,9 +327,10 @@ class Bot:
                 #     comm = asyncio.run_coroutine_threadsafe(self.comm_client.run(), self.loop)  # Start the client that communicates with remote clients
 
                 # Running loop
-                last_check = perf_counter() - 20
+                last_check = perf_counter()
                 last_ping = perf_counter() - 60*60  # 1 hour
                 last_update = perf_counter() - 60
+                last_cache_reset = perf_counter()
                 
                 # comm_done = False
                 while self.running:
@@ -311,7 +342,7 @@ class Bot:
                         last_check = perf_counter()
 
                     # Check if access token needs to be renewed
-                    if perf_counter() >= self.expire_time:
+                    if perf_counter() >= self.expire_time-20:
                         self.access_token, self.expire_time = self.get_access_token()
                         self.expire_time += perf_counter()
 
@@ -324,6 +355,11 @@ class Bot:
                         last_update = perf_counter()
                         create_anime_list()
                         self.load_anime()
+
+                    if perf_counter() - last_cache_reset >= 60*60*24:
+                        # to prevent the cache from growing too large
+                        self.mw_cache["dictionary"] = {}
+                        self.mw_cache["thesaurus"] = {}
 
                     # Check if poll is no longer running, in which case, the bot is no longer running.
                     if poll.done():
@@ -425,9 +461,11 @@ class Bot:
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
         self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
-        self.offlines[ctx.channel] = not self.cm.channels[ctx.channel].offlineonly
         self.recent_score_cache[ctx.channel] = {}
         self.trivia_helpers[ctx.channel] = TriviaHelper()
+        self.mw_cache["args"][ctx.channel] = {"word": "",  "index": 1}
+        for reminder in self.old_reminders.get(ctx.channel, []):
+            self.set_reminder_event(reminder)
 
     async def on_message(self, ctx: MessageContext):
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or \
@@ -736,11 +774,11 @@ class Bot:
                 ", ".join(USER_SETTINGS)
             )
         try:
-            value = {"on": True, "off": False}[args[1].lower()]
+            value = {"on": 1, "off": 0}[args[1].lower()]
         except KeyError:
             return await self.send_message(ctx.channel, "You must specify on or off.")
 
-        self.database.update_userdata(ctx, setting, value)
+        self.database.update_userdata(ctx, setting, str(value))
         await self.send_message(
             ctx.channel,
             f"@{ctx.user.display_name} The {setting} setting has been turned {args[1]}."
@@ -867,7 +905,7 @@ class Bot:
         if afk is None:
             self.afks.remove(ctx.sending_user)
             return
-        if (datetime.now(tz=tz.utc) - afk.time.replace(tzinfo=tz.utc)).seconds > 60:
+        if (datetime.now(tz=tz.utc) - afk.time.replace(tzinfo=tz.utc)).total_seconds() > 60:
             await self.remove_user_afk(ctx, afk)
 
     async def remove_user_afk(self, ctx, afk):
@@ -1500,7 +1538,7 @@ class Bot:
         sent_message = await self.send_message(ctx.channel, f"@{ctx.user.display_name} {text}")
         self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
 
-    @command_manager.command("osu", cooldown=Cooldown(0, 5))
+    @command_manager.command("osu", aliases=["profile", "o"], cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
         args = ctx.get_args('ascii')
         use_lazer = self.process_arg('-l', args)
@@ -1693,6 +1731,11 @@ class Bot:
         
     @command_manager.command("send_map", aliases=["sm"])
     async def send_osu_map(self, ctx):
+        return await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} Sorry! This command is temporarily disabled."
+        )
+
         beatmap = self.get_map_cache(ctx)
         if beatmap is None: return
         osu_user = self.database.get_osu_user_from_user_id(ctx.user_id)
@@ -1787,81 +1830,291 @@ class Bot:
         self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Emotes have been refreshed "
                                              f"(this command has a 1 minute cooldown).")
-                                             
-    @command_manager.command("remind")
-    async def set_reminder(self, ctx):
+
+    async def send_reminder_msg(self, reminder: Reminder):
+        user = self.database.get_user_from_user_id(reminder.user_id)
+        # this *shouldn't* occur
+        if user is None:
+            return
+
+        await self.send_message(reminder.channel, f"@{user.username} DinkDonk Reminder! {reminder.message}")
+        self.database.finish_reminder(reminder.id)
+
+    def set_reminder_event(self, reminder: Reminder):
+        length = max(0, (reminder.end_time - datetime.now(tz=tz.utc)).total_seconds())
+        self.set_timed_event(length, self.send_reminder_msg, reminder)
+
+    async def time_text_to_timedelta(self, ctx, text: str) -> timedelta | None:
         time_multipliers = {
             "s": 1,
             "m": 60,
-            "h": 60*60
+            "h": 60 * 60,
+            "d": 60 * 60 * 24,
+            "w": 60 * 60 * 24 * 7
         }
-    
+
+        if (cc := text.count(":")) > 0:
+            if cc > 1:
+                return await self.send_message(ctx.channel, "Must specify times in XX:XX format Nerdge")
+
+            tz = self.database.get_user_timezone(ctx.user_id)
+            if tz is None:
+                return await self.send_message(
+                    ctx.channel,
+                    "You need to link a timezone with !linktz to use time reminders"
+                )
+
+            try:
+                hour, minute = tuple(map(int, text.split(":")))
+            except ValueError:
+                return await self.send_message(ctx.channel, "Not a valid integer Nerdge")
+
+            tz = timezone(tz)
+            now = datetime.now(tz=tz)
+            future = now.replace(hour=hour, minute=minute)
+            if now >= future:
+                future += timedelta(hours=24)
+            return future - now
+
+        suffix = text[-1].lower()
+        if suffix not in time_multipliers:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} the time must end with s, m, h, d, or w Nerdge"
+            )
+
+        try:
+            return timedelta(seconds=round(float(text[:-1])*time_multipliers[suffix]))
+        except ValueError:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number Nerdge")
+
+    @command_manager.command("remind")
+    async def set_reminder(self, ctx):
         args = ctx.get_args()
         if len(args) == 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must give a time (10s, 20m, 1h, ...) Chatting")
-            
-        suffix = args[0][-1].lower()
-        if suffix not in time_multipliers:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} the time must end with s, m, or h Awkward")
-            
-        wait = args[0][:-1]
-        if not wait.isdigit():
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number Nerdge")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Must give a time (10s, 20m, 1.5h, 3.2d, ...) Chatting"
+            )
+
+        now = datetime.now(tz=tz.utc)
+        length = await self.time_text_to_timedelta(ctx, args[0])
+        if not isinstance(length, timedelta):
+            return
+        if length.total_seconds() < 60:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Reminder must be at least a minute Nerdge"
+            )
         
-        self.set_timed_event(int(wait)*time_multipliers[suffix], self.send_message, ctx.channel, f"@{ctx.user.display_name} DinkDonk {' '.join(args[1:])}")
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Reminder set! Okayge")
+        reminder = self.database.create_reminder(ctx, now+length, " ".join(args[1:]))
+        self.set_reminder_event(reminder)
+
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} Set reminder to occur in {format_date(now-length)} YIPPEE"
+        )
         
     @command_manager.command("osulb")
     async def offline_chat_osu_leaderboard(self, ctx):
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://bot.sheppsu.me/osu/")
 
-    # lastfm
+    @staticmethod
+    def parse_mw_text(text):
+        def parse_mark(mark):
+            for m in ("a_link", "d_link", "i_link", "et_link", "mat", "sx", "dxt"):
+                if mark.startswith(m):
+                    return mark.split("|")[1]
+            return {
+                "bc": ":"
+            }.get(mark, "")
 
-    @command_manager.command("lastfm_link")
-    async def link_lastfm(self, ctx):
-        args = ctx.get_args('ascii')
-        if len(args) == 0 or args[0].strip() == "":
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username.")
+        while "{" in text:
+            start = text.index("{")
+            end = text.index("}")
+            text = text[:start] + parse_mark(text[start+1:end]) + text[end+1:]
+        return text
 
-        username = " ".join(args).strip()
-        lastfm_username = await self.lastfm.get_lastfm_user(username)
+    async def parse_mw_args(self, ctx, dictionary=True):
+        args = ctx.get_args()
+        last_args = self.mw_cache["args"][ctx.channel] or {}
 
-        if lastfm_username is None:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
+        index = self.process_value_arg("-i", args, last_args["index"])
+        if type(index) == str and not index.isdigit():
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Index must be an integer")
 
-        lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
+        if len(args) == 0 and len(last_args["word"]) == 0:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Specify a word to lookup")
+        elif len(args) != 0 and type(index) == int:
+            # default to index 1 when word is specified but not index
+            index = 1
 
-        if lastfm_user is not None:
-            self.database.update_lastfm_data(ctx.user_id, lastfm_username)
-        else:
-            self.database.new_lastfm_data(ctx.user_id, lastfm_username)
+        word = " ".join(args) or last_args["word"]
+        index = int(index)
+        data = self.make_mw_req(word, dictionary=dictionary)
 
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {lastfm_username['user']['name']} to your account.")
-    
-    @command_manager.command("lastfm_username")
-    async def lastfm_username(self, ctx):
-        lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
-        if lastfm_user == None:
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} There is no username linked to your account.")
-        else:
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your username is {lastfm_user[0]}")
-    
-    @command_manager.command("np")
-    async def lastfm_np(self, ctx):
-        lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
-        if lastfm_user == None:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You don't have a username linked to LastFM, you can do !lastfm_link *username* to link your account.")
-        
-        recent_song = self.lastfm.get_recent_song(lastfm_user[0])
+        if data is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Something went wrong when communicating with the Merriam-Webster api"
+            )
 
-        if "@attr" in recent_song['recenttracks']['track'][0]:
-            song_title = recent_song['recenttracks']['track'][0]['name']
-            song_artist = recent_song['recenttracks']['track'][0]['artist']['name']
-            song_url = recent_song['recenttracks']['track'][0]['url']
+        if len(data) == 0:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} that word does not exist in the Merriam-Webster collegiate dictionary"
+            )
 
-            await self.send_message(ctx.channel, f"Now playing for {lastfm_user[0]}: {song_artist} - {song_title} | {song_url}")
-        else:
-            await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are not currently playing anything.")
+        if type(data[0]) == str:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Could not find that word. Did you mean one of these words: {', '.join(data)}"
+            )
+
+        if index not in range(1, len(data)+1):
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Index must be between 1 and {len(data)}"
+            )
+
+        self.mw_cache["args"][ctx.channel]["word"] = word
+        self.mw_cache["args"][ctx.channel]["index"] = index
+
+        return data[index-1], index, len(data)
+
+    @staticmethod
+    def parse_definition(data) -> str:
+        if (definition := data.get("def", None)) is None:
+            return
+
+        definition = MWDefinition(definition[0])
+
+        def get_text(definition):
+            return next(filter(lambda item: isinstance(item, MWSenseDefinitionText), definition.items)).content
+
+        seq = definition.sense_sequences[0]
+        sense = seq.senses[0]
+        if isinstance(sense, MWBindingSense):
+            sense = sense.sense
+        if isinstance(sense, MWSense):
+            return get_text(sense.definition)
+
+        text = ""
+        for i, sense in enumerate(sense):
+            if isinstance(sense, MWBindingSense):
+                sense = sense.sense
+            if i != 0 and sense.sense_number is not None:
+                text += f"{sense.sense_number} "
+            text += get_text(sense.definition)
+
+        return text
+
+    @staticmethod
+    def parse_example(data):
+        if (definition := data.get("def", None)) is None:
+            return
+
+        definition = MWDefinition(definition[0])
+
+        def find_example(sense):
+            if isinstance(sense, MWBindingSense):
+                sense = sense.sense
+
+            if sense.definition is not None:
+                for item in sense.definition.items:
+                    print(item)
+                    if isinstance(item, MWSenseVerbalIllustration):
+                        return item.items[0]["t"]
+
+            if sense.divided_sense is not None:
+                return find_example(sense.divided_sense)
+
+        # I love MW response format!!!!!
+        for seq in definition.sense_sequences:
+            for sense in seq.senses:
+                if isinstance(sense, MWSense):
+                    sense = [sense]
+                for sense in sense:
+                    example = find_example(sense)
+                    if example is not None:
+                        return example
+
+    @command_manager.command("define", aliases=["def"])
+    async def define_word(self, ctx):
+        ret = await self.parse_mw_args(ctx)
+        if type(ret) != tuple:
+            return
+        data, index, length = ret
+
+        word = data["meta"]["id"].split(":")[0]
+        definition = self.parse_definition(data)
+        if definition is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} ({index}/{length}) {word} :No definition available for this index"
+            )
+
+        fl = data["fl"]
+        date = data.get("date")
+        date = f" | from {self.parse_mw_text(date)}" if date is not None else ""
+
+        return await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {self.parse_mw_text(definition)}{date}"
+        )
+
+    @command_manager.command("example")
+    async def example_word(self, ctx):
+        ret = await self.parse_mw_args(ctx)
+        if type(ret) != tuple:
+            return
+        data, index, length = ret
+
+        word = data["meta"]["id"].split(":")[0]
+        example = self.parse_example(data)
+        if example is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} ({index}/{length}) {word} :No example available for this index"
+            )
+
+        fl = data["fl"]
+        return await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {self.parse_mw_text(example)}"
+        )
+
+    @command_manager.command("synonyms")
+    async def synonyms_word(self, ctx):
+        ret = await self.parse_mw_args(ctx, dictionary=False)
+        if type(ret) != tuple:
+            return
+        data, index, length = ret
+
+        word = data["meta"]["id"].split(":")[0]
+        fl = data["fl"]
+        syns = sum(data["meta"]["syns"], [])[:20]
+        if len(syns) == 0:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no synonym entries")
+        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(syns)}")
+
+    @command_manager.command("antonyms")
+    async def antonyms_word(self, ctx):
+        ret = await self.parse_mw_args(ctx, dictionary=False)
+        if type(ret) != tuple:
+            return
+        data, index, length = ret
+
+        if type(data) == str:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
+
+        word = data["meta"]["id"].split(":")[0]
+        fl = data["fl"]
+        ants = sum(data["meta"]["ants"], [])[:20]
+        if len(ants) == 0:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
+        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(ants)}")
+
 
 if __name__ == "__main__":
     bot = Bot(command_manager)
