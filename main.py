@@ -17,6 +17,7 @@ from helper_objects import *
 from context import *
 from util import *
 from constants import *
+from lastfm import LastFMClient
 
 import websockets
 import os
@@ -164,6 +165,9 @@ class Bot:
         self.osu_lock = asyncio.Lock()
 
         self.message_buffer = []
+
+        # lastfm
+        self.lastfm = LastFMClient()
 
     # Util
 
@@ -386,7 +390,6 @@ class Bot:
 
     async def connect(self):
         await self.ws.send(f"PASS {self.oauth}")
-        print(f"> PASS {self.oauth}")
         await self.ws.send(f"NICK {self.username}")
         print(f"> NICK {self.username}")
 
@@ -2114,10 +2117,56 @@ class Bot:
         ants = sum(data["meta"]["ants"], [])[:20]
         if len(ants) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
+
         await self.send_message(
             ctx.channel,
             f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(ants)}"
         )
+
+    @command_manager.command("lastfm_link", aliases=["fmlink"])
+    async def link_lastfm(self, ctx):
+        args = ctx.get_args('ascii')
+        if len(args) == 0 or args[0].strip() == "":
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username.")
+
+        username = " ".join(args).strip()
+        user = self.lastfm.get_lastfm_user(username)
+
+        if user is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
+
+        username = user['user']['name']
+
+        # check whether they've linked before
+        if self.database.get_lastfm_user_from_user_id(ctx.user_id) is not None:
+            self.database.update_lastfm_data(ctx.user_id, username)
+        else:
+            self.database.new_lastfm_data(ctx.user_id, username)
+
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {username} to your account.")
+    
+    @command_manager.command("lastfm_np", aliases=["fmnp"])
+    async def lastfm_np(self, ctx):
+        lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
+        if lastfm_user is None:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} You don't have a username linked to LastFM, "
+                f"you can do !fmlink *username* to link your account."
+            )
+        
+        recent_song = self.lastfm.get_recent_song(lastfm_user[0])
+
+        if "@attr" in recent_song['recenttracks']['track'][0]:
+            song_title = recent_song['recenttracks']['track'][0]['name']
+            song_artist = recent_song['recenttracks']['track'][0]['artist']['name']
+            song_url = recent_song['recenttracks']['track'][0]['url']
+            return await self.send_message(
+                ctx.channel,
+                f"Now playing for {lastfm_user[0]}: {song_artist} - {song_title} | {song_url}"
+            )
+
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are not currently playing anything.")
 
     @command_manager.command("update_userdata", aliases=["updateud"])
     async def update_userdata(self, ctx):
