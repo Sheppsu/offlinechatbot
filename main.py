@@ -2119,7 +2119,7 @@ class Bot:
             f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(ants)}"
         )
 
-    @command_manager.command("update_userdata", "updateud")
+    @command_manager.command("update_userdata", aliases=["updateud"])
     async def update_userdata(self, ctx):
         self.database.update_userdata(ctx, "username", ctx.sending_user)
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} updated your username for userdata")
