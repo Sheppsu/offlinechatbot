@@ -2140,17 +2140,6 @@ class Bot:
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {username} to your account.")
     
-    @command_manager.command("lastfm_username", aliases=["fmusername", "fmuser"])
-    async def lastfm_username(self, ctx):
-        lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
-        if lastfm_user is None:
-            return await self.send_message(
-                ctx.channel,
-                f"@{ctx.user.display_name} There is no username linked to your account."
-            )
-
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} You're linked to {lastfm_user[0]} for lastfm")
-    
     @command_manager.command("lastfm_np", aliases=["fmnp"])
     async def lastfm_np(self, ctx):
         lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
