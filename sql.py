@@ -267,6 +267,22 @@ class Database:
         timezone = cursor.fetchone()
         return timezone[0] if timezone else None
 
+    # lastfm
+
+    def new_lastfm_data(self, user_id, lastfm_username):
+        self.get_cursor().execute(f"INSERT INTO lastfm (user_id, lastfm_user) VALUES ({user_id}, '{lastfm_username['user']['name']}')")
+        self.database.commit()
+
+    def update_lastfm_data(self, user_id, lastfm_username):
+        self.get_cursor().execute(f"UPDATE lastfm SET lastfm_user = '{lastfm_username['user']['name']}' WHERE user_id = '{user_id}'")
+        self.database.commit()
+
+    def get_lastfm_user_from_user_id(self, user_id):
+        cursor = self.get_cursor()
+        cursor.execute(f"SELECT lastfm_user FROM lastfm WHERE user_id = {user_id}")
+        lastfm_user = cursor.fetchone()
+        return lastfm_user if lastfm_user else None
+
     # misc
 
     def save_messages(self, ctx, buffer):
