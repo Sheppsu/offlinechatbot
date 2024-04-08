@@ -1889,7 +1889,7 @@ class Bot:
         except ValueError:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number Nerdge")
 
-    @command_manager.command("remind")
+    @command_manager.command("remind", aliases=["reminder", "remindme"])
     async def set_reminder(self, ctx):
         args = ctx.get_args()
         if len(args) == 0:
@@ -2059,7 +2059,7 @@ class Bot:
         date = data.get("date")
         date = f" | from {self.parse_mw_text(date)}" if date is not None else ""
 
-        return await self.send_message(
+        await self.send_message(
             ctx.channel,
             f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {self.parse_mw_text(definition)}{date}"
         )
@@ -2080,7 +2080,7 @@ class Bot:
             )
 
         fl = data["fl"]
-        return await self.send_message(
+        await self.send_message(
             ctx.channel,
             f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}] {self.parse_mw_text(example)}"
         )
@@ -2097,7 +2097,10 @@ class Bot:
         syns = sum(data["meta"]["syns"], [])[:20]
         if len(syns) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no synonym entries")
-        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(syns)}")
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(syns)}"
+        )
 
     @command_manager.command("antonyms")
     async def antonyms_word(self, ctx):
@@ -2114,9 +2117,11 @@ class Bot:
         ants = sum(data["meta"]["ants"], [])[:20]
         if len(ants) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
-        return await self.send_message(ctx.channel, f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(ants)}")
-    
-        # lastfm
+
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(ants)}"
+        )
 
     @command_manager.command("lastfm_link", aliases=["fmlink"])
     async def link_lastfm(self, ctx):
@@ -2162,6 +2167,11 @@ class Bot:
             )
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are not currently playing anything.")
+
+    @command_manager.command("update_userdata", aliases=["updateud"])
+    async def update_userdata(self, ctx):
+        self.database.update_userdata(ctx, "username", ctx.sending_user)
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} updated your username for userdata")
 
 
 if __name__ == "__main__":
