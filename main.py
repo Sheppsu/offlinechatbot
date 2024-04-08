@@ -1886,7 +1886,7 @@ class Bot:
         except ValueError:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} not a valid number Nerdge")
 
-    @command_manager.command("remind")
+    @command_manager.command("remind", aliases=["reminder", "remindme"])
     async def set_reminder(self, ctx):
         args = ctx.get_args()
         if len(args) == 0:
