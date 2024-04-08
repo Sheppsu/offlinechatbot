@@ -17,7 +17,7 @@ from helper_objects import *
 from context import *
 from util import *
 from constants import *
-
+from lastfm import LastFM
 import websockets
 import os
 import sys
@@ -2114,6 +2114,54 @@ class Bot:
         if len(ants) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} this word has no antonym entries")
         return await self.send_message(ctx.channel, f"@{ctx.user.display_name} ({index}/{length}) {word} [{fl}]: {', '.join(ants)}")
+    
+        # lastfm
+
+    @command_manager.command("lastfm_link")
+    async def link_lastfm(self, ctx):
+        args = ctx.get_args('ascii')
+        if len(args) == 0 or args[0].strip() == "":
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username.")
+
+        username = " ".join(args).strip()
+        lastfm_username = await self.lastfm.get_lastfm_user(username)
+
+        if lastfm_username is None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
+
+        lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
+
+        if lastfm_user is not None:
+            self.database.update_lastfm_data(ctx.user_id, lastfm_username)
+        else:
+            self.database.new_lastfm_data(ctx.user_id, lastfm_username)
+
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} Linked {lastfm_username['user']['name']} to your account.")
+    
+    @command_manager.command("lastfm_username")
+    async def lastfm_username(self, ctx):
+        lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
+        if lastfm_user == None:
+            await self.send_message(ctx.channel, f"@{ctx.user.display_name} There is no username linked to your account.")
+        else:
+            await self.send_message(ctx.channel, f"@{ctx.user.display_name} Your username is {lastfm_user[0]}")
+    
+    @command_manager.command("np")
+    async def lastfm_np(self, ctx):
+        lastfm_user = self.database.get_lastfm_user_from_user_id(ctx.user_id)
+        if lastfm_user == None:
+            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} You don't have a username linked to LastFM, you can do !lastfm_link *username* to link your account.")
+        
+        recent_song = self.lastfm.get_recent_song(lastfm_user[0])
+
+        if "@attr" in recent_song['recenttracks']['track'][0]:
+            song_title = recent_song['recenttracks']['track'][0]['name']
+            song_artist = recent_song['recenttracks']['track'][0]['artist']['name']
+            song_url = recent_song['recenttracks']['track'][0]['url']
+
+            await self.send_message(ctx.channel, f"Now playing for {lastfm_user[0]}: {song_artist} - {song_title} | {song_url}")
+        else:
+            await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are not currently playing anything.")
 
 
 if __name__ == "__main__":
