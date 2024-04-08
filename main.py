@@ -1,11 +1,5 @@
 # coding=utf-8
 
-# TODO: clean up code in general
-#       utilize DMs (maybe)
-#       make decorators for osu arguments
-#       implement rate limit for unverified bot
-#       save bans to database so they can be made with a command and also check via user id
-#       try communicating with the mysql server more instead of saving data locally
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -389,9 +383,9 @@ class Bot:
         self.running = False
 
     async def connect(self):
+        print(f"Connecting to irc server as {self.username}")
         await self.ws.send(f"PASS {self.oauth}")
         await self.ws.send(f"NICK {self.username}")
-        print(f"> NICK {self.username}")
 
     async def poll(self):
         while self.running:
