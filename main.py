@@ -453,13 +453,17 @@ class Bot:
             self.own_state = ctx
 
     async def on_join(self, ctx: JoinContext):
+        # probably reconnecting to the channel
+        if ctx.channel in self.message_locks:
+            return
+
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
         self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         self.recent_score_cache[ctx.channel] = {}
         self.trivia_helpers[ctx.channel] = TriviaHelper()
         self.mw_cache["args"][ctx.channel] = {"word": "",  "index": 1}
-        for reminder in self.old_reminders.get(ctx.channel, []):
+        for reminder in self.old_reminders.pop(ctx.channel, []):
             self.set_reminder_event(reminder)
 
     async def on_message(self, ctx: MessageContext):
@@ -1836,7 +1840,7 @@ class Bot:
         self.database.finish_reminder(reminder.id)
 
     def set_reminder_event(self, reminder: Reminder):
-        length = max(0, (reminder.end_time - datetime.now(tz=tz.utc)).total_seconds())
+        length = max(0.0, (reminder.end_time - datetime.now(tz=tz.utc)).total_seconds())
         self.set_timed_event(length, self.send_reminder_msg, reminder)
 
     async def time_text_to_timedelta(self, ctx, text: str) -> timedelta | None:
