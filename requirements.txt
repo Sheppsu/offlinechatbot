@@ -1,5 +1,5 @@
 python-dotenv==0.20.0
-osu.py==1.2.0
+osu.py>=2.0.0
 websockets==11.0.3
 mysql-connector-python==8.0.29
 pytz==2022.1

@@ -148,14 +148,7 @@ class Bot:
                     continue
                 self.tz_abbreviations[abbr].append(name)
 
-        # self.osu_client = AsynchronousClient.from_osu_credentials(
-        #     os.getenv("OSU_USERNAME"), os.getenv("OSU_PASSWORD"),
-        #     request_wait_time=0, limit_per_minute=1200
-        # )
-        self.osu_client = AsynchronousClient.from_client_credentials(
-            os.getenv("OSU_CLIENT_ID"), os.getenv("OSU_CLIENT_SECRET"), None
-        )
-        self.osu_client.http.use_lazer = False
+        self.osu_client = None
         self.osu_lock = asyncio.Lock()
 
         self.message_buffer = []
@@ -309,6 +302,9 @@ class Bot:
         # start off by checking stream status of all channels
         # checking now will prevent some possible bugs
         self.get_streams_status()
+        self.osu_client = await AsynchronousClient.from_client_credentials(
+            os.getenv("OSU_CLIENT_ID"), os.getenv("OSU_CLIENT_SECRET"), None
+        )
 
         async with websockets.connect(self.uri) as ws:
             self.ws = ws
@@ -1366,9 +1362,8 @@ class Bot:
             if osu_user_id == user_id:
                 return username
 
-    async def make_osu_request(self, request, use_lazer=False):
+    async def make_osu_request(self, request):
         await self.osu_lock.acquire()
-        self.osu_client.http.use_lazer = use_lazer
         try:
             result = await request
         except:
@@ -1540,7 +1535,6 @@ class Bot:
     @command_manager.command("osu", aliases=["profile", "o"], cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
         args = ctx.get_args('ascii')
-        use_lazer = self.process_arg('-l', args)
         mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
@@ -1551,7 +1545,7 @@ class Bot:
 
         try:
             user = await self.make_osu_request(
-                self.osu_client.get_user(user=user, mode=mode, key="username" if type(user) == str else "id"), use_lazer)
+                self.osu_client.get_user(user=user, mode=mode, key="username" if type(user) == str else "id"))
         except client_exceptions.ClientResponseError:
             return await self.send_message(ctx.channel, f"{ctx.user.display_name} A user with the name {username} "
                                                         "does not exist. If they did before it's possible they "
@@ -1589,7 +1583,6 @@ class Bot:
     async def osu_top(self, ctx):
         args = ctx.get_args('ascii')
 
-        use_lazer = self.process_arg('-l', args)
         mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
             return
@@ -1604,7 +1597,7 @@ class Bot:
         username = self.osu_username_from_id(user_id)
 
         top_scores = await self.make_osu_request(
-            self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100), use_lazer)
+            self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100))
         if not top_scores:
             return await self.send_message(
                 ctx.channel,
