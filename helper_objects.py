@@ -302,7 +302,7 @@ class Scramble:
         answer = list(answer.replace(" ", ""))
         random.shuffle(answer)
         for _ in range(nspaces):
-            while answer[(i := random.randint(1, len(answer)-2))] == " " and answer[i-1] == " ":
+            while answer[(i := random.randint(1, len(answer)-2))] == " " or answer[i-1] == " ":
                 pass
             answer.insert(i, " ")
         return "".join(answer)
