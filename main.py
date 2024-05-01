@@ -2151,10 +2151,9 @@ class Bot:
         if "@attr" in recent_song['recenttracks']['track'][0]:
             song_title = recent_song['recenttracks']['track'][0]['name']
             song_artist = recent_song['recenttracks']['track'][0]['artist']['name']
-            song_url = recent_song['recenttracks']['track'][0]['url']
             return await self.send_message(
                 ctx.channel,
-                f"Now playing for {lastfm_user[0]}: {song_artist} - {song_title} | {song_url}"
+                f"Now playing for {lastfm_user[0]}: {song_artist} - {song_title}"
             )
 
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} You are not currently playing anything.")
