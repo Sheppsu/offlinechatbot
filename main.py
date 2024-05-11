@@ -1941,7 +1941,6 @@ class Bot:
         word = " ".join(args) or last_args["word"]
         index = int(index)
         data = await self.make_mw_req(word, dictionary=dictionary)
-        print(data)
 
         if data is None:
             return await self.send_message(
@@ -2012,7 +2011,6 @@ class Bot:
 
             if sense.definition is not None:
                 for item in sense.definition.items:
-                    print(item)
                     if isinstance(item, MWSenseVerbalIllustration):
                         return item.items[0]["t"]
 
