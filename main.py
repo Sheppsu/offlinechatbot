@@ -21,7 +21,7 @@ from osu import AsynchronousClient, GameModeStr, Mods, Mod, GameModeInt, SoloSco
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
-from aiohttp import client_exceptions
+from aiohttp import client_exceptions, ClientSession as AiohttpClientSession
 from datetime import datetime, timezone as tz, timedelta
 from collections import defaultdict
 
@@ -52,7 +52,7 @@ class Bot:
 
     restarts = 0
 
-    def __init__(self, cm):
+    def __init__(self, cm, loop):
         self.database = Database()
         channels_to_run_in = [ChannelConfig("sheppsu", 156710598)] if TESTING else self.database.get_channels()
 
@@ -62,7 +62,7 @@ class Bot:
         self.ws = None
         # self.comm_client = CommunicationClient(self)
         self.running = False
-        self.loop = asyncio.get_event_loop()
+        self.loop = loop
         self.last_message = {}
         self.own_state = None
         self.irc_command_handlers = {
@@ -243,11 +243,6 @@ class Bot:
     # Api request stuff
     # TODO: consider moving api stuff to its own class
 
-    def load_top_plays(self):  # To be used in the future maybe
-        resp = requests.get('https://osutrack-api.ameo.dev/bestplay?mode=0')
-        resp.raise_for_status()
-        top_plays = resp.json()
-
     def get_access_token(self):
         params = {
             "client_id": self.client_id,
@@ -259,15 +254,16 @@ class Bot:
         resp = resp.json()
         return resp['access_token'], resp['expires_in'] / 1000
 
-    def get_streams_status(self):
+    async def get_streams_status(self):
         # TODO: account for limit of 100
         channels = list(map(lambda c: c.id, filter(lambda c: c.offlineonly, self.cm.channels.values())))
         params = {"user_id": channels}
         headers = {"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id}
 
         try:
-            resp = requests.get("https://api.twitch.tv/helix/streams", params=params, headers=headers)
-            data = resp.json()
+            async with AiohttpClientSession() as session:
+                async with session.get("https://api.twitch.tv/helix/streams", params=params, headers=headers) as resp:
+                    data = await resp.json()
             if "data" not in data:
                 raise Exception(resp.text)
             data = data["data"]
@@ -283,25 +279,26 @@ class Bot:
         for channel_id in channels:
             self.offlines[user_logins[channel_id]] = channel_id not in online_streams
 
-    def make_mw_req(self, endpoint, dictionary=True):
+    async def make_mw_req(self, endpoint, dictionary=True):
         cache = self.mw_cache["dictionary" if dictionary else "thesaurus"]
         if (value := cache.get(endpoint.lower(), None)) is not None:
             return value
 
         base, key = ("collegiate", self.MWD_API_KEY) if dictionary else ("thesaurus", self.MWT_API_KEY)
-        resp = requests.get(f"https://www.dictionaryapi.com/api/v3/references/{base}/json/{endpoint}?key={key}")
-        if resp.status_code == 200:
-            cache[endpoint.lower()] = (data := resp.json())
-            return data
-        print(f"mw returned {resp.status_code}: {resp.text}")
-        return
+        async with AiohttpClientSession() as session:
+            async with session.get(f"https://www.dictionaryapi.com/api/v3/references/{base}/json/{endpoint}?key={key}") as resp:
+                if resp.status == 200:
+                    cache[endpoint.lower()] = (data := await resp.json())
+                    return data
+
+                print(f"mw returned {resp.status}: {await resp.text()}")
 
     # Fundamental
 
     async def start(self):
         # start off by checking stream status of all channels
         # checking now will prevent some possible bugs
-        self.get_streams_status()
+        await self.get_streams_status()
         self.osu_client = await AsynchronousClient.from_client_credentials(
             os.getenv("OSU_CLIENT_ID"), os.getenv("OSU_CLIENT_SECRET"), None
         )
@@ -329,7 +326,7 @@ class Bot:
 
                     # Check if channels are live
                     if perf_counter() - last_check >= 10:
-                        self.get_streams_status()
+                        await self.get_streams_status()
                         last_check = perf_counter()
 
                     # Check if access token needs to be renewed
@@ -1943,7 +1940,8 @@ class Bot:
 
         word = " ".join(args) or last_args["word"]
         index = int(index)
-        data = self.make_mw_req(word, dictionary=dictionary)
+        data = await self.make_mw_req(word, dictionary=dictionary)
+        print(data)
 
         if data is None:
             return await self.send_message(
@@ -2166,6 +2164,7 @@ class Bot:
 
 
 if __name__ == "__main__":
-    bot = Bot(command_manager)
+    loop = asyncio.new_event_loop()
+    bot = Bot(command_manager, loop)
     bot.running = True
-    bot.loop.run_until_complete(bot.start())
+    loop.run_until_complete(bot.start())
