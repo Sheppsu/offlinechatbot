@@ -3,6 +3,7 @@ import random
 import requests
 import html
 import math
+import asyncio
 from time import perf_counter
 from enum import IntEnum, IntFlag
 from collections import namedtuple
@@ -797,3 +798,45 @@ class MWDefinition:
     def __init__(self, data):
         self.verb_divider: str | None = data.get("vd")
         self.sense_sequences: list[MWSequenceSense] = list(map(MWSequenceSense, data.get("sseq", [])))
+
+
+class MapGuessHelper:
+    __slots__ = ("loop", "answers")
+
+    def __init__(self, loop):
+        self.loop = loop
+        self.answers = {}
+
+    def new(self, channel, beatmapset, timeout_callback, money) -> str:
+        async def timeout():
+            await asyncio.sleep(30)
+            answer = self.complete(channel, cancel=False)
+            await timeout_callback(answer)
+
+        task = self.loop.create_task(timeout())
+
+        top_diff = sorted(beatmapset.beatmaps, key=lambda b: b.difficulty_rating)[-1]
+        attrs = [beatmapset.artist, beatmapset.title, top_diff.version, beatmapset.creator]
+
+        mystery_attr = random.randint(0, 3)
+        original = attrs[mystery_attr]
+        print(original)
+        attrs[mystery_attr] = " ".join(map(lambda s: "?"*len(s), original.split(" ")))
+
+        self.answers[channel] = (original, task, money)
+        return ("Fill in the blank (top difficulty): {} - {} [{}] (%.2f*) mapset by {}" % top_diff.difficulty_rating).format(*attrs)
+
+    def check(self, channel, guess):
+        if (item := self.answers.get(channel, None)) is not None and guess.lower() == item[0].lower():
+            self.complete(channel)
+            return item[2]
+        return 0
+
+    def complete(self, channel, cancel=True) -> str:
+        item = self.answers.pop(channel)
+        if cancel:
+            item[1].cancel()
+        return item[0]
+
+    def in_progress(self, channel):
+        return channel in self.answers

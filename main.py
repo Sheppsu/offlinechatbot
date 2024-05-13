@@ -17,7 +17,17 @@ import websockets
 import os
 import sys
 # from client import Bot as CommunicationClient
-from osu import AsynchronousClient, GameModeStr, Mods, Mod, GameModeInt, SoloScore, ScoreDataStatistics
+from osu import (
+    AsynchronousClient,
+    GameModeStr,
+    Mods,
+    Mod,
+    GameModeInt,
+    SoloScore,
+    ScoreDataStatistics,
+    BeatmapsetSearchFilter,
+    BeatmapsetSearchSort
+)
 from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
 from pytz import timezone, all_timezones
 from copy import deepcopy
@@ -133,6 +143,9 @@ class Bot:
         # Anime compare
         self.compare_helper = AnimeCompare(self.anime)
         self.anime_compare_future = {}
+
+        # osuguess
+        self.osu_guess_helper = MapGuessHelper(self.loop)
 
         # osu! stuff
         self.recent_score_cache = {}
@@ -460,34 +473,50 @@ class Bot:
             self.set_reminder_event(reminder)
 
     async def on_message(self, ctx: MessageContext):
+        # check if should respond
         if (ctx.channel in self.offlines and not self.offlines[ctx.channel]) or \
                 ctx.user.username == self.username:
             return
 
+        # for pogpega man
         if ctx.message.lower().startswith("pogpega") and ctx.message.lower() != "pogpega":
             ctx.message = ctx.message[8:]
 
         ascii_message = "".join([char for char in ctx.message if char.isascii()]).strip()
 
+        # check scrambles
         for scramble_type, scramble in self.scrambles.items():
             if scramble.in_progress(ctx.channel):
                 await self.on_scramble(ctx, scramble_type)
 
+        # check anime compares
         if ctx.user.username in self.anime_compare_future and self.anime_compare_future[ctx.user.username] is not None and \
                 ascii_message.isdigit() and int(ascii_message.strip()) in range(1, 3):
             game = self.compare_helper.get_game(ctx.user.username)
             if game is not None:
                 await self.on_anime_compare(ctx, game)
 
+        # check trivias
         elif self.trivia_helpers[ctx.channel].is_in_progress and ascii_message.isdigit() and \
                 int(ascii_message.strip()) in range(1, 5):
             message = int(ascii_message)
             await self.on_answer(ctx, message)
 
+        # check bomb party
         if self.bomb_party_helper.started:
             await self.on_bomb_party(ctx)
 
+        # check afks
         await self.on_afk(ctx)
+
+        # check osu_guess
+        if (money := self.osu_guess_helper.check(ctx.channel, ctx.message)) != 0:
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Correct! You get {money} Becky Bucks."
+            )
+            self.database.add_money(ctx, money)
+            return
 
         if ctx.reply:
             ascii_message = " ".join(ascii_message.split()[1:])
@@ -2159,6 +2188,45 @@ class Bot:
     async def update_userdata(self, ctx):
         self.database.update_userdata(ctx, "username", ctx.sending_user)
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} updated your username for userdata")
+
+    @command_manager.command("osuguess")
+    async def osu_guess(self, ctx):
+        if self.osu_guess_helper.in_progress(ctx.channel):
+            return
+
+        args = ctx.get_args("ascii")
+        if len(args) == 0:
+            i = random.randint(0, 100)  # easy diff
+        else:
+            difficulty = args[0]
+            try:
+                i = random.randint(*{
+                    "easy": (0, 499),
+                    "medium": (500, 999),
+                    "hard": (1000, 1999)
+                }[difficulty.lower()])
+            except KeyError:
+                return await self.send_message(
+                    ctx.channel,
+                    f"@{ctx.user.display_name} Invalid difficulty. Valid difficulties are easy, medium, hard"
+                )
+
+        beatmapset = (await self.osu_client.search_beatmapsets(
+            BeatmapsetSearchFilter().set_sort(BeatmapsetSearchSort.PLAYS).set_mode(GameModeInt.STANDARD),
+            i//50+1
+        )).beatmapsets[i % 50]
+        await self.send_message(
+            ctx.channel,
+            self.osu_guess_helper.new(
+                ctx.channel,
+                beatmapset,
+                lambda answer: self.send_message(
+                    ctx.channel,
+                    f"Time ran out for osuguess. The answer was {answer}."
+                ),
+                10 + (i // 10)
+            )
+        )
 
 
 if __name__ == "__main__":
