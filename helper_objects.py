@@ -820,7 +820,6 @@ class MapGuessHelper:
 
         mystery_attr = random.randint(0, 3)
         original = attrs[mystery_attr]
-        print(original)
         attrs[mystery_attr] = " ".join(map(lambda s: "?"*len(s), original.split(" ")))
 
         self.answers[channel] = (original, task, money)
