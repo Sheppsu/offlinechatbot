@@ -818,7 +818,7 @@ class MapGuessHelper:
         top_diff = sorted(beatmapset.beatmaps, key=lambda b: b.difficulty_rating)[-1]
         attrs = [beatmapset.artist, beatmapset.title, top_diff.version, beatmapset.creator]
 
-        mystery_attr = i or random.randint(0, 3)
+        mystery_attr = random.randint(0, 3) if i is None else i
         original = attrs[mystery_attr]
         attrs[mystery_attr] = " ".join(map(lambda s: "?"*len(s), original.split(" ")))
 

@@ -2204,27 +2204,31 @@ class Bot:
 
         args = ctx.get_args("ascii")
 
-        attr_i = await self.process_index_arg(ctx, args, range(1, 5))
-        if attr_i is None:
-            return
-        if attr_i == -1:
-            attr_i = None
+        difficulty = self.process_value_arg("-d", args, "easy")
+        try:
+            i = random.randint(*{
+                "easy": (0, 499),
+                "medium": (500, 999),
+                "hard": (1000, 1999)
+            }[difficulty.lower()])
+        except KeyError:
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Invalid difficulty. Valid difficulties are easy, medium, hard"
+            )
 
-        if len(args) == 0:
-            i = random.randint(0, 100)  # easy diff
-        else:
-            difficulty = args[0]
+        valid_attrs = ["artist", "title", "difficulty", "mapper"]
+        if len(args) > 0:
             try:
-                i = random.randint(*{
-                    "easy": (0, 499),
-                    "medium": (500, 999),
-                    "hard": (1000, 1999)
-                }[difficulty.lower()])
-            except KeyError:
+                attr_i = valid_attrs.index(args[0].lower())
+            except ValueError:
                 return await self.send_message(
                     ctx.channel,
-                    f"@{ctx.user.display_name} Invalid difficulty. Valid difficulties are easy, medium, hard"
+                    f"@{ctx.user.display_name} valid guess types are artist, title, difficulty, or mapper. "
+                    "Specify nothing for random."
                 )
+        else:
+            attr_i = None
 
         beatmapset = (await self.osu_client.search_beatmapsets(
             BeatmapsetSearchFilter().set_sort(BeatmapsetSearchSort.PLAYS).set_mode(GameModeInt.STANDARD),
