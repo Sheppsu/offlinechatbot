@@ -2243,7 +2243,7 @@ class Bot:
                     ctx.channel,
                     f"Time ran out for osuguess. The answer was {answer}."
                 ),
-                10 + (i // 10),
+                40 + (i // 40),
                 attr_i
             )
         )
