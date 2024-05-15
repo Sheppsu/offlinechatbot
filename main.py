@@ -1193,13 +1193,21 @@ class Bot:
         if arg == -1:
             return -1
         if arg is None:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify an index with the -i argument. "
-                                                        f"Specify a number between {rng[0]} and {rng[-1]}")
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Must specify an index with the -i argument. "
+                f"Specify a number between {rng[0]} and {rng[-1]}"
+            )
+            return
         if arg.lower() == "random":
             return random.choice(rng)-1
         if type(arg) != int and (not arg.isdigit() or int(arg) not in rng):
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify a number between "
-                                                        f"{rng[0]} and {rng[-1]} for the -i argument.")
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Must specify a number between "
+                f"{rng[0]} and {rng[-1]} for the -i argument."
+            )
+            return
         return int(arg)-1
 
     async def get_osu_user_id_from_osu_username(self, ctx, username):
@@ -2195,6 +2203,13 @@ class Bot:
             return
 
         args = ctx.get_args("ascii")
+
+        attr_i = await self.process_index_arg(ctx, args, range(1, 5))
+        if attr_i is None:
+            return
+        if attr_i == -1:
+            attr_i = None
+
         if len(args) == 0:
             i = random.randint(0, 100)  # easy diff
         else:
@@ -2224,7 +2239,8 @@ class Bot:
                     ctx.channel,
                     f"Time ran out for osuguess. The answer was {answer}."
                 ),
-                10 + (i // 10)
+                10 + (i // 10),
+                attr_i
             )
         )
 
