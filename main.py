@@ -1,10 +1,12 @@
 # coding=utf-8
-
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
-from get_top_players import Client
-from get_popular_anime import create_list as create_anime_list
+try:
+    from get_top_players import Client as TopPlayersClient
+except:
+    pass
+from anime import create_list as create_anime_list
 from sql import Database, USER_SETTINGS, Reminder
 # from emotes import EmoteRequester
 from helper_objects import *
@@ -19,18 +21,16 @@ import sys
 # from client import Bot as CommunicationClient
 from osu import (
     AsynchronousClient,
-    GameModeStr,
     Mods,
     Mod,
     GameModeInt,
     SoloScore,
-    ScoreDataStatistics,
     BeatmapsetSearchFilter,
     BeatmapsetSearchSort
 )
-from osu_diff_calc import OsuPerformanceCalculator, OsuDifficultyAttributes, OsuScoreAttributes
+from mal import Client as MALClient
+import rosu_pp_py as rosu
 from pytz import timezone, all_timezones
-from copy import deepcopy
 from aiohttp import client_exceptions, ClientSession as AiohttpClientSession
 from datetime import datetime, timezone as tz, timedelta
 from collections import defaultdict
@@ -40,9 +40,9 @@ TESTING = "--test" in sys.argv
 LOCAL = "-local" in sys.argv
 
 if not TESTING or not os.path.exists("data/top players (200).json"):
-    Client().run()  # Update top player json file
+    TopPlayersClient().run()  # Update top player json file
 if not TESTING or not os.path.exists("data/anime.json"):
-    create_anime_list()
+    create_anime_list(MALClient.from_client_credentials(os.getenv("MAL_CLIENT_ID"), os.getenv("MAL_CLIENT_SECRET")))
 if not TESTING or not os.path.exists("data/azur_lane.json"):
     from azur_lane import download_azur_lane_ship_names
     download_azur_lane_ship_names()
@@ -161,8 +161,13 @@ class Bot:
                     continue
                 self.tz_abbreviations[abbr].append(name)
 
-        self.osu_client = None
-        self.osu_lock = asyncio.Lock()
+        self.osu_client: AsynchronousClient | None = None
+
+        try:
+            self.MAX_MEDALS = int(requests.get("https://osekai.net/medals/api/public/count").text)
+        except:
+            print("Unable to fetch total medals from osekai")
+            self.MAX_MEDALS = 0
 
         self.message_buffer = []
 
@@ -351,11 +356,6 @@ class Bot:
                     if perf_counter() - last_ping >= 60*60:
                         last_ping = perf_counter()
                         self.database.ping()
-
-                    if perf_counter() - last_update >= 60*60:
-                        last_update = perf_counter()
-                        create_anime_list()
-                        self.load_anime()
 
                     if perf_counter() - last_cache_reset >= 60*60*24:
                         # to prevent the cache from growing too large
@@ -1178,15 +1178,25 @@ class Bot:
             f"@{ctx.user.display_name} Please specify a username or link your account with !link [username]."
         )
 
-    async def process_osu_mode_args(self, ctx, args):
+    async def process_osu_mode_args(self, ctx, args, required=True, as_int=False):
         arg = self.process_value_arg("-m", args, 0)
-        if arg is None:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Must specify a mode with the -m argument. "
-                                                        f"Valid modes are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
-        if type(arg) != int and (not arg.isdigit() or int(arg) not in range(0, 4)):
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Invalid mode. Valid modes "
-                                                        f"are 0 (osu), 1 (taiko), 2 (catch), 3 (mania).")
-        return ("osu", "taiko", "fruits", "mania")[int(arg)]
+        if arg is None and required:
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Must specify a mode with the -m argument. "
+                "Valid modes are 0 (osu), 1 (taiko), 2 (catch), 3 (mania)."
+            )
+            return
+        elif not required:
+            return -1
+        if isinstance(arg, str) and (not arg.isdigit() or int(arg) not in range(0, 4)):
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Invalid mode. Valid modes "
+                "are 0 (osu), 1 (taiko), 2 (catch), 3 (mania)."
+            )
+            return
+        return int(arg) if as_int else ("osu", "taiko", "fruits", "mania")[int(arg)]
 
     async def process_index_arg(self, ctx, args, rng=range(1, 101)):
         arg = self.process_value_arg("-i", args, -1)
@@ -1212,106 +1222,12 @@ class Bot:
 
     async def get_osu_user_id_from_osu_username(self, ctx, username):
         if username not in self.osu_user_id_cache:
-            user = await self.make_osu_request(self.osu_client.get_user(user=username, key="username"))
+            user = await self.osu_client.get_user(user=username, key="username")
             if user is None:
                 await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
                 return
             self.osu_user_id_cache[username] = user.id
         return self.osu_user_id_cache[username]
-
-    @staticmethod
-    def get_if_fc(o_score, beatmap, beatmap_attributes):
-        score = deepcopy(o_score)
-        if score.ruleset_id == GameModeInt.STANDARD.value:
-            count_300 = score.statistics.great if score.statistics.great else 0
-            count_100 = score.statistics.ok if score.statistics.ok else 0
-            count_50 = score.statistics.meh if score.statistics.meh else 0
-            count_miss = score.statistics.miss if score.statistics.miss else 0
-            total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
-            total_hits = count_300 + count_100 + count_50 + count_miss
-
-            count_300 += count_miss + total_objects - total_hits
-            score.statistics.great = count_300
-            score.statistics.miss, count_miss = 0, 0
-            score.max_combo = beatmap_attributes.max_combo
-
-            accuracy = (count_300 * 300 + count_100 * 100 + count_50 * 50) / \
-                       (300 * (count_300 + count_100 + count_50 + count_miss))
-            score.accuracy = accuracy
-
-            return accuracy, Bot.calculate_pp(score, beatmap, beatmap_attributes)
-
-    @staticmethod
-    def calculate_pp(score, beatmap, beatmap_attributes, transform=True):
-        if beatmap.mode == GameModeStr.STANDARD:
-            attributes = OsuDifficultyAttributes.from_attributes({
-                'aim_difficulty': beatmap_attributes.mode_attributes.aim_difficulty,
-                'speed_difficulty': beatmap_attributes.mode_attributes.speed_difficulty,
-                'flashlight_difficulty': beatmap_attributes.mode_attributes.flashlight_difficulty,
-                'slider_factor': beatmap_attributes.mode_attributes.slider_factor,
-                'speed_note_count': beatmap_attributes.mode_attributes.speed_note_count,
-                'approach_rate': beatmap_attributes.mode_attributes.approach_rate,
-                'overall_difficulty': beatmap_attributes.mode_attributes.overall_difficulty,
-                'max_combo': beatmap_attributes.max_combo,
-                'drain_rate': beatmap.drain,
-                'hit_circle_count': beatmap.count_circles,
-                'slider_count': beatmap.count_sliders,
-                'spinner_count': beatmap.count_spinners,
-            })
-            if transform:
-                # temporary solution until pp calc accepts other mods
-                all_mods = score.mods
-                limited_mods = list(filter(lambda m: type(m.mod) != str and m.mod.name in Mods._member_names_, score.mods))
-                if len(limited_mods) != len(list(filter(lambda m: type(m.mod) != str and m.mod != Mod.Classic, all_mods))):
-                    return
-                score.mods = limited_mods
-                score_attributes = OsuScoreAttributes.from_osupy_score(score)
-                score.mods = all_mods
-            else:
-                score_attributes = score
-            calculator = OsuPerformanceCalculator(GameModeStr.STANDARD, attributes, score_attributes)
-            try:
-                return calculator.calculate()
-            except:
-                traceback.print_exc()
-
-    @staticmethod
-    def get_hit_data(statistics, ruleset_id):
-        if isinstance(statistics, ScoreDataStatistics):
-            if ruleset_id == GameModeInt.STANDARD.value:
-                hit_string = "%d/%d/%d/%d" % (hits := (
-                    statistics.great or 0,
-                    statistics.ok or 0,
-                    statistics.meh or 0,
-                    statistics.miss or 0
-                ))
-            else:
-                hit_string = "%d/%d/%d/%d/%d/%d" % (hits := (
-                    statistics.perfect or 0,
-                    statistics.great or 0,
-                    statistics.good or 0,
-                    statistics.ok or 0,
-                    statistics.meh or 0,
-                    statistics.miss or 0
-                ))
-        else:
-            if ruleset_id == GameModeInt.STANDARD.value:
-                hit_string = "%d/%d/%d/%d" % (hits := (
-                    statistics.count_300,
-                    statistics.count_100,
-                    statistics.count_50,
-                    statistics.count_miss
-                ))
-            else:
-                hit_string = "%d/%d/%d/%d/%d/%d" % (hits := (
-                    statistics.count_geki,
-                    statistics.count_300,
-                    statistics.count_katu,
-                    statistics.count_100,
-                    statistics.count_50,
-                    statistics.count_miss
-                ))
-        return hit_string, sum(hits)
 
     @staticmethod
     def get_mod_string(mods):
@@ -1332,53 +1248,54 @@ class Bot:
             mods
         ))
 
-    def get_score_message(self, score, beatmap, beatmap_attributes, prefix="Recent score for {username}"):
+    async def get_score_message(self, score: SoloScore, prefix="Recent score for {username}") -> tuple[str, BeatmapCalculator]:
         score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
-        # Format and send message for recent score
-        hit_string, total_hits = self.get_hit_data(score.statistics, self.parse_score_mode_int(score))
-        total_objects = beatmap.count_sliders + beatmap.count_spinners + beatmap.count_circles
-        if score.pp is None and score.passed and score.ruleset_id == GameModeInt.STANDARD.value and beatmap_attributes.type is not None:
-            score.pp = self.calculate_pp(score, beatmap, beatmap_attributes)
-        if_fc_acc, if_fc_pp = None, None
-        if beatmap_attributes.type is not None and score.max_combo != beatmap_attributes.max_combo and score.ruleset_id == GameModeInt.STANDARD.value:
-            if_fc_acc, if_fc_pp = self.get_if_fc(score, beatmap, beatmap_attributes)
+
+        calc = await BeatmapCalculator.from_beatmap_id(score.beatmap_id)
+        perf = calc.calculate(score)
+        fc_perf, fc_acc = calc.calculate_if_fc(score) if perf.effective_miss_count >= 1 else (None, None)
+        hits = BeatmapCalculator.parse_stats(score.statistics)
+
         return score_format.format(**{
             "username": score.user.username,
-            "passed": "" if score.passed else f" (Failed {round(total_hits / total_objects * 100)}%)",
-            "artist": beatmap.beatmapset.artist,
-            "title": beatmap.beatmapset.title,
-            "diff": beatmap.version,
+            "passed": "" if score.passed else f" (Failed {round(sum(hits) / calc.beatmap.n_objects * 100)}%)",
+            "artist": calc.info.metadata.artist,
+            "title": calc.info.metadata.title,
+            "diff": calc.info.metadata.version,
             "mods": " +" + self.get_mod_string(score.mods) if score.mods else "",
-            "mapper": beatmap.beatmapset.creator,
-            "star_rating": round(beatmap_attributes.star_rating, 2),
-            "pp": f"{round(score.pp, 2)}pp" if score.pp and score.passed else "",
-            "if_fc_pp": f" ({round(if_fc_pp, 2)} for {round(if_fc_acc * 100, 2)}% FC)" if if_fc_pp is not None else "",
+            "mapper": calc.info.metadata.creator,
+            "star_rating": round(fc_perf.difficulty.stars, 2),
+            "pp": f"{round(perf.pp, 2)}pp",
+            "if_fc_pp": f" ({round(fc_perf.pp, 2)} for {round(fc_acc * 100, 2)}% FC)" if fc_perf is not None else "",
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
-            "max_combo": beatmap_attributes.max_combo,
-            "genki_counts": hit_string,
+            "max_combo": fc_perf.difficulty.max_combo,
+            "genki_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
             "time_ago": format_date(score.ended_at)
-        })
+        }), calc
 
-    async def get_compact_scores_message(self, scores):
-        score_format = "{artist} - {title} [{diff}]{mods} {acc}% ({genki_counts}): {pp}pp | {time_ago} ago"
+    async def get_compact_scores_message(self, scores) -> str:
+        score_format = "{artist} - {title} [{diff}]{mods} ({sr}*) {acc}% ({genki_counts}): {pp}pp{fc_pp} | {time_ago} ago"
         message = ""
-        beatmap_ids = list(map(lambda s: s.beatmap_id, scores))
-        beatmaps = sorted(
-            await self.make_osu_request(self.osu_client.get_beatmaps(beatmap_ids)), key=lambda b: beatmap_ids.index(b.id)
+        calcs: tuple[BeatmapCalculator] = await asyncio.gather(
+            *(BeatmapCalculator.from_beatmap_id(score.beatmap_id) for score in scores)
         )
-        for i, score in enumerate(scores):
-            hit_string, _ = self.get_hit_data(score.statistics, score.ruleset_id)
-            beatmap = beatmaps[i]
+        for calc, score in zip(calcs, scores):
+            perf = calc.calculate(score)
+            fc_perf, fc_acc = calc.calculate_if_fc(score) if perf.effective_miss_count >= 1 else (None, None)
+            hits = BeatmapCalculator.parse_stats(score.statistics)
+
             message += "🌟" + score_format.format(**{
-                "artist": beatmap.beatmapset.artist,
-                "title": beatmap.beatmapset.title,
-                "diff": beatmap.version,
+                "artist": calc.info.metadata.artist,
+                "title": calc.info.metadata.title,
+                "diff": calc.info.metadata.version,
                 "mods": " +" + self.get_mod_string(score.mods) if score.mods else "",
+                "sr": round(perf.difficulty.stars, 2),
                 "acc": round(score.accuracy * 100, 2),
-                "genki_counts": hit_string,
-                "pp": 0 if score.pp is None else round(score.pp, 2),
+                "genki_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
+                "pp": round(perf.pp, 2),
+                "fc_pp": f" ({round(fc_perf.pp, 2)} for {round(fc_acc * 100, 2)}% FC)" if fc_perf is not None else "",
                 "time_ago": format_date(score.ended_at),
             })
         return message
@@ -1396,53 +1313,29 @@ class Bot:
             if osu_user_id == user_id:
                 return username
 
-    async def make_osu_request(self, request):
-        await self.osu_lock.acquire()
-        try:
-            result = await request
-        except:
-            traceback.print_exc()
-            result = None
-        self.osu_lock.release()
-        return result
-
-    def get_map_cache(self, ctx):
+    def get_map_cache(self, ctx) -> BeatmapCalculator | None:
         if len(self.recent_score_cache[ctx.channel]) == 0:
             return
         if ctx.reply:
             if ctx.reply.msg_body in self.recent_score_cache[ctx.channel]:
                 return self.recent_score_cache[ctx.channel][ctx.reply.msg_body]
             return
-        return list(self.recent_score_cache[ctx.channel].values())[-1]
+        return tuple(self.recent_score_cache[ctx.channel].values())[-1]
 
-    def add_recent_map(self, ctx, sent_message, beatmap, attributes):
+    def add_recent_map(self, ctx, sent_message, bm_calc):
         msg = " ".join(sent_message)
         if msg in self.recent_score_cache[ctx.channel]:
             del self.recent_score_cache[ctx.channel][msg]
-        self.recent_score_cache[ctx.channel].update({msg: (beatmap, attributes)})
+        self.recent_score_cache[ctx.channel].update({msg: bm_calc})
         while len(self.recent_score_cache) > 50:
-            del self.recent_score_cache[ctx.channel][list(self.recent_score_cache[ctx.channel].keys())[0]]
+            del self.recent_score_cache[ctx.channel][next(self.recent_score_cache[ctx.channel].keys())]
 
     async def get_beatmap_from_arg(self, ctx, beatmap_link):
         beatmap_id = tuple(filter(lambda s: len(s.strip()) > 0, beatmap_link.split("/")))[-1]
-        beatmap = await self.make_osu_request(self.osu_client.get_beatmap(beatmap_id))
-        if beatmap is None:
+        calc = await BeatmapCalculator.from_beatmap_id(beatmap_id)
+        if calc is None:
             return await self.send_message(ctx.channel, "Failed to get beatmap from the provided link/id.")
-        beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap_id))
-        return beatmap, beatmap_attributes
-
-    @staticmethod
-    def parse_score_mods(score):
-        if isinstance(score, SoloScore):
-            # temporary thing until I fix some libraries
-            return list(map(lambda m: m.mod.value, filter(lambda m: type(m.mod) != str and m.mod.name in Mods._member_names_, score.mods))) if score.mods else None
-        return score.mods
-
-    @staticmethod
-    def parse_score_mode_int(score):
-        if isinstance(score, SoloScore):
-            return score.ruleset_id
-        return score.mode_int.value
+        return calc
 
     @command_manager.command("rs", cooldown=Cooldown(0, 3))
     async def recent_score(self, ctx):
@@ -1464,12 +1357,11 @@ class Bot:
 
         # Get recent score
         if not best:
-            scores = await self.make_osu_request(
-                self.osu_client.get_user_scores(
-                    user_id, "recent", include_fails=1, mode=mode, limit=1, offset=index))
+            scores = await self.osu_client.get_user_scores(
+                user_id, "recent", include_fails=1, mode=mode, limit=1, offset=index
+            )
         else:
-            scores = await self.make_osu_request(
-                self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100))
+            scores = await self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
             scores = sorted(scores, key=lambda x: x.ended_at, reverse=True)
         if not scores:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} "
@@ -1477,94 +1369,104 @@ class Bot:
                                                         "or the index you specified is out of range.")
 
         score = scores[0 if not best else index]
-        if isinstance(score, SoloScore):
-            beatmap = await self.make_osu_request(
-                self.osu_client.get_beatmap(score.beatmap_id))
-        else:
-            beatmap = score.beatmap
-        beatmap_attributes = await self.make_osu_request(
-            self.osu_client.get_beatmap_attributes(beatmap.id, self.parse_score_mods(score), ruleset_id=self.parse_score_mode_int(score)))
-        sent_message = await self.send_message(ctx.channel, self.get_score_message(score, beatmap, beatmap_attributes))
-        self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
+        msg, calc = await self.get_score_message(score)
+        sent_message = await self.send_message(ctx.channel, msg)
+        self.add_recent_map(ctx, sent_message, calc)
 
     @command_manager.command("c", aliases=['compare'], cooldown=Cooldown(0, 3))
     async def compare_score(self, ctx):
         if not len(self.recent_score_cache[ctx.channel]):
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} I don't have a cache of the last beatmap."
+            )
         cache = self.get_map_cache(ctx)
-        if cache is None: return
-        await self.compare_score_func(ctx, False, cache)
+        if cache is None:
+            return
+        await self.compare_score_func(ctx, cache)
 
-    async def compare_score_func(self, ctx, most_recent=True, cache=None):
-        beatmap, beatmap_attributes = list(self.recent_score_cache[ctx.channel].values())[-1] if most_recent else cache
+    async def compare_score_func(self, ctx, cache=None):
+        calc = self.get_map_cache(ctx) if cache is None else cache
+        if calc is None:
+            return
+
         args = ctx.get_args('ascii')
-        if '-m' not in map(str.lower, args):
-            mode = None
-        else:
-            mode = await self.process_osu_mode_args(ctx, args)
-            if mode is None:
-                return
+        mode = await self.process_osu_mode_args(ctx, args, required=False, as_int=True)
+        if mode is None:
+            return
+        elif mode == -1:
+            mode = int(calc.beatmap.mode)
 
         user_id = await self.get_osu_user_id_from_args(ctx, args)
         if user_id is None:
             return
         username = self.osu_username_from_id(user_id)
 
-        update_beatmap_attributes = mode is not None and mode != beatmap.mode.value
-        if mode is None:
-            mode = beatmap.mode.value
+        if mode != int(calc.beatmap.mode):
+            calc.beatmap.convert(rosu.GameMode(mode))
+
+        mode = GameModeInt.get_str_equivalent(GameModeInt(mode)).value
 
         try:
-            scores = await self.make_osu_request(
-                self.osu_client.get_user_beatmap_scores(beatmap.id, user_id, mode))
+            scores = await self.osu_client.get_user_beatmap_scores(calc.beatmap_id, user_id, mode)
         except client_exceptions.ClientResponseError:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} This map does not have a leaderboard.")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} Either this map does not have a leaderboard or "
+                "an unexpected error occurred"
+            )
         if not scores:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} has no "
-                                                        f"scores on that beatmap for mode {proper_mode_name[mode]}.")
-
-        # For max_combo attribute
-        if update_beatmap_attributes:
-            beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap.id, ruleset=mode))
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} User {username} has no "
+                f"scores on that beatmap for mode {proper_mode_name[mode]}."
+            )
 
         score_format = "{mods} {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp} | {time_ago} ago"
-        message = f"Scores for {username} on {beatmap.beatmapset.artist} - {beatmap.beatmapset.title} " \
-                  f"[{beatmap.version}] ({beatmap.beatmapset.creator}): "
+        message = f"Scores for {username} on {calc.info.metadata.artist} - {calc.info.metadata.title} " \
+                  f"[{calc.info.metadata.version}] ({calc.info.metadata.creator}): "
         for score in scores[:5]:
-            hit_string, _ = self.get_hit_data(score.statistics, score.ruleset_id)
+            perf = calc.calculate(score)
+            hits = calc.parse_stats(score.statistics)
             message += "🌟" + score_format.format(**{
                 "mods": " +" + "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
                 "acc": round(score.accuracy * 100, 2),
                 "combo": score.max_combo,
-                "max_combo": beatmap_attributes.max_combo,
-                "genki_counts": hit_string,
-                "pp": f"{round(score.pp, 2)}pp" if score.pp else "No pp",
+                "max_combo": perf.difficulty.max_combo,
+                "genki_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
+                "pp": f"{round(perf.pp, 2)}pp",
                 "time_ago": format_date(score.ended_at)
             })
         sent_message = await self.send_message(ctx.channel, message)
-        self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
+        self.add_recent_map(ctx, sent_message, calc)
+
+    async def get_beatmap_from_arg_or_cache(self, ctx, args):
+        if len(args) > 0:
+            return await self.get_beatmap_from_arg(ctx, args[0])
+        elif len(self.recent_score_cache[ctx.channel]) == 0:
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} I don't have a cache of the last beatmap."
+            )
+        else:
+            return self.get_map_cache(ctx)
 
     @command_manager.command("map", aliases=["m"])
     async def send_map(self, ctx):
         args = ctx.get_args('ascii')
-        if len(args) > 0:
-            result = await self.get_beatmap_from_arg(ctx, args[0])
-            if result is None:
-                return
-            beatmap, beatmap_attributes = result
-        elif len(self.recent_score_cache[ctx.channel]) == 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
-        else:
-            beatmap, beatmap_attributes = self.get_map_cache(ctx)
-            # TODO: make less scuffed lole
-            beatmap_attributes = await self.make_osu_request(self.osu_client.get_beatmap_attributes(beatmap.id, ruleset=beatmap.mode))
 
-        if beatmap is None or beatmap_attributes is None: return
+        calc = await self.get_beatmap_from_arg_or_cache(ctx, args)
+        if calc is None:
+            return
 
-        text = f"{beatmap.beatmapset.artist} - {beatmap.beatmapset.title} [{beatmap.version}] " \
-               f"({beatmap.beatmapset.creator}, {round(beatmap_attributes.star_rating, 2)}*) https://osu.ppy.sh/b/{beatmap.id}"
+        diff = rosu.Difficulty().calculate(calc.beatmap)
+        text = (
+            f"{calc.info.metadata.artist} - {calc.info.metadata.title} [{calc.info.metadata.version}] "
+            f"({calc.info.metadata.creator}, {round(diff.stars, 2)}*) "
+            f"https://osu.ppy.sh/b/{calc.beatmap_id}"
+        )
         sent_message = await self.send_message(ctx.channel, f"@{ctx.user.display_name} {text}")
-        self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
+        self.add_recent_map(ctx, sent_message, calc)
 
     @command_manager.command("osu", aliases=["profile", "o"], cooldown=Cooldown(0, 5))
     async def osu_profile(self, ctx):
@@ -1578,8 +1480,7 @@ class Bot:
         username = self.osu_username_from_id(user)
 
         try:
-            user = await self.make_osu_request(
-                self.osu_client.get_user(user=user, mode=mode, key="username" if type(user) == str else "id"))
+            user = await self.osu_client.get_user(user=user, mode=mode, key="username" if type(user) == str else "id")
         except client_exceptions.ClientResponseError:
             return await self.send_message(ctx.channel, f"{ctx.user.display_name} A user with the name {username} "
                                                         "does not exist. If they did before it's possible they "
@@ -1590,7 +1491,6 @@ class Bot:
 
         stats = user.statistics
 
-        total_medals = 280
         profile_layout = "{username}'s profile [{mode}]: #{global_rank} ({country}#{country_rank}) - {pp}pp; Peak: #{peak_rank} {peak_time_ago} ago | " \
                          "{accuracy}% | {play_count} playcount ({play_time} hrs) | Medal count: {medal_count}/{total_medals} ({medal_completion}%) | " \
                          "Followers: {follower_count} | Mapping subs: {subscriber_count}"
@@ -1607,8 +1507,8 @@ class Bot:
             "play_count": stats.play_count,
             "play_time": stats.play_time//3600,
             "medal_count": len(user.user_achievements),
-            "total_medals": total_medals,
-            "medal_completion": round(len(user.user_achievements) / total_medals * 100, 2),
+            "total_medals": self.MAX_MEDALS,
+            "medal_completion": round(len(user.user_achievements) / self.MAX_MEDALS * 100, 2),
             "follower_count": user.follower_count,
             "subscriber_count": user.mapping_follower_count,
         }))
@@ -1630,8 +1530,7 @@ class Bot:
             return
         username = self.osu_username_from_id(user_id)
 
-        top_scores = await self.make_osu_request(
-            self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100))
+        top_scores = await self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
         if not top_scores:
             return await self.send_message(
                 ctx.channel,
@@ -1642,8 +1541,7 @@ class Bot:
         top_scores = top_scores[:5] if index == -1 else [top_scores[index]]
         username = top_scores[0].user.username
 
-        beatmap = None
-        beatmap_attributes = None
+        calc = None
         if len(top_scores) > 1:
             message = f"Top{' recent' if recent_tops else ''} {proper_mode_name[mode]} " \
                       f"scores for {username}: " if index == -1 else f"Top {index+1}{' recent' if recent_tops else ''} " \
@@ -1651,20 +1549,13 @@ class Bot:
             message += await self.get_compact_scores_message(top_scores)
         else:
             score = top_scores[0]
-            beatmap = await self.make_osu_request(self.osu_client.get_beatmap(score.beatmap_id))
-            beatmap_attributes = await self.make_osu_request(
-                self.osu_client.get_beatmap_attributes(
-                    beatmap.id,
-                    self.parse_score_mods(score),
-                    ruleset_id=self.parse_score_mode_int(score)
-                )
+            message, calc = await self.get_score_message(
+                score, f"Top {index+1}{' recent' if recent_tops else ''} score for {username}"
             )
-            message = self.get_score_message(score, beatmap, beatmap_attributes,
-                                             prefix=f"Top {index+1}{' recent' if recent_tops else ''} score for {username}")
 
         sent_message = await self.send_message(ctx.channel, message)
-        if beatmap_attributes is not None:
-            self.add_recent_map(ctx, sent_message, beatmap, beatmap_attributes)
+        if calc is not None:
+            self.add_recent_map(ctx, sent_message, calc)
 
     @command_manager.command("link", cooldown=Cooldown(0, 2))
     async def link_osu_account(self, ctx):
@@ -1673,8 +1564,7 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username.")
 
         username = " ".join(args).strip()
-        user = await self.make_osu_request(
-            self.osu_client.get_user(user=username, key="username"))
+        user = await self.osu_client.get_user(user=username, key="username")
 
         if user is None:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
@@ -1692,11 +1582,9 @@ class Bot:
     async def simulate_score(self, ctx):
         if len(self.recent_score_cache[ctx.channel]) == 0:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
-        beatmap = self.get_map_cache(ctx)
-        if beatmap is None: return
-        beatmap = beatmap[0]
-        if beatmap.mode != GameModeStr.STANDARD:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Sorry, but I only support pp calculation for osu!std at the moment.")
+        calc = self.get_map_cache(ctx)
+        if calc is None:
+            return
 
         args = ctx.get_args("ascii")
         if len(args) == 0:
@@ -1712,32 +1600,20 @@ class Bot:
                 return await self.send_message(ctx.channel, f"{ctx.user.display_name} The mod combination you gave is invalid.")
             mods = Mods.get_from_list(mods)
 
-        beatmap_difficulty = await self.make_osu_request(
-            self.osu_client.get_beatmap_attributes(beatmap.id, mods))
+        calc.calculate_difficulty(0 if mods is None else mods.value)
 
         pp_values = []
-        total_objects = beatmap.count_sliders + beatmap.count_circles + beatmap.count_spinners
         for acc in (1, 0.99, 0.98, 0.97, 0.96, 0.95):
-            h2 = round((3/2)*total_objects*(1-acc))
-            h1 = total_objects - h2
-            actual_acc = (300*h1 + 100*h2)/(300*total_objects)
-            score = OsuScoreAttributes()
-            score.set_attributes({
-                "mods": mods,
-                "accuracy": actual_acc,
-                "score_max_combo": beatmap_difficulty.max_combo,
-                "count_great": h1,
-                "count_ok": h2,
-                "count_meh": 0,
-                "count_miss": 0,
-            })
-            pp = self.calculate_pp(score, beatmap, beatmap_difficulty, False)
-            pp_values.append(f"{int(acc*100)}% - {round(pp, 2)}")
+            perf = calc.calculate_from_acc(acc)
+            pp_values.append(f"{int(acc*100)}% - {round(perf.pp, 2)}")
 
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} {beatmap.beatmapset.artist} - "
-                                             f"{beatmap.beatmapset.title} [{beatmap.version}] "
-                                             f"{mods.to_readable_string() if mods is not None else 'NM'}: "
-                                             f"{' | '.join(pp_values)}")
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} {calc.info.metadata.artist} - "
+            f"{calc.info.metadata.title} [{calc.info.metadata.version}] "
+            f"{mods.to_readable_string() if mods is not None else 'NM'}: "
+            f"{' | '.join(pp_values)}"
+        )
 
     @command_manager.command("score", aliases=["sc"])
     async def osu_score(self, ctx):
@@ -1745,15 +1621,14 @@ class Bot:
 
         if len(args) < 1:
             return await self.send_message(ctx.channel, "Must give a beatmap link or beatmap id.")
-        result = await self.get_beatmap_from_arg(ctx, args[0])
-        if result is None:
+        calc = await self.get_beatmap_from_arg(ctx, args[0])
+        if calc is None:
             return
-        beatmap, beatmap_attributes = result
 
         i = ctx.message.index(args[0])
         ctx.message = (ctx.message[:i] + ctx.message[i+len(args[0])+1:]).strip()
 
-        await self.compare_score_func(ctx, False, (beatmap, beatmap_attributes))
+        await self.compare_score_func(ctx, calc)
         
     @command_manager.command("send_map", aliases=["sm"])
     async def send_osu_map(self, ctx):
@@ -1762,8 +1637,9 @@ class Bot:
             f"@{ctx.user.display_name} Sorry! This command is temporarily disabled."
         )
 
-        beatmap = self.get_map_cache(ctx)
-        if beatmap is None: return
+        calc = self.get_map_cache(ctx)
+        if calc is None:
+            return
         osu_user = self.database.get_osu_user_from_user_id(ctx.user_id)
         if osu_user is None:
             return await self.send_message(
@@ -1778,19 +1654,25 @@ class Bot:
                 f"@{ctx.user.display_name} You must have a verified account link to use this command. "
                 "Go to https://bot.sheppsu.me, login, and then go to https://bot.sheppsu.me/osuauth (will take a few minutes to update)"
             )
-        
-        beatmap = beatmap[0]
-        bms = beatmap.beatmapset
-        bms_title = f"{bms.artist} - {bms.title} [{beatmap.version}] mapped by {bms.creator}"
-        await self.make_osu_request(self.osu_client.create_new_pm(osu_user[0], f"(Automated bot message) [{bms_title}](https://osu.ppy.sh/b/{beatmap.id})", False))
+
+        md = calc.info.metadata
+        bms_title = f"{md.artist} - {md.title} [{md.version}] mapped by {md.creator}"
+        await self.osu_client.create_new_pm(osu_user[0], f"(Automated bot message) [{bms_title}](https://osu.ppy.sh/b/{md.beatmap_id})", False)
         await self.send_message(ctx.channel, f"@{ctx.user.display_name} Sent the beatmap to your osu DMs!")
 
     @command_manager.command("preview", aliases=["p"])
     async def send_osu_preview(self, ctx):
-        cache = self.get_map_cache(ctx)
-        if cache is None:
+        args = ctx.get_args("ascii")
+        calc = await self.get_beatmap_from_arg_or_cache(ctx, args)
+        if calc is None:
             return
-        await self.send_message(ctx.channel, f"@{ctx.user.display_name} https://preview.tryz.id.vn/?b={cache[0].id}")
+
+        md = calc.info.metadata
+        await self.send_message(
+            ctx.channel,
+            f"@{ctx.user.display_name} {md.artist} - {md.title} [{md.version}] "
+            f"https://preview.tryz.id.vn/?b={calc.beatmap_id}"
+        )
 
     @command_manager.command("validtz")
     async def valid_timezones(self, ctx):
@@ -2009,7 +1891,7 @@ class Bot:
         return data[index-1], index, len(data)
 
     @staticmethod
-    def parse_definition(data) -> str:
+    def parse_definition(data) -> str | None:
         if (definition := data.get("def", None)) is None:
             return
 
