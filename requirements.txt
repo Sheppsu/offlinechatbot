@@ -1,6 +1,6 @@
 python-dotenv==0.20.0
-osu.py>=2.0.0
+git+https://github.com/Sheppsu/osu.py@cd3ecf470b0b15af187ba5308e18dc9c8f7c3d64#egg=osu.py
 websockets==11.0.3
 mysql-connector-python==8.0.29
 pytz==2022.1
-git+https://github.com/Sheppsu/osu_diff_calc@423b06a5e770ce90467ad1d9da0b8e95dc260382#egg=osu_diff_calc
+git+https://github.com/Sheppsu/beatmap_reader@73534780219866c353385223c78dfb5e3a566098#egg=beatmap_reader
