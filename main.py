@@ -1247,15 +1247,23 @@ class Bot:
             lambda m: m.mod.value+fmt_settings(m),
             mods
         ))
+    
+    def get_score_attrs(self, calc, score):
+        perf = calc.calculate(score)
+        fc_perf, fc_acc = calc.calculate_if_fc(score) if (
+            (perf.effective_miss_count is not None and perf.effective_miss_count >= 1) or 
+            not score.passed or 
+            score.statistics.miss > 0
+        ) else (None, None)
+        hits = BeatmapCalculator.parse_stats(score.statistics)
+        return perf, fc_perf, fc_acc, hits
 
     async def get_score_message(self, score: SoloScore, prefix="Recent score for {username}") -> tuple[str, BeatmapCalculator]:
         score_format = prefix+":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
                     "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
 
         calc = await BeatmapCalculator.from_beatmap_id(score.beatmap_id)
-        perf = calc.calculate(score)
-        fc_perf, fc_acc = calc.calculate_if_fc(score) if perf.effective_miss_count >= 1 else (None, None)
-        hits = BeatmapCalculator.parse_stats(score.statistics)
+        perf, fc_perf, fc_acc, hits = self.get_score_attrs(calc, score)
 
         bm_perf = fc_perf if not score.passed else perf
 
@@ -1284,9 +1292,7 @@ class Bot:
             *(BeatmapCalculator.from_beatmap_id(score.beatmap_id) for score in scores)
         )
         for calc, score in zip(calcs, scores):
-            perf = calc.calculate(score)
-            fc_perf, fc_acc = calc.calculate_if_fc(score) if perf.effective_miss_count >= 1 else (None, None)
-            hits = BeatmapCalculator.parse_stats(score.statistics)
+            perf, fc_perf, fc_acc, hits = self.get_score_attrs(calc, score)
 
             message += "🌟" + score_format.format(**{
                 "artist": calc.info.metadata.artist,
