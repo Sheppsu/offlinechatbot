@@ -1257,6 +1257,8 @@ class Bot:
         fc_perf, fc_acc = calc.calculate_if_fc(score) if perf.effective_miss_count >= 1 else (None, None)
         hits = BeatmapCalculator.parse_stats(score.statistics)
 
+        bm_perf = fc_perf if not score.passed else perf
+
         return score_format.format(**{
             "username": score.user.username,
             "passed": "" if score.passed else f" (Failed {round(sum(hits) / calc.beatmap.n_objects * 100)}%)",
@@ -1265,12 +1267,12 @@ class Bot:
             "diff": calc.info.metadata.version,
             "mods": " +" + self.get_mod_string(score.mods) if score.mods else "",
             "mapper": calc.info.metadata.creator,
-            "star_rating": round(fc_perf.difficulty.stars, 2),
+            "star_rating": round(bm_perf.difficulty.stars, 2),
             "pp": f"{round(perf.pp, 2)}pp",
             "if_fc_pp": f" ({round(fc_perf.pp, 2)} for {round(fc_acc * 100, 2)}% FC)" if fc_perf is not None else "",
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
-            "max_combo": fc_perf.difficulty.max_combo,
+            "max_combo": bm_perf.difficulty.max_combo,
             "genki_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
             "time_ago": format_date(score.ended_at)
         }), calc
@@ -1291,7 +1293,7 @@ class Bot:
                 "title": calc.info.metadata.title,
                 "diff": calc.info.metadata.version,
                 "mods": " +" + self.get_mod_string(score.mods) if score.mods else "",
-                "sr": round(perf.difficulty.stars, 2),
+                "sr": round((perf if score.passed else fc_perf).difficulty.stars, 2),
                 "acc": round(score.accuracy * 100, 2),
                 "genki_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
                 "pp": round(perf.pp, 2),

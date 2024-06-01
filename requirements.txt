@@ -3,4 +3,4 @@ git+https://github.com/Sheppsu/osu.py@cd3ecf470b0b15af187ba5308e18dc9c8f7c3d64#e
 websockets==11.0.3
 mysql-connector-python==8.0.29
 pytz==2022.1
-git+https://github.com/Sheppsu/beatmap_reader@73534780219866c353385223c78dfb5e3a566098#egg=beatmap_reader
+git+https://github.com/Sheppsu/beatmap_reader@984975b598f1275e8bf0b265d1eb638d4bd3a36f#egg=beatmap_reader
