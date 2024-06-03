@@ -1253,7 +1253,7 @@ class Bot:
         fc_perf, fc_acc = calc.calculate_if_fc(score) if (
             (perf.effective_miss_count is not None and perf.effective_miss_count >= 1) or 
             not score.passed or 
-            score.statistics.miss > 0
+            score.statistics.miss is None or score.statistics.miss > 0
         ) else (None, None)
         hits = BeatmapCalculator.parse_stats(score.statistics)
         return perf, fc_perf, fc_acc, hits
