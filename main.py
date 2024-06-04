@@ -1498,13 +1498,21 @@ class Bot:
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
 
         stats = user.statistics
+        if (rank_history := user.rank_history) is not None:
+            rank_history = user.rank_history.data
+            rank_direction = rank_history[min(len(rank_history), 29)] - rank_history[-1]
+            rank_direction = ("↑" if rank_direction >= 0 else "↓") + str(abs(rank_direction))
 
-        profile_layout = "{username}'s profile [{mode}]: #{global_rank} ({country}#{country_rank}) - {pp}pp; Peak: #{peak_rank} {peak_time_ago} ago | " \
-                         "{accuracy}% | {play_count} playcount ({play_time} hrs) | Medal count: {medal_count}/{total_medals} ({medal_completion}%) | " \
-                         "Followers: {follower_count} | Mapping subs: {subscriber_count}"
+        profile_layout = (
+            "{username}'s profile [{mode}]: #{global_rank}{rank_direction} ({country}#{country_rank}) - "
+            "{pp}pp; Peak: #{peak_rank} {peak_time_ago} ago | {accuracy}% | {play_count} playcount "
+            "({play_time} hrs) | Medal count: {medal_count}/{total_medals} ({medal_completion}%) | "
+            "Followers: {follower_count} | Mapping subs: {subscriber_count}"
+        )
         await self.send_message(ctx.channel, profile_layout.format(**{
             "username": user.username,
             "mode": proper_mode_name[mode],
+            "rank_direction": " "+rank_direction if rank_history is not None else "",
             "global_rank": stats.global_rank,
             "country": user.country.code,
             "country_rank": stats.country_rank,
