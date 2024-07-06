@@ -440,6 +440,10 @@ class Bot:
         # probably reconnecting to the channel
         if ctx.channel in self.message_locks:
             return
+        try:
+            channel_id = self.cm.channels[ctx.channel].id
+        except KeyError:
+            channel_id = None
 
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
@@ -449,7 +453,7 @@ class Bot:
         for reminder in self.old_reminders.pop(ctx.channel, []):
             self.set_reminder_event(reminder)
 
-        self.emotes[ctx.channel] = await self.emote_requester.get_channel_emotes(ctx.channel)
+        self.emotes[ctx.channel] = await self.emote_requester.get_channel_emotes(channel_id or ctx.channel)
 
     async def on_message(self, ctx: MessageContext):
         # check if should respond
