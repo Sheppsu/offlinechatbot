@@ -208,15 +208,23 @@ class HTTPHandler:
         return user_id
 
 
-def require_channel(on_fail):
+def catch_error(on_fail, require_channel=False):
     def decorator(func):
-        async def wrapper(self, channel):
-            if isinstance(channel, str):
-                channel = await self.http.get_user_id(channel)
-            if channel is None:
-                return on_fail()
+        async def wrapper(self, *args):
+            if require_channel:
+                channel = args[0]
+                if isinstance(channel, str):
+                    channel = await self.http.get_user_id(channel)
+                if channel is None:
+                    return on_fail()
 
-            return await func(self, channel)
+                args = (channel,)
+
+            try:
+                return await func(self, *args)
+            except KeyError as exc:
+                print(exc)
+                return on_fail
 
         return wrapper
 
@@ -227,7 +235,7 @@ class EmoteRequester:
     def __init__(self, twitch_client: TwitchAPIHelper):
         self.http: HTTPHandler = HTTPHandler(twitch_client)
 
-    @require_channel(lambda: ([], [], []))
+    @catch_error(lambda: [], True)
     async def get_channel_emotes(self, channel):
         return sum(await asyncio.gather(
             self.get_7tv_channel_emotes(channel),
@@ -235,6 +243,7 @@ class EmoteRequester:
             self.get_ffz_channel_emotes(channel)
         ), [])
 
+    @catch_error(lambda: [])
     async def get_global_emotes(self):
         return sum(await asyncio.gather(
             self.get_7tv_global_emotes(),
@@ -242,7 +251,7 @@ class EmoteRequester:
             self.get_ffz_global_emotes()
         ), [])
 
-    @require_channel(lambda: [])
+    @catch_error(lambda: [], True)
     async def get_7tv_channel_emotes(self, channel):
         return list(map(
             SevenTVEmote,
@@ -252,6 +261,7 @@ class EmoteRequester:
             ))["emote_set"]["emotes"]
         ))
 
+    @catch_error(lambda: [])
     async def get_7tv_global_emotes(self):
         return list(map(
             SevenTVEmote,
@@ -261,7 +271,7 @@ class EmoteRequester:
             ))["emotes"]
         ))
 
-    @require_channel(lambda: [])
+    @catch_error(lambda: [], True)
     async def get_bttv_channel_emotes(self, channel):
         return list(map(
             BetterTVEmote,
@@ -271,13 +281,15 @@ class EmoteRequester:
             ))["channelEmotes"]
         ))
 
+    @catch_error(lambda: [])
     async def get_bttv_global_emotes(self):
         return list(map(BetterTVEmote, await self.http.get(Path.get_bttv_global_emotes(), return_on_fail=[])))
 
-    @require_channel(lambda: [])
+    @catch_error(lambda: [], True)
     async def get_ffz_channel_emotes(self, channel):
         return list(map(FrankerFaceZEmote, await self.http.get(Path.get_ffz_channel_emotes(channel), return_on_fail=[])))
 
+    @catch_error(lambda: [])
     async def get_ffz_global_emotes(self):
         return list(map(FrankerFaceZEmote, await self.http.get(Path.get_ffz_global_emotes(), return_on_fail=[])))
 

@@ -453,10 +453,7 @@ class Bot:
         for reminder in self.old_reminders.pop(ctx.channel, []):
             self.set_reminder_event(reminder)
 
-        try:
-            self.emotes[ctx.channel] = await self.emote_requester.get_channel_emotes(channel_id or ctx.channel)
-        except KeyError:
-            self.emotes[ctx.channel] = []
+        self.emotes[ctx.channel] = await self.emote_requester.get_channel_emotes(channel_id or ctx.channel)
 
     async def on_message(self, ctx: MessageContext):
         # check if should respond
