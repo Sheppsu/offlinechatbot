@@ -1,4 +1,5 @@
 import os
+import asyncio
 from aiohttp import client_exceptions, ClientSession
 
 from helper_objects import TwitchAPIHelper
@@ -228,18 +229,18 @@ class EmoteRequester:
 
     @require_channel(lambda: ([], [], []))
     async def get_channel_emotes(self, channel):
-        return (
-            await self.get_7tv_channel_emotes(channel) +
-            await self.get_bttv_channel_emotes(channel) +
-            await self.get_ffz_channel_emotes(channel)
-        )
+        return sum(await asyncio.gather(
+            self.get_7tv_channel_emotes(channel),
+            self.get_bttv_channel_emotes(channel),
+            self.get_ffz_channel_emotes(channel)
+        ), [])
 
     async def get_global_emotes(self):
-        return (
-            await self.get_7tv_global_emotes() +
-            await self.get_bttv_global_emotes() +
-            await self.get_ffz_global_emotes()
-        )
+        return sum(await asyncio.gather(
+            self.get_7tv_global_emotes(),
+            self.get_bttv_global_emotes(),
+            self.get_ffz_global_emotes()
+        ), [])
 
     @require_channel(lambda: [])
     async def get_7tv_channel_emotes(self, channel):
@@ -284,7 +285,6 @@ class EmoteRequester:
 # Testing
 if __name__ == "__main__":
     from dotenv import load_dotenv
-    import asyncio
     import sys
 
     load_dotenv()
