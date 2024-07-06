@@ -224,7 +224,7 @@ def catch_error(on_fail, require_channel=False):
                 return await func(self, *args)
             except KeyError as exc:
                 print(exc)
-                return on_fail
+                return on_fail()
 
         return wrapper
 
