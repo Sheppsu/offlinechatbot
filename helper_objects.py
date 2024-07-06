@@ -10,11 +10,11 @@ import math
 import asyncio
 import rosu_pp_py as rosu
 import beatmap_reader as br
-from time import perf_counter
+from time import monotonic
 from enum import IntEnum, IntFlag
 from collections import namedtuple
 from constants import admins
-from aiohttp import ClientSession
+from aiohttp import ClientSession, client_exceptions
 
 
 class BombPartyPlayer:
@@ -101,12 +101,12 @@ class BombParty:
         self.turn_order = list(self.party.keys())
         random.shuffle(self.turn_order)
         self.timer = self.bomb_settings['timer']
-        self.bomb_start_time = perf_counter()
+        self.bomb_start_time = monotonic()
         self.started = True
 
     def on_word_used(self, message):
         message = message.lower()
-        self.timer -= max((0, perf_counter() - self.bomb_start_time - self.bomb_settings['minimum_time']))
+        self.timer -= max((0, monotonic() - self.bomb_start_time - self.bomb_settings['minimum_time']))
         self.used_words.append(message)
 
     def on_explode(self):
@@ -129,7 +129,7 @@ class BombParty:
         player = self.current_player.user
         while self.current_player.lives == 0 or self.current_player.user == player:
             self.current_player_index = 1 + self.current_player_index if self.current_player_index != len(self.turn_order) - 1 else 0
-        self.bomb_start_time = perf_counter()
+        self.bomb_start_time = monotonic()
 
     def set_letters(self):
         self.current_letters = random.choice(self.bomb_party_letters[self.bomb_settings['difficulty']])
@@ -485,8 +485,8 @@ class Command:
 
     def check_cooldown(self, ctx):
         self.update_usage(ctx)
-        return DeniedUsageReason.NONE if perf_counter() - self.usage[ctx.channel]["global"] >= self.cooldown.command_cd and \
-            perf_counter() - self.usage[ctx.channel]["user"][ctx.user.username] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
+        return DeniedUsageReason.NONE if monotonic() - self.usage[ctx.channel]["global"] >= self.cooldown.command_cd and \
+            monotonic() - self.usage[ctx.channel]["user"][ctx.user.username] >= self.cooldown.user_cd else DeniedUsageReason.COOLDOWN
 
     def check_banned(self, ctx):
         return DeniedUsageReason.NONE if self.banned is None or ctx.user.username not in self.banned else DeniedUsageReason.BANNED
@@ -495,8 +495,8 @@ class Command:
         return self.check_permission(ctx) | self.check_cooldown(ctx) | self.check_banned(ctx)
 
     def on_used(self, ctx):
-        self.usage[ctx.channel]["global"] = perf_counter()
-        self.usage[ctx.channel]["user"][ctx.user.username] = perf_counter()
+        self.usage[ctx.channel]["global"] = monotonic()
+        self.usage[ctx.channel]["user"][ctx.user.username] = monotonic()
 
     def __contains__(self, item):
         return item.lower() in self.aliases + [self.name]
@@ -1054,3 +1054,67 @@ class BeatmapCalculator:
             mods=self.last_mods,
             clock_rate=self.last_clock_rate
         ).calculate(self.last_diff)
+
+
+class TwitchAPIHelper:
+    def __init__(self, client_id: str, client_secret: str):
+        self.client_id: str = client_id
+        self.client_secret: str = client_secret
+        self._token: str | None = None
+        self._expires_at: int = 0
+        self._lock: asyncio.Lock = asyncio.Lock()
+        
+    async def get_token(self) -> str | None:
+        if monotonic() >= self._expires_at - 5:
+            await self._lock.acquire()
+            await self._get_token()
+            self._lock.release()
+
+        return self._token
+    
+    async def _get_token(self):
+        params = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "grant_type": "client_credentials"
+        }
+        data = await self.make_request(
+            "post",
+            "https://id.twitch.tv/oauth2/token",
+            False,
+            params=params
+        )
+
+        self._token = data["access_token"]
+        self._expires_at = monotonic() + (data["expires_in"] / 1000)
+
+    async def make_request(self, method, url, requires_auth: bool = True, return_on_error=None, **kwargs):
+        if requires_auth:
+            token = await self.get_token()
+            if token is None:
+                return return_on_error
+
+            headers = {"Authorization": f"Bearer {token}", "Client-Id": self.client_id}
+        else:
+            headers = {}
+        headers.update(kwargs.pop("headers", {}))
+
+        try:
+            async with ClientSession() as session:
+                async with session.request(method, url, headers=headers, **kwargs) as resp:
+                    data = await resp.json()
+                    if "error" in data:
+                        print(f"Request to {url} failed: {data['error']}")
+                        return return_on_error
+
+                    return data
+        except client_exceptions.ClientError:
+            return return_on_error
+
+    async def get(self, endpoint, return_on_error=None, **kwargs):
+        return await self.make_request(
+            "get",
+            "https://api.twitch.tv/"+endpoint,
+            return_on_error=return_on_error,
+            **kwargs
+        )

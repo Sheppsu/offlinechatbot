@@ -1,9 +1,7 @@
-import requests
 import os
-from dotenv import load_dotenv
-from time import perf_counter
+from aiohttp import client_exceptions, ClientSession
 
-load_dotenv()
+from helper_objects import TwitchAPIHelper
 
 
 class SevenTVFile:
@@ -131,7 +129,6 @@ class FrankerFaceZEmote:
 
 class Path:
     providers = {
-        "twitch": "https://api.twitch.tv/helix/",
         "7tv": "https://7tv.io/v3/",
         "bttv": "https://api.betterttv.net/3/",
         "ffz": "https://api.betterttv.net/3/",
@@ -140,10 +137,6 @@ class Path:
     def __init__(self, provider, path, auth=None):
         self.path = self.providers[provider] + path
         self.auth = auth
-
-    @classmethod
-    def get_user_id(cls):
-        return cls("twitch", "users", "twitch")
 
     @classmethod
     def get_7tv_channel_emotes(cls, channel):
@@ -174,124 +167,138 @@ class Path:
 
 
 class HTTPHandler:
-    def __init__(self, twitch_client_id, twitch_client_secret):
-        self.twitch_client_id = twitch_client_id
-        self.twitch_client_secret = twitch_client_secret
-        self.access_token = None
-        self.expire_time = None
-        self.user_id_cache = {}
+    def __init__(self, twitch_client: TwitchAPIHelper):
+        self.twitch_client: TwitchAPIHelper = twitch_client
+        self.user_id_cache: dict[str, int] = {}
 
-    @property
-    def twitch_auth_header(self):
-        return {
-            "Authorization": f"Bearer {self.access_token}",
-            "Client-Id": self.twitch_client_id,
-        }
-
-    def set_access_token(self, access_token):
-        self.access_token = access_token
-
-    def get_access_token(self):
-        params = {
-            "client_id": self.twitch_client_id,
-            "client_secret": self.twitch_client_secret,
-            "grant_type": "client_credentials"
-        }
-        resp = requests.post("https://id.twitch.tv/oauth2/token", params=params)
+    async def make_request(self, method, url, return_on_error=None, **kwargs):
         try:
-            resp.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            print(f"Failed to retrieve access token: {e}")
-            return ""
-        resp = resp.json()
-        self.access_token, self.expire_time = resp['access_token'], resp['expires_in']
-        self.expire_time += perf_counter()
+            async with ClientSession() as session:
+                async with session.request(method, url, **kwargs) as resp:
+                    return await resp.json()
+        except client_exceptions.ClientError:
+            return return_on_error
 
-    def get(self, path, headers=None, return_on_fail=None, **kwargs):
+    async def get(self, path, headers=None, return_on_fail=None, **kwargs):
         headers = {
             "Content-Type": "application/json",
-            **(getattr(self, f"{path.auth}_auth_header") if path.auth is not None else {}),
             **(headers if headers is not None else {}),
         }
-        resp = requests.get(path, headers=headers, **kwargs)
+        headers.update(kwargs.pop("headers", {}))
+        return await self.make_request("get", str(path), headers=headers, **kwargs)
 
-        try:
-            resp.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            print(f"Failed request for {path}: {e}")
-            return return_on_fail
-
-        return resp.json()
-
-    def get_user_id(self, username):
+    async def get_user_id(self, username):
         if username in self.user_id_cache:
             return self.user_id_cache[username]
-        data = self.get(Path.get_user_id(), params={"login": username}, return_on_fail={"data": [{"id": None}]})["data"]
-        if not data:
-            return
-        user_id = int(data[0]["id"])
+
+        data = await self.twitch_client.get(
+            "helix/users",
+            params={"login": username},
+            return_on_error={"data": [{"id": None}]}
+        )
+
+        user_id = data["data"][0]["id"]
         if user_id is not None:
+            user_id = int(user_id)
             self.user_id_cache[username] = user_id
         else:
             print("Failed to get user id for " + username)
+
         return user_id
 
 
+def require_channel(on_fail):
+    def decorator(func):
+        async def wrapper(self, channel):
+            if isinstance(channel, str):
+                channel = await self.http.get_user_id(channel)
+            if channel is None:
+                return on_fail()
+
+            return await func(self, channel)
+
+        return wrapper
+
+    return decorator
+
+
 class EmoteRequester:
-    def __init__(self, twitch_client_id, twitch_client_secret):
-        self.http = HTTPHandler(twitch_client_id, twitch_client_secret)
+    def __init__(self, twitch_client: TwitchAPIHelper):
+        self.http: HTTPHandler = HTTPHandler(twitch_client)
 
-    def get_channel_emotes(self, channel):
-        if channel is None: return [], [], []
-        if type(channel) == str: channel = self.http.get_user_id(channel)
-        return self.get_7tv_channel_emotes(channel), \
-               self.get_bttv_channel_emotes(channel), \
-               self.get_ffz_channel_emotes(channel)
+    @require_channel(lambda: ([], [], []))
+    async def get_channel_emotes(self, channel):
+        return (
+            await self.get_7tv_channel_emotes(channel) +
+            await self.get_bttv_channel_emotes(channel) +
+            await self.get_ffz_channel_emotes(channel)
+        )
 
-    def get_global_emotes(self):
-        return self.get_7tv_global_emotes(), \
-               self.get_bttv_global_emotes(), \
-               self.get_ffz_global_emotes()
+    async def get_global_emotes(self):
+        return (
+            await self.get_7tv_global_emotes() +
+            await self.get_bttv_global_emotes() +
+            await self.get_ffz_global_emotes()
+        )
 
-    def get_7tv_channel_emotes(self, channel):
-        if channel is None: return []
-        if type(channel) == str: channel = self.http.get_user_id(channel)
-        if channel is None: return []
-        data = self.http.get(Path.get_7tv_channel_emotes(channel), return_on_fail=None)
-        if data is None:
-            return []
-        return list(map(SevenTVEmote, data["emote_set"]["emotes"]))
+    @require_channel(lambda: [])
+    async def get_7tv_channel_emotes(self, channel):
+        return list(map(
+            SevenTVEmote,
+            (await self.http.get(
+                Path.get_7tv_channel_emotes(channel),
+                return_on_fail={"emote_set": {"emotes": []}}
+            ))["emote_set"]["emotes"]
+        ))
 
-    def get_7tv_global_emotes(self):
-        data = self.http.get(Path.get_7tv_global_emotes(), return_on_fail=None)
-        if data is None:
-            return []
-        return list(map(SevenTVEmote, data["emotes"]))
+    async def get_7tv_global_emotes(self):
+        return list(map(
+            SevenTVEmote,
+            (await self.http.get(
+                Path.get_7tv_global_emotes(),
+                return_on_fail={"emotes": []}
+            ))["emotes"]
+        ))
 
-    def get_bttv_channel_emotes(self, channel):
-        if channel is None: return []
-        if type(channel) == str: channel = self.http.get_user_id(channel)
-        if channel is None: return []
-        return list(map(BetterTVEmote, self.http.get(Path.get_bttv_channel_emotes(channel), return_on_fail={"channelEmotes": []})["channelEmotes"]))
+    @require_channel(lambda: [])
+    async def get_bttv_channel_emotes(self, channel):
+        return list(map(
+            BetterTVEmote,
+            (await self.http.get(
+                Path.get_bttv_channel_emotes(channel),
+                return_on_fail={"channelEmotes": []}
+            ))["channelEmotes"]
+        ))
 
-    def get_bttv_global_emotes(self):
-        return list(map(BetterTVEmote, self.http.get(Path.get_bttv_global_emotes(), return_on_fail=[])))
+    async def get_bttv_global_emotes(self):
+        return list(map(BetterTVEmote, await self.http.get(Path.get_bttv_global_emotes(), return_on_fail=[])))
 
-    def get_ffz_channel_emotes(self, channel):
-        if channel is None: return []
-        if type(channel) == str: channel = self.http.get_user_id(channel)
-        if channel is None: return []
-        return list(map(FrankerFaceZEmote, self.http.get(Path.get_ffz_channel_emotes(channel), return_on_fail=[])))
+    @require_channel(lambda: [])
+    async def get_ffz_channel_emotes(self, channel):
+        return list(map(FrankerFaceZEmote, await self.http.get(Path.get_ffz_channel_emotes(channel), return_on_fail=[])))
 
-    def get_ffz_global_emotes(self):
-        return list(map(FrankerFaceZEmote, self.http.get(Path.get_ffz_global_emotes(), return_on_fail=[])))
+    async def get_ffz_global_emotes(self):
+        return list(map(FrankerFaceZEmote, await self.http.get(Path.get_ffz_global_emotes(), return_on_fail=[])))
 
 
 # Testing
 if __name__ == "__main__":
-    emote_requester = EmoteRequester(os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET"))
-    emote_requester.http.get_access_token()
-    emotes = emote_requester.get_channel_emotes("btmc")
-    print(emotes[0])
-    print(emotes[1])
-    print(emotes[2])
+    from dotenv import load_dotenv
+    import asyncio
+    import sys
+
+    load_dotenv()
+
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    async def main():
+        twitch_client = TwitchAPIHelper(os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET"))
+        emote_requester = EmoteRequester(twitch_client)
+        emotes = await emote_requester.get_channel_emotes("btmc")
+        print(f"{len(emotes)} emotes")
+        print(f"{len(tuple(filter(lambda e: isinstance(e, SevenTVEmote), emotes)))} 7TV emotes")
+        print(f"{len(tuple(filter(lambda e: isinstance(e, BetterTVEmote), emotes)))} BTTV emotes")
+        print(f"{len(tuple(filter(lambda e: isinstance(e, FrankerFaceZEmote), emotes)))} FFZ emotes")
+
+    asyncio.new_event_loop().run_until_complete(main())

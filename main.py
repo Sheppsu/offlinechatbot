@@ -1,4 +1,6 @@
 # coding=utf-8
+import asyncio
+
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
@@ -8,7 +10,7 @@ except:
     pass
 from anime import create_list as create_anime_list
 from sql import Database, USER_SETTINGS, Reminder
-# from emotes import EmoteRequester
+from emotes import EmoteRequester
 from helper_objects import *
 from context import *
 from util import *
@@ -34,6 +36,7 @@ from pytz import timezone, all_timezones
 from aiohttp import client_exceptions, ClientSession as AiohttpClientSession
 from datetime import datetime, timezone as tz, timedelta
 from collections import defaultdict
+from time import monotonic
 
 
 TESTING = "--test" in sys.argv
@@ -86,8 +89,7 @@ class Bot:
         self.offlines = {channel.name: not channel.offlineonly for channel in self.cm.channels.values()}
 
         # Twitch api stuff
-        self.access_token, self.expire_time = self.get_access_token()
-        self.expire_time += perf_counter()
+        self.twitch_client: TwitchAPIHelper = TwitchAPIHelper(os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET"))
 
         # Message related variables
         self.message_send_cd = 1.5
@@ -123,17 +125,16 @@ class Bot:
             "osu": Scramble("player name", lambda: random.choice(self.top_players), 0.8),
             "map": Scramble("map name", lambda: random.choice(self.top_maps), 1.3),
             "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
-            # "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.7,
-            #                   ScrambleHintType.EVERY_OTHER, True, ScrambleRewardType.LOGARITHM),
+            "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.7,
+                              ScrambleHintType.EVERY_OTHER, True, ScrambleRewardType.LOGARITHM),
             "anime": Scramble("anime", lambda: random.choice(self.anime[:250]), 1.1),
             "al": Scramble("azurlane ship", lambda: random.choice(self.azur_lane), 0.9),
         }
         self.scramble_manager = ScrambleManager(self.scrambles)
 
         # emote stuff
-        # self.emote_requester = EmoteRequester(self.client_id, self.client_secret)
-        # self.emote_requester.http.set_access_token(self.access_token)
-        self.emotes = {channel: [] for channel in self.cm.channels}  # {channel: sum(self.emote_requester.get_channel_emotes(channel), []) for channel in self.cm.channels}
+        self.emote_requester = EmoteRequester(self.twitch_client)
+        self.emotes = {channel: [] for channel in self.cm.channels}
 
         # Bomb party
         self.bomb_party_helper = BombParty()
@@ -261,37 +262,19 @@ class Bot:
     # Api request stuff
     # TODO: consider moving api stuff to its own class
 
-    def get_access_token(self):
-        params = {
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "grant_type": "client_credentials"
-        }
-        resp = requests.post("https://id.twitch.tv/oauth2/token", params=params)
-        resp.raise_for_status()
-        resp = resp.json()
-        return resp['access_token'], resp['expires_in'] / 1000
-
     async def get_streams_status(self):
         # TODO: account for limit of 100
         channels = list(map(lambda c: c.id, filter(lambda c: c.offlineonly, self.cm.channels.values())))
         params = {"user_id": channels}
-        headers = {"Authorization": f"Bearer {self.access_token}", "Client-Id": self.client_id}
 
-        try:
-            async with AiohttpClientSession() as session:
-                async with session.get("https://api.twitch.tv/helix/streams", params=params, headers=headers) as resp:
-                    data = await resp.json()
-            if "data" not in data:
-                raise Exception(resp.text)
-            data = data["data"]
-            online_streams = [int(user["user_id"]) for user in data]
-        except Exception as e:
-            print(f"get_stream_status err: {e}")
+        data = await self.twitch_client.get("helix/streams", params=params)
+        if data is None:
             for channel in self.cm.channels.values():
                 self.offlines[channel.name] = not channel.offlineonly
             return
-            
+
+        data = data["data"]
+        online_streams = [int(user["user_id"]) for user in data]
         user_logins = {channel.id: channel.name for channel in self.cm.channels.values()}
         
         for channel_id in channels:
@@ -317,8 +300,9 @@ class Bot:
         # start off by checking stream status of all channels
         # checking now will prevent some possible bugs
         await self.get_streams_status()
+
         self.osu_client = await AsynchronousClient.from_client_credentials(
-            os.getenv("OSU_CLIENT_ID"), os.getenv("OSU_CLIENT_SECRET"), None
+            int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), None
         )
 
         async with websockets.connect(self.uri) as ws:
@@ -333,31 +317,25 @@ class Bot:
                 #     comm = asyncio.run_coroutine_threadsafe(self.comm_client.run(), self.loop)  # Start the client that communicates with remote clients
 
                 # Running loop
-                last_check = perf_counter()
-                last_ping = perf_counter() - 60*60  # 1 hour
-                last_update = perf_counter() - 60
-                last_cache_reset = perf_counter()
+                last_check = monotonic()
+                last_ping = monotonic() - 60*60  # 1 hour
+                last_cache_reset = monotonic()
                 
                 # comm_done = False
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other stuff to run
 
                     # Check if channels are live
-                    if perf_counter() - last_check >= 10:
+                    if monotonic() - last_check >= 10:
                         await self.get_streams_status()
-                        last_check = perf_counter()
-
-                    # Check if access token needs to be renewed
-                    if perf_counter() >= self.expire_time-20:
-                        self.access_token, self.expire_time = self.get_access_token()
-                        self.expire_time += perf_counter()
+                        last_check = monotonic()
 
                     # Ping database once an hour for keepalive
-                    if perf_counter() - last_ping >= 60*60:
-                        last_ping = perf_counter()
+                    if monotonic() - last_ping >= 60*60:
+                        last_ping = monotonic()
                         self.database.ping()
 
-                    if perf_counter() - last_cache_reset >= 60*60*24:
+                    if monotonic() - last_cache_reset >= 60*60:
                         # to prevent the cache from growing too large
                         self.mw_cache["dictionary"] = {}
                         self.mw_cache["thesaurus"] = {}
@@ -465,12 +443,13 @@ class Bot:
 
         self.message_locks[ctx.channel] = asyncio.Lock()
         self.last_message[ctx.channel] = ""
-        self.emotes[ctx.channel] = []  # sum(self.emote_requester.get_channel_emotes(ctx.channel), [])
         self.recent_score_cache[ctx.channel] = {}
         self.trivia_helpers[ctx.channel] = TriviaHelper()
         self.mw_cache["args"][ctx.channel] = {"word": "",  "index": 1}
         for reminder in self.old_reminders.pop(ctx.channel, []):
             self.set_reminder_event(reminder)
+
+        self.emotes[ctx.channel] = await self.emote_requester.get_channel_emotes(ctx.channel)
 
     async def on_message(self, ctx: MessageContext):
         # check if should respond
@@ -2148,6 +2127,9 @@ class Bot:
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     loop = asyncio.new_event_loop()
     bot = Bot(command_manager, loop)
     bot.running = True
