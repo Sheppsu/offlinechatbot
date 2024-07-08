@@ -640,11 +640,12 @@ class Bot:
                                                         "in this channel to use the emote scramble.")
 
         scrambled_word = self.scramble_manager.get_scramble(scramble_type, ctx.channel)
+        future = self.set_timed_event(120, self.on_scramble_finish, ctx.channel, scramble_type)
+        self.scramble_manager.pass_future(scramble_type, ctx.channel, future)
+
         await self.send_message(ctx.channel, f"Unscramble this "
                                              f"{self.scramble_manager.get_scramble_name(scramble_type)}: "
                                              f"{scrambled_word.lower()}")
-        future = self.set_timed_event(120, self.on_scramble_finish, ctx.channel, scramble_type)
-        self.scramble_manager.pass_future(scramble_type, ctx.channel, future)
 
     async def on_scramble(self, ctx, scramble_type):
         money = self.scramble_manager.check_answer(scramble_type, ctx.channel, ctx.message)
@@ -653,12 +654,10 @@ class Bot:
         answer = self.scramble_manager.get_answer(scramble_type, ctx.channel)
         name = self.scramble_manager.get_scramble_name(scramble_type)
         self.scramble_manager.reset(scramble_type, ctx.channel)
-        emotes = list(map(lambda e: e.name, self.emotes[ctx.channel]))
         await self.send_message(ctx.channel,
                                 f"@{ctx.user.display_name} You got it right! "
                                 f"{answer} was the "
-                                f"{name}. "
-                                f"{'Drake ' if 'Drake' in emotes else ''}"
+                                f"{name}. Drake "
                                 f"You've won {money} Becky Bucks!")
         self.database.add_money(ctx, money)
 
