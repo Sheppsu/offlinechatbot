@@ -157,3 +157,4 @@ data/azur_lane.json
 docs/
 db_editing/
 .DS_Store
+test.py

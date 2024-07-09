@@ -1,5 +1,4 @@
 # coding=utf-8
-import asyncio
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
@@ -17,10 +16,10 @@ from util import *
 from constants import *
 from lastfm import LastFMClient
 
+import asyncio
 import websockets
 import os
 import sys
-# from client import Bot as CommunicationClient
 from osu import (
     AsynchronousClient,
     Mods,
@@ -45,7 +44,11 @@ LOCAL = "-local" in sys.argv
 if not TESTING or not os.path.exists("data/top players (200).json"):
     TopPlayersClient().run()  # Update top player json file
 if not TESTING or not os.path.exists("data/anime.json"):
-    create_anime_list(MALClient.from_client_credentials(os.getenv("MAL_CLIENT_ID"), os.getenv("MAL_CLIENT_SECRET")))
+    if os.getenv("MAL_CLIENT_ID") is None:
+        with open("data/anime.json", "w") as f:
+            f.write("[]")
+    else:
+        create_anime_list(MALClient.from_client_credentials(os.getenv("MAL_CLIENT_ID"), os.getenv("MAL_CLIENT_SECRET")))
 if not TESTING or not os.path.exists("data/azur_lane.json"):
     from azur_lane import download_azur_lane_ship_names
     download_azur_lane_ship_names()
@@ -63,8 +66,6 @@ class Bot:
     MWD_API_KEY = os.getenv("MWD_API_KEY")
     MWT_API_KEY = os.getenv("MWT_API_KEY")
 
-    restarts = 0
-
     def __init__(self, cm, loop):
         self.database = Database()
         channels_to_run_in = [ChannelConfig("sheppsu", 156710598)] if TESTING else self.database.get_channels()
@@ -73,11 +74,11 @@ class Bot:
         self.cm.init(self, channels_to_run_in)
 
         self.ws = None
-        # self.comm_client = CommunicationClient(self)
         self.running = False
         self.loop = loop
         self.last_message = {}
         self.own_state = None
+        self.restarts = 0
         self.irc_command_handlers = {
             ContextType.CONNECTED: self.on_running,
             ContextType.PRIVMSG: self.on_message,
@@ -312,16 +313,13 @@ class Bot:
             try:
                 # Start up
                 await self.connect()  # Connect to the irc server
-                poll = asyncio.run_coroutine_threadsafe(self.poll(), self.loop)  # Begin polling for events sent by the server
-                # if not TESTING:
-                #     comm = asyncio.run_coroutine_threadsafe(self.comm_client.run(), self.loop)  # Start the client that communicates with remote clients
+                runner = self.loop.create_task(self.run_handler())
 
                 # Running loop
                 last_check = monotonic()
                 last_ping = monotonic() - 60*60  # 1 hour
                 last_cache_reset = monotonic()
                 
-                # comm_done = False
                 while self.running:
                     await asyncio.sleep(1)  # Leave time for other stuff to run
 
@@ -335,33 +333,22 @@ class Bot:
                         last_ping = monotonic()
                         self.database.ping()
 
+                    # to prevent the cache from growing too large
                     if monotonic() - last_cache_reset >= 60*60:
-                        # to prevent the cache from growing too large
                         self.mw_cache["dictionary"] = {}
                         self.mw_cache["thesaurus"] = {}
 
                     # Check if poll is no longer running, in which case, the bot is no longer running.
-                    if poll.done():
-                        print(poll.result())
+                    if runner.done():
                         self.running = False
-
-                    # if not TESTING and comm.done() and not comm_done:
-                    #     comm_done = True
-                    #     try:
-                    #         print("Communication client finished")
-                    #         print(comm.result())
-                    #     except:
-                    #         traceback.print_exc()
 
             except KeyboardInterrupt:
                 pass
             except websockets.ConnectionClosedError as e:
                 # Restart the bot
                 print(e)
-                if self.restarts < 5:
-                    self.restarts += 1
-                    print("Restarting bot...")
-                    await self.start()
+                print("Restarting bot...")
+                return
             except:
                 print(traceback.format_exc())
         self.running = False
@@ -371,7 +358,7 @@ class Bot:
         await self.ws.send(f"PASS {self.oauth}")
         await self.ws.send(f"NICK {self.username}")
 
-    async def poll(self):
+    async def run_handler(self):
         while self.running:
             data = await self.ws.recv()
             print(f"< {data}")
@@ -2136,4 +2123,5 @@ if __name__ == "__main__":
     loop = asyncio.new_event_loop()
     bot = Bot(command_manager, loop)
     bot.running = True
-    loop.run_until_complete(bot.start())
+    while bot.running:
+        loop.run_until_complete(bot.start())
