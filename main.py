@@ -1304,7 +1304,7 @@ class Bot:
         if msg in self.recent_score_cache[ctx.channel]:
             del self.recent_score_cache[ctx.channel][msg]
         self.recent_score_cache[ctx.channel].update({msg: bm_calc})
-        while len(self.recent_score_cache) > 50:
+        while len(self.recent_score_cache) > 10:
             del self.recent_score_cache[ctx.channel][next(self.recent_score_cache[ctx.channel].keys())]
 
     async def get_beatmap_from_arg(self, ctx, beatmap_link):
@@ -1566,7 +1566,10 @@ class Bot:
     @command_manager.command("simulate", cooldown=Cooldown(0, 2), aliases=["s"])
     async def simulate_score(self, ctx):
         if len(self.recent_score_cache[ctx.channel]) == 0:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} I don't have a cache of the last beatmap.")
+            return await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} I don't have a cache of the last beatmap."
+            )
         calc = self.get_map_cache(ctx)
         if calc is None:
             return
@@ -1582,7 +1585,10 @@ class Bot:
             try:
                 mods = list(map(Mods.get_from_abbreviation, mods))
             except KeyError:
-                return await self.send_message(ctx.channel, f"{ctx.user.display_name} The mod combination you gave is invalid.")
+                return await self.send_message(
+                    ctx.channel,
+                    f"{ctx.user.display_name} The mod combination you gave is invalid."
+                )
             mods = Mods.get_from_list(mods)
 
         calc.calculate_difficulty(0 if mods is None else mods.value)
