@@ -126,7 +126,7 @@ class Bot:
             "osu": Scramble("player name", lambda: random.choice(self.top_players), 0.8),
             "map": Scramble("map name", lambda: random.choice(self.top_maps), 1.3),
             "genshin": Scramble("genshin weap/char", lambda: random.choice(self.genshin), 0.7),
-            "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]).name, 0.7,
+            "emote": Scramble("emote", lambda channel: random.choice(self.emotes[channel]), 0.7,
                               ScrambleHintType.EVERY_OTHER, True, ScrambleRewardType.LOGARITHM),
             "anime": Scramble("anime", lambda: random.choice(self.anime[:250]), 1.1),
             "al": Scramble("azurlane ship", lambda: random.choice(self.azur_lane), 0.9),

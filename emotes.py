@@ -5,127 +5,16 @@ from aiohttp import client_exceptions, ClientSession
 from helper_objects import TwitchAPIHelper
 
 
-class SevenTVFile:
-    __slots__ = ("name", "static_name", "width", "height", "frame_count", "size", "format")
-    
-    def __init__(self, data):
-        self.name = data["name"]
-        self.static_name = data["static_name"]
-        self.width = data["width"]
-        self.height = data["height"]
-        self.frame_count = data["frame_count"]
-        self.size = data["size"]
-        self.format = data["format"]
+def get_7tv_name(data):
+    return data["name"]
 
 
-class SevenTVHost:
-    __slots__ = (
-        "url",
-        "files",
-    )
-
-    def __init__(self, data):
-        self.url = data["url"]
-        self.files = list(map(SevenTVFile, data["files"]))
-        
-        
-class SevenTVUser:
-    __slots__ = (
-        "id",
-        "username",
-        "display_name",
-        "avatar_url",
-        "style",
-        "roles",
-    )
-    
-    def __init__(self, data):
-        self.id = data["id"]
-        self.username = data["username"]
-        self.display_name = data["display_name"]
-        self.avatar_url = data.get("avatar_url")
-        self.style = data["style"]
-        self.roles = data.get("roles")
+def get_ffz_name(data):
+    return data["code"]
 
 
-class SevenTVEmoteData:
-    __slots__ = (
-        "id",
-        "name",
-        "flags",
-        "lifecycle",
-        "state",
-        "listed",
-        "animated",
-        "owner",
-        "host"
-    )
-    
-    def __init__(self, data):
-        self.id = data["id"]
-        self.name = data["name"]
-        self.flags = data["flags"]
-        self.lifecycle = data["lifecycle"]
-        self.state = data["state"]
-        self.listed = data["listed"]
-        self.animated = data["animated"]
-        self.owner = SevenTVUser(data["owner"])
-        self.host = SevenTVHost(data["host"])
-
-
-class SevenTVEmote:
-    __slots__ = (
-        "id",
-        "name",
-        "flags",
-        "timestamp",
-        "actor_id",
-        "data",
-    )
-
-    def __init__(self, data):
-        self.id = data["id"]
-        self.name = data["name"]
-        self.flags = data["flags"]
-        self.timestamp = data["timestamp"]
-        self.actor_id = data["actor_id"]
-        self.data = SevenTVEmoteData(data["data"])
-
-
-class BetterTVEmote:
-    __slots__ = (
-        "id", "name", "image_type", "owner_id"
-    )
-
-    def __init__(self, data):
-        self.id = data["id"]
-        self.name = data["code"]
-        self.image_type = data["imageType"]
-        self.owner_id = data["userId"]
-
-
-class FrankerFaceZUser:
-    __slots__ = (
-        "id", "name", "display_name",
-    )
-
-    def __init__(self, data):
-        self.id = data["id"]
-        self.name = data["name"]
-        self.display_name = data["displayName"]
-
-
-class FrankerFaceZEmote:
-    __slots__ = (
-        "id", "owner", "name", "images", "image_type"
-    )
-
-    def __init__(self, data):
-        self.id = data["id"]
-        self.owner = FrankerFaceZUser(data["user"])
-        self.name = data["code"]
-        self.images = data["images"]
-        self.image_type = data["imageType"]
+def get_bttv_name(data):
+    return data["code"]
 
 
 class Path:
@@ -254,7 +143,7 @@ class EmoteRequester:
     @catch_error(lambda: [], True)
     async def get_7tv_channel_emotes(self, channel):
         return list(map(
-            SevenTVEmote,
+            get_7tv_name,
             (await self.http.get(
                 Path.get_7tv_channel_emotes(channel),
                 return_on_fail={"emote_set": {"emotes": []}}
@@ -264,7 +153,7 @@ class EmoteRequester:
     @catch_error(lambda: [])
     async def get_7tv_global_emotes(self):
         return list(map(
-            SevenTVEmote,
+            get_7tv_name,
             (await self.http.get(
                 Path.get_7tv_global_emotes(),
                 return_on_fail={"emotes": []}
@@ -274,7 +163,7 @@ class EmoteRequester:
     @catch_error(lambda: [], True)
     async def get_bttv_channel_emotes(self, channel):
         return list(map(
-            BetterTVEmote,
+            get_bttv_name,
             (await self.http.get(
                 Path.get_bttv_channel_emotes(channel),
                 return_on_fail={"channelEmotes": []}
@@ -283,15 +172,15 @@ class EmoteRequester:
 
     @catch_error(lambda: [])
     async def get_bttv_global_emotes(self):
-        return list(map(BetterTVEmote, await self.http.get(Path.get_bttv_global_emotes(), return_on_fail=[])))
+        return list(map(get_bttv_name, await self.http.get(Path.get_bttv_global_emotes(), return_on_fail=[])))
 
     @catch_error(lambda: [], True)
     async def get_ffz_channel_emotes(self, channel):
-        return list(map(FrankerFaceZEmote, await self.http.get(Path.get_ffz_channel_emotes(channel), return_on_fail=[])))
+        return list(map(get_ffz_name, await self.http.get(Path.get_ffz_channel_emotes(channel), return_on_fail=[])))
 
     @catch_error(lambda: [])
     async def get_ffz_global_emotes(self):
-        return list(map(FrankerFaceZEmote, await self.http.get(Path.get_ffz_global_emotes(), return_on_fail=[])))
+        return list(map(get_ffz_name, await self.http.get(Path.get_ffz_global_emotes(), return_on_fail=[])))
 
 
 # Testing
@@ -309,8 +198,5 @@ if __name__ == "__main__":
         emote_requester = EmoteRequester(twitch_client)
         emotes = await emote_requester.get_channel_emotes("btmc")
         print(f"{len(emotes)} emotes")
-        print(f"{len(tuple(filter(lambda e: isinstance(e, SevenTVEmote), emotes)))} 7TV emotes")
-        print(f"{len(tuple(filter(lambda e: isinstance(e, BetterTVEmote), emotes)))} BTTV emotes")
-        print(f"{len(tuple(filter(lambda e: isinstance(e, FrankerFaceZEmote), emotes)))} FFZ emotes")
 
     asyncio.new_event_loop().run_until_complete(main())
