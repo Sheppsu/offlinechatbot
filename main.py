@@ -56,6 +56,10 @@ if not TESTING or not os.path.exists("data/azur_lane.json"):
 command_manager = CommandManager()
 
 
+class ReconnectException(BaseException):
+    """Raised when the bot needs to reconnect"""
+
+
 class Bot:
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
@@ -75,6 +79,7 @@ class Bot:
 
         self.ws = None
         self.running = False
+        self.reconnect = False
         self.loop = loop
         self.last_message = {}
         self.own_state = None
@@ -84,6 +89,7 @@ class Bot:
             ContextType.PRIVMSG: self.on_message,
             ContextType.USERSTATE: self.on_user_state,
             ContextType.JOIN: self.on_join,
+            ContextType.RECONNECT: self.on_reconnect
         }
 
         # Is channel offline or not
@@ -315,7 +321,9 @@ class Bot:
                 await self.connect()  # Connect to the irc server
                 runner = self.loop.create_task(self.run_handler())
 
-                # Running loop
+                # successfully connected, reset reconnect
+                self.reconnect = False
+
                 last_check = monotonic()
                 last_ping = monotonic() - 60*60  # 1 hour
                 last_cache_reset = monotonic()
@@ -348,10 +356,11 @@ class Bot:
                 # Restart the bot
                 print(e)
                 print("Restarting bot...")
-                return
+                self.reconnect = True
             except:
                 print(traceback.format_exc())
-        self.running = False
+
+        self.running = self.reconnect
 
     async def connect(self):
         print(f"Connecting to irc server as {self.username}")
@@ -368,13 +377,14 @@ class Bot:
                 continue
 
             # Account for tags
-            ctxs = Context(data)
+            ctxs = get_contexts(data)
 
             for ctx in ctxs:
                 for cmd, handler in self.irc_command_handlers.items():
                     if ctx.type == cmd:
-                        future = asyncio.run_coroutine_threadsafe(handler(ctx), self.loop)
+                        future = self.loop.create_task(handler(ctx))
                         future.add_done_callback(future_callback)
+                        break
 
     async def join(self, channel):
         channel = channel.lower()
@@ -441,6 +451,10 @@ class Bot:
             self.set_reminder_event(reminder)
 
         self.emotes[ctx.channel] = await self.emote_requester.get_channel_emotes(channel_id or ctx.channel)
+
+    async def on_reconnect(self, ctx):
+        self.running = False
+        self.reconnect = True
 
     async def on_message(self, ctx: MessageContext):
         # check if should respond
