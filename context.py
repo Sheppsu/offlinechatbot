@@ -11,51 +11,53 @@ class ContextType(Enum):
     USERSTATE = "USERSTATE"
     ROOMSTATE = "ROOMSTATE"
     CONNECTED = "376"
+    RECONNECT = "RECONNECT"
 
 
-class Context:
-    type = None  # So IDE will shut up about no attribute type
+def parse_tags_string(string):
+    return dict(map(lambda item: (item[:(i := item.index("="))], item[i+1:]), string.split(";")))
 
-    def __new__(cls, string):
-        contexts = []
-        for string in string.split("\r\n"):
-            data = string.split()
-            if len(data) < 3:
-                continue
-            tags = None
-            if data[0].startswith("@"):
-                tags = Context.parse_tags_string(data[0][1:])
-            offset = 1 if tags is not None else 0
-            source = data[0 + offset]
-            try:
-                message_type = ContextType(data[1 + offset])
-            except ValueError:
-                contexts.append(UnknownContext(source, data[1 + offset]))
-                continue
-            channel = data[2 + offset][1:]
-            if message_type == ContextType.PRIVMSG:
-                message = " ".join(data[3 + offset:])[1:]
-                sending_user = source.split("!")[0][1:]
-                action = False
-                if message.startswith("\x01"):
-                    message = message[7:-1]
-                    action = True
-                contexts.append(MessageContext(sending_user, channel, message, tags, source, action))
-            elif message_type == ContextType.JOIN:
-                contexts.append(JoinContext(channel, source))
-            elif message_type == ContextType.PART:
-                contexts.append(PartContext(channel, source))
-            elif message_type == ContextType.USERSTATE:
-                contexts.append(UserStateContext(source, channel, tags))
-            elif message_type == ContextType.ROOMSTATE:
-                contexts.append(RoomStateContext(source, channel, tags))
-            else:
-                contexts.append(UnknownContext(source, message_type))
-        return contexts
 
-    @staticmethod
-    def parse_tags_string(string):
-        return dict(map(lambda item: (item[:(i := item.index("="))], item[i+1:]), string.split(";")))
+def get_contexts(msg):
+    for string in msg.split("\r\n"):
+        data = string.split()
+
+        if len(data) < 3:
+            continue
+
+        tags = None
+        if data[0].startswith("@"):
+            tags = parse_tags_string(data[0][1:])
+
+        offset = 1 if tags is not None else 0
+
+        source = data[0 + offset]
+
+        try:
+            message_type = ContextType(data[1 + offset])
+        except ValueError:
+            yield UnknownContext(source, data[1 + offset])
+            continue
+
+        channel = data[2 + offset][1:]
+        if message_type == ContextType.PRIVMSG:
+            message = " ".join(data[3 + offset:])[1:]
+            sending_user = source.split("!")[0][1:]
+            action = False
+            if message.startswith("\x01"):
+                message = message[7:-1]
+                action = True
+            yield MessageContext(sending_user, channel, message, tags, source, action)
+        elif message_type == ContextType.JOIN:
+            yield JoinContext(channel, source)
+        elif message_type == ContextType.PART:
+            yield PartContext(channel, source)
+        elif message_type == ContextType.USERSTATE:
+            yield UserStateContext(source, channel, tags)
+        elif message_type == ContextType.ROOMSTATE:
+            yield RoomStateContext(source, channel, tags)
+        else:
+            yield UnknownContext(source, message_type)
 
 
 class JoinContext:
