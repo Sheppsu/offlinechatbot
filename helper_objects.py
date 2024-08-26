@@ -1065,10 +1065,11 @@ class TwitchAPIHelper:
         self._lock: asyncio.Lock = asyncio.Lock()
         
     async def get_token(self) -> str | None:
+        await self._lock.acquire()
         if monotonic() >= self._expires_at - 5:
-            await self._lock.acquire()
             await self._get_token()
-            self._lock.release()
+        
+        self._lock.release()
 
         return self._token
     
@@ -1078,15 +1079,23 @@ class TwitchAPIHelper:
             "client_secret": self.client_secret,
             "grant_type": "client_credentials"
         }
-        data = await self.make_request(
-            "post",
-            "https://id.twitch.tv/oauth2/token",
-            False,
-            params=params
-        )
+        
+        while True:
+            data = await self.make_request(
+                "post",
+                "https://id.twitch.tv/oauth2/token",
+                False,
+                params=params
+            )
+            
+            if data is None:
+                await asyncio.sleep(1)
+                continue
 
-        self._token = data["access_token"]
-        self._expires_at = monotonic() + (data["expires_in"] / 1000)
+            self._token = data["access_token"]
+            self._expires_at = monotonic() + (data["expires_in"] / 1000)
+            
+            break
 
     async def make_request(self, method, url, requires_auth: bool = True, return_on_error=None, **kwargs):
         if requires_auth:
