@@ -346,10 +346,6 @@ class Bot:
                         self.mw_cache["dictionary"] = {}
                         self.mw_cache["thesaurus"] = {}
 
-                    # Check if poll is no longer running, in which case, the bot is no longer running.
-                    if runner.done():
-                        self.running = False
-
             except KeyboardInterrupt:
                 pass
             except websockets.ConnectionClosedError as e:
