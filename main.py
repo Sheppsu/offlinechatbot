@@ -1392,7 +1392,7 @@ class Bot:
         if mode != int(calc.beatmap.mode):
             calc.beatmap.convert(rosu.GameMode(mode))
 
-        mode = GameModeInt.get_str_equivalent(GameModeInt(mode)).value
+        mode = GameModeStr[GameModeInt(mode).name].value
 
         try:
             scores = await self.osu_client.get_user_beatmap_scores(calc.beatmap_id, user_id, mode)
