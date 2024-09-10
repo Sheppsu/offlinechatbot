@@ -25,6 +25,7 @@ from osu import (
     Mods,
     Mod,
     GameModeInt,
+    GameModeStr,
     SoloScore,
     BeatmapsetSearchFilter,
     BeatmapsetSearchSort
