@@ -1314,7 +1314,7 @@ class Bot:
         if msg in self.recent_score_cache[ctx.channel]:
             del self.recent_score_cache[ctx.channel][msg]
         self.recent_score_cache[ctx.channel].update({msg: bm_calc})
-        while len(self.recent_score_cache) > 10:
+        while len(self.recent_score_cache[ctx.channel]) > 10:
             del self.recent_score_cache[ctx.channel][next(iter(self.recent_score_cache[ctx.channel].keys()))]
 
     async def get_beatmap_from_arg(self, ctx, beatmap_link):
