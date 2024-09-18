@@ -56,7 +56,8 @@ Freminet
 Charlotte
 Chevreuse
 Gaming
-
+Sethos
+Kachina
 
 4* Weapons
 
@@ -98,86 +99,98 @@ Range Gauge
 
 5* Characters
 
-Baizhu
-Al Haitham
-Scaramouche
-Dehya
-Nilou
-Cyno
-Nahida
-Tighnari
-Yelan
-Kamisato Ayato
-Yae Miko
-Shenhe
-Arataki Itto
-Sangonomiya Kokomi
-Raiden Shogun
-Yoimiya
-Kamisato Ayaka
-Kaedehara Kazuha
-Eula
-Hu Tao
-Xiao
-Ganyu
-Albedo
-Zhongli
-Tartaglia
-Klee
 Venti
+Klee
+Tartaglia
+Zhongli
+Albedo
+Ganyu
+Xiao
 Keqing
-Mona
-Qiqi
-Diluc
-Jean
+Hu Tao
+Eula
+Kaedehara Kazuha
+Kamisato Ayaka
+Yoimiya
+Raiden Shogun
+Sangonomiya Kokomi
+Arataki Itto
+Shenhe
+Yae Miko
+Kamisato Ayato
+Yelan
+Tighnari
+Cyno
+Nilou
+Nahida
+Wanderer
+Alhaitham
+Dehya
+Baizhu
 Lyney
 Neuvillette
 Wriothesley
 Furina
 Navia
 Xianyun
+Chiori
+Arlecchino
+Clorinde
+Sigewinne
+Emilie
+Mualani
+Kinich
 
 
 5* Weapons
 
 Aquila Favonia
-Skyward Blade
+Amos' Bow
+Lost Prayer to the Sacred Winds
+Wolf's Gravestone
+Skyward Harp
+Memory of Dust
+Vortex Vanquisher
+The Unforged
 Summit Shaper
+Skyward Atlas
+Skyward Pride
+Primordial Jade Winged-Spear
 Primordial Jade Cutter
+Staff of Homa
+Elegy for the End
+Skyward Blade
+Song of Broken Pines
 Freedom-Sworn
 Mistsplitter Reforged
-Skyward Pride
-Wolf's Gravestone
-The Unforged
-Song of Broken Pines
-Redhorn Stonethresher
-Primordial Jade Winged-Spear
 Skyward Spine
-Vortex Vanquisher
-Staff of Homa
-Engulfing Lightning
-Calamity Queller
-Skyward Atlas
-Lost Prayer to the Sacred Winds
-Memory of Dust
-Everlasting Moonglow
-Kagura's Verity
-Skyward Harp
-Amos' Bow
-Elegy for the End
 Thundering Pulse
+Engulfing Lightning
+Everlasting Moonglow
 Polar Star
+Redhorn Stonethresher
+Calamity Queller
+Kagura's Verity
 Haran Geppaku Futsu
-Key of Khai-Nisut
-Staff of the Scarlet Sands
 Aqua Simulacra
 Hunter's Path
+Staff of the Scarlet Sands
+Key of Khaj-Nisut
 A Thousand Floating Dreams
 Tulaytullah's Remembrance
+Light of Foliar Incision
+Beacon of the Reed Sea
 Jadefall's Splendor
 The First Great Magic
-Tomr of the Eternal Flow
+Tome of the Eternal Flow
 Cashflow Supervision
 Splendor of Tranquil Waters
 Verdict
 Crane's Echoing Call
+Uraku Misugiri
+Crimson Moon's Semblance
+Absolution
+Silvershower Heartstrings
+Lumidouce Elegy
+Surf's Up
+Fang of the Mountain King
