@@ -10,11 +10,15 @@ import math
 import asyncio
 import rosu_pp_py as rosu
 import beatmap_reader as br
+import logging
 from time import monotonic
 from enum import IntEnum, IntFlag
 from collections import namedtuple
 from constants import admins
 from aiohttp import ClientSession, client_exceptions
+
+
+_log = logging.getLogger(__name__)
 
 
 class BombPartyPlayer:
@@ -1066,8 +1070,14 @@ class TwitchAPIHelper:
         
     async def get_token(self) -> str | None:
         await self._lock.acquire()
-        if monotonic() >= self._expires_at - 5:
-            await self._get_token()
+        # try just in case
+        try:
+            if monotonic() >= self._expires_at - 5:
+                await self._get_token()
+        except Exception as exc:
+            _log.exception("Exception occurred trying to renew twitch api token", exc)
+            self._lock.release()
+            return
         
         self._lock.release()
 
