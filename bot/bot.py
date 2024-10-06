@@ -47,7 +47,7 @@ if not TESTING or not os.path.exists("data/anime.json"):
     else:
         create_anime_list(MALClient.from_client_credentials(os.getenv("MAL_CLIENT_ID"), os.getenv("MAL_CLIENT_SECRET")))
 if not TESTING or not os.path.exists("data/azur_lane.json"):
-    from azur_lane import download_azur_lane_ship_names
+    from .azur_lane import download_azur_lane_ship_names
     download_azur_lane_ship_names()
 
 command_manager = CommandManager()
