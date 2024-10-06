@@ -1,8 +1,10 @@
 import requests
 import os
+import logging
 
 
 lastfm_token = os.getenv("LASTFM_API_KEY")
+log = logging.getLogger(__name__)
 
 
 class LastFMClient:
@@ -22,7 +24,7 @@ class LastFMClient:
             resp.raise_for_status()
             return resp.json()
         except Exception as err:
-            print(f"Lastfm request failed: {err}\n{resp.text}")
+            log.error(f"Lastfm request failed: {err}\n{resp.text}")
 
     def get_lastfm_user(self, user):
         params = self.get_params("user.getinfo", user=user)

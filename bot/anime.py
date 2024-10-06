@@ -1,5 +1,6 @@
-from constants import name_formatting
 import json
+
+from .constants import name_formatting
 
 
 def format_title(anime):

@@ -1,6 +1,7 @@
-from constants import azur_lane_data_url, name_formatting
 import requests
 import json
+
+from .constants import azur_lane_data_url, name_formatting
 
 
 def format_name(name):

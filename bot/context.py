@@ -1,7 +1,8 @@
 from enum import Enum
 from datetime import datetime
-from util import parse_irc_string
 import pytz
+
+from .util import parse_irc_string
 
 
 class ContextType(Enum):

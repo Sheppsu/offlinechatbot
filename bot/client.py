@@ -2,9 +2,13 @@ import websockets
 import json
 import asyncio
 import requests
-import traceback
+import logging
 from os import getenv
-from util import future_callback
+
+from .util import future_callback
+
+
+log = logging.getLogger(__name__)
 
 
 class ClientBase:
@@ -20,9 +24,9 @@ class ClientBase:
 
     async def make_connection(self):
         await self.ws.send("AUTH " + self.PASSWORD)
-        print(f"> AUTH {self.PASSWORD}")
+        log.info(f"> AUTH {self.PASSWORD}")
         await self.ws.send("CONNTYPE " + self.CONN_TYPE)
-        print(f"> CONNTYPE {self.CONN_TYPE}")
+        log.info(f"> CONNTYPE {self.CONN_TYPE}")
 
     async def close(self):
         await self.ws.close(1000)
@@ -30,7 +34,7 @@ class ClientBase:
     async def poll(self):
         while True:
             data = await self.ws.recv()
-            print(f"< {data}")
+            log.info(f"< {data}")
             await self.handle_data(data)
 
     async def handle_data(self, data):
@@ -48,20 +52,20 @@ class ClientBase:
                 self.ws = ws
                 await self.make_connection()
                 await self.poll()
-        except websockets.ConnectionClosedError as err:
-            if err.rcvd is None:
-                traceback.print_exc()
+        except websockets.ConnectionClosedError as exc:
+            if exc.rcvd is None:
+                log.exception(exc)
             else:
-                print(err.rcvd.reason)
-                if err.rcvd.code == 3001 or str(err) == self.last_err:
+                log.error(exc.rcvd.reason)
+                if exc.rcvd.code == 3001 or str(exc) == self.last_err:
                     await asyncio.sleep(60)
                 else:
-                    self.last_err = str(err)
-        except Exception as e:
-            traceback.print_exc()
-            if self.last_err == str(e):
+                    self.last_err = str(exc)
+        except Exception as exc:
+            log.exception(exc)
+            if self.last_err == str(exc):
                 await asyncio.sleep(60)
-            self.last_err = str(e)
+            self.last_err = str(exc)
         await self.run()
 
 
@@ -89,7 +93,7 @@ class Bot(ClientBase):
         if len(data) > 2:
             params = json.loads(" ".join(data[2:]))
 
-        print(f"Message received from client {client_id}: {command} {params if params else ''}")
+        log.info(f"Message received from client {client_id}: {command} {params if params else ''}")
 
         if command in self.command_handlers:
             future = asyncio.run_coroutine_threadsafe(self.command_handlers[command](client_id, params), self.bot.loop)
@@ -98,9 +102,9 @@ class Bot(ClientBase):
     async def on_refresh_db(self, client_id, params):
         self.bot.reload_db_data()
         await self.ws.send(f"{client_id} REFRESHDB OK")
-        print(f"> {client_id} REFRESHDB OK")
+        log.info(f"> {client_id} REFRESHDB OK")
 
     async def on_channel_reload(self, client_id, params):
         await self.bot.reload_channels()
         await self.ws.send(f"{client_id} RELOAD_CHANNELS OK")
-        print(f"> {client_id} RELOAD_CHANNELS OK")
+        log.info(f"> {client_id} RELOAD_CHANNELS OK")

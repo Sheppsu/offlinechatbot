@@ -1,8 +1,12 @@
 import os
 import asyncio
+import logging
 from aiohttp import client_exceptions, ClientSession
 
-from helper_objects import TwitchAPIHelper
+from .helper_objects import TwitchAPIHelper
+
+
+log = logging.getLogger(__name__)
 
 
 def get_7tv_name(data):
@@ -92,7 +96,7 @@ class HTTPHandler:
             user_id = int(user_id)
             self.user_id_cache[username] = user_id
         else:
-            print("Failed to get user id for " + username)
+            log.error("Failed to get user id for " + username)
 
         return user_id
 
@@ -112,7 +116,7 @@ def catch_error(on_fail, require_channel=False):
             try:
                 return await func(self, *args)
             except KeyError as exc:
-                print(exc)
+                log.exception(exc)
                 return on_fail()
 
         return wrapper

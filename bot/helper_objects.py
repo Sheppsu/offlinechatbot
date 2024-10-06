@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import random
-
 import osu
 import requests
 import html
@@ -14,11 +13,12 @@ import logging
 from time import monotonic
 from enum import IntEnum, IntFlag
 from collections import namedtuple
-from constants import admins
 from aiohttp import ClientSession, client_exceptions
 
+from .constants import admins
 
-_log = logging.getLogger(__name__)
+
+log = logging.getLogger(__name__)
 
 
 class BombPartyPlayer:
@@ -114,14 +114,10 @@ class BombParty:
         self.used_words.append(message)
 
     def on_explode(self):
-        print("setting timer")
         self.timer = self.bomb_settings['timer']
-        print("bomb start time to zero")
         self.bomb_start_time = 0
-        print("player loses life")
         player = self.current_player
         player.lives -= 1
-        print("return message")
         return f"@{player.user} " + \
                (f"You ran out of time and now have {player.lives} {'♥' * player.lives} heart(s) left"
                 if player.lives != 0 else "You ran out of time and lost all your lives! YouDied")
@@ -139,9 +135,7 @@ class BombParty:
         self.current_letters = random.choice(self.bomb_party_letters[self.bomb_settings['difficulty']])
 
     def get_winner(self):
-        print("getting winner")
         players_left = [player for player in self.party.values() if player.lives != 0]
-        print("returning winner")
         return players_left[0] if len(players_left) == 1 else None
 
     def set_setting(self, setting, value):
@@ -268,7 +262,7 @@ class Scramble:
         future = self.progress[channel]["future"]
         self.progress[channel] = self.default_progress
         if cancel and future is not None and not future.cancelled() and not future.done():
-            print(f"Cancelling future for {self.name} scramble")
+            log.info(f"Cancelling future for {self.name} scramble")
             future.cancel()
 
     def new_answer(self, channel):
@@ -474,9 +468,6 @@ class Command:
         self.fargs = fargs if fargs is not None else []
         self.fkwargs = fkwargs if fkwargs is not None else {}
 
-    def print(self, out, *args, **kwargs):
-        print(f"<{self.name}>: {str(out)}", *args, **kwargs)
-
     def check_permission(self, ctx):
         return DeniedUsageReason.NONE if self.permissions[self.permission](ctx) else DeniedUsageReason.PERMISSION
 
@@ -612,7 +603,7 @@ class TriviaHelper:
         try:
             resp = requests.get("https://opentdb.com/api.php", params=params)
         except Exception as e:
-            print(e)
+            log.exception(e)
             self.answer = None
             return
         if resp.status_code != 200:
@@ -907,7 +898,7 @@ class BeatmapCalculator:
                 try:
                     resp.raise_for_status()
                 except Exception as e:
-                    print("Failed to get osu beatmap", e)
+                    log.exception(f"Failed to get osu beatmap", exc_info=e)
                 content = await resp.read()
                 info = br.Beatmap(BeatmapReader(content.decode("utf-8").split("\n")))
                 info.load()
@@ -1015,7 +1006,6 @@ class BeatmapCalculator:
             or self.last_clock_rate != clock_rate or not score.passed or not self.last_passed else self.last_diff
 
         stats = self.parse_stats(score.statistics)
-        print(stats)
         stats = LegacyStats(
             stats.n_geki,
             stats.n300 + stats.misses if score.passed else
@@ -1025,7 +1015,6 @@ class BeatmapCalculator:
             stats.n50,
             0,
         )
-        print(stats)
         perf = rosu.Performance(
             n300=stats.n300,
             n100=stats.n100,
@@ -1075,7 +1064,7 @@ class TwitchAPIHelper:
             if monotonic() >= self._expires_at - 5:
                 await self._get_token()
         except Exception as exc:
-            _log.exception("Exception occurred trying to renew twitch api token", exc)
+            log.exception("Exception occurred trying to renew twitch api token", exc)
             self._lock.release()
             return
         
@@ -1123,7 +1112,7 @@ class TwitchAPIHelper:
                 async with session.request(method, url, headers=headers, **kwargs) as resp:
                     data = await resp.json()
                     if "error" in data:
-                        print(f"Request to {url} failed: {data['error']}")
+                        log.error(f"Request to {url} failed: {data['error']}")
                         return return_on_error
 
                     return data

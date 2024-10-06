@@ -1,9 +1,10 @@
 from mysql import connector
 from datetime import datetime, timezone as tz
-from helper_objects import ChannelCommandInclusion, ChannelConfig
 from dataclasses import dataclass
 import os
 import json
+
+from .helper_objects import ChannelCommandInclusion, ChannelConfig
 
 
 @dataclass

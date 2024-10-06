@@ -1,7 +1,10 @@
-import traceback
 import asyncio
 from datetime import datetime
 import pytz
+import logging
+
+
+log = logging.getLogger(__name__)
 
 
 async def do_timed_event(wait, callback, *args, **kwargs):
@@ -15,9 +18,9 @@ def future_callback(future):
     try:
         result = future.result()
         if result:
-            print(result)
-    except:
-        traceback.print_exc()
+            log.info(result)
+    except Exception as exc:
+        log.exception(exc)
 
 
 def split_message(message):
