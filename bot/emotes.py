@@ -3,7 +3,7 @@ import asyncio
 import logging
 from aiohttp import client_exceptions, ClientSession
 
-from .helper_objects import TwitchAPIHelper
+from bot.helper_objects import TwitchAPIHelper
 
 
 log = logging.getLogger(__name__)
@@ -146,12 +146,20 @@ class EmoteRequester:
 
     @catch_error(lambda: [], True)
     async def get_7tv_channel_emotes(self, channel):
+        emote_list = await self.http.get(
+                Path.get_7tv_channel_emotes(channel),
+                return_on_fail={"emote_set": {"emotes": []}})
+        
+        # check if the channel actually has 7tv emotes, if not return default.
+        if emote_list["emote_set"] == None:
+            return list(map(
+                get_7tv_name,
+                {"emote_set": {"emotes": []}}
+            ))
+
         return list(map(
             get_7tv_name,
-            (await self.http.get(
-                Path.get_7tv_channel_emotes(channel),
-                return_on_fail={"emote_set": {"emotes": []}}
-            ))["emote_set"]["emotes"]
+            emote_list["emote_set"]["emotes"]
         ))
 
     @catch_error(lambda: [])
