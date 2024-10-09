@@ -3,7 +3,7 @@ import asyncio
 import logging
 from aiohttp import client_exceptions, ClientSession
 
-from bot.helper_objects import TwitchAPIHelper
+from .helper_objects import TwitchAPIHelper
 
 
 log = logging.getLogger(__name__)
