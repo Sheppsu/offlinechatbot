@@ -70,7 +70,8 @@ class HTTPHandler:
             async with ClientSession() as session:
                 async with session.request(method, url, **kwargs) as resp:
                     return await resp.json()
-        except client_exceptions.ClientError:
+        except client_exceptions.ClientError as exc:
+            log.exception(exc)
             return return_on_error
 
     async def get(self, path, headers=None, return_on_fail=None, **kwargs):
@@ -79,7 +80,13 @@ class HTTPHandler:
             **(headers if headers is not None else {}),
         }
         headers.update(kwargs.pop("headers", {}))
-        return await self.make_request("get", str(path), headers=headers, **kwargs)
+        return await self.make_request(
+            "get",
+            str(path),
+            headers=headers,
+            return_on_error=return_on_fail,
+            **kwargs
+        )
 
     async def get_user_id(self, username):
         if username in self.user_id_cache:
@@ -116,7 +123,6 @@ def catch_error(on_fail, require_channel=False):
             try:
                 return await func(self, *args)
             except KeyError as exc:
-                log.exception(exc)
                 return on_fail()
 
         return wrapper
