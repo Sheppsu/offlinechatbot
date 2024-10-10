@@ -152,20 +152,22 @@ class EmoteRequester:
 
     @catch_error(lambda: [], True)
     async def get_7tv_channel_emotes(self, channel):
-        emote_list = await self.http.get(
+        emote_list: dict = await self.http.get(
                 Path.get_7tv_channel_emotes(channel),
                 return_on_fail={"emote_set": {"emotes": []}})
+
+        emotes = emote_list.get("emote_set", {}).get("emotes")
         
         # check if the channel actually has 7tv emotes, if not return default.
-        if emote_list["emote_set"] == None:
+        if not emotes:
             return list(map(
                 get_7tv_name,
-                {"emote_set": {"emotes": []}}
+                []
             ))
 
         return list(map(
             get_7tv_name,
-            emote_list["emote_set"]["emotes"]
+            emotes
         ))
 
     @catch_error(lambda: [])
@@ -215,6 +217,8 @@ if __name__ == "__main__":
         twitch_client = TwitchAPIHelper(os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET"))
         emote_requester = EmoteRequester(twitch_client)
         emotes = await emote_requester.get_channel_emotes("btmc")
-        print(f"{len(emotes)} emotes")
+        print(f"{len(emotes)} channel emotes")
+        emotes = await emote_requester.get_7tv_channel_emotes("btmc")
+        print(f"{len(emotes)} 7tv channel emotes")
 
     asyncio.new_event_loop().run_until_complete(main())
