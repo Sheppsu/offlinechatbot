@@ -156,18 +156,10 @@ class EmoteRequester:
                 Path.get_7tv_channel_emotes(channel),
                 return_on_fail={"emote_set": {"emotes": []}})
 
-        emotes = emote_list.get("emote_set", {}).get("emotes")
-        
-        # check if the channel actually has 7tv emotes, if not return default.
-        if not emotes:
-            return list(map(
-                get_7tv_name,
-                []
-            ))
-
         return list(map(
             get_7tv_name,
-            emotes
+            # check if the channel actually has 7tv emotes, if not return default.
+            emote_list.get("emote_set", {}).get("emotes", [])
         ))
 
     @catch_error(lambda: [])
