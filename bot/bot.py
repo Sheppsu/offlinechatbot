@@ -1247,6 +1247,8 @@ class Bot:
         calc = await BeatmapCalculator.from_beatmap_id(score.beatmap_id)
         perf, fc_perf, fc_acc, hits = self.get_score_attrs(calc, score)
 
+        pp = score.pp or perf.pp
+
         bm_perf = fc_perf if not score.passed else perf
 
         return score_format.format(**{
@@ -1258,7 +1260,7 @@ class Bot:
             "mods": " +" + self.get_mod_string(score.mods) if score.mods else "",
             "mapper": calc.info.metadata.creator,
             "star_rating": round(bm_perf.difficulty.stars, 2),
-            "pp": f"{round(perf.pp, 2)}pp",
+            "pp": f"{round(pp, 2)}pp",
             "if_fc_pp": f" ({round(fc_perf.pp, 2)} for {round(fc_acc * 100, 2)}% FC)" if fc_perf is not None else "",
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
