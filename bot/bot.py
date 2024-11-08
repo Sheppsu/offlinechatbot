@@ -1508,7 +1508,7 @@ class Bot:
             "play_time": stats.play_time//3600,
             "medal_count": len(user.user_achievements),
             "total_medals": self.MAX_MEDALS,
-            "medal_completion": round(len(user.user_achievements) / self.MAX_MEDALS * 100, 2),
+            "medal_completion": 0 if self.MAX_MEDALS == 0 else round(len(user.user_achievements) / self.MAX_MEDALS * 100, 2),
             "follower_count": user.follower_count,
             "subscriber_count": user.mapping_follower_count,
         }))
