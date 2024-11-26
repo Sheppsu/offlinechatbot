@@ -1785,7 +1785,7 @@ class Bot:
 
             tz = timezone(tz)
             now = datetime.now(tz=tz)
-            future = now.replace(hour=hour, minute=minute)
+            future = now.replace(hour=hour, minute=minute, second=0)
             if now >= future:
                 future += timedelta(hours=24)
             return future - now
