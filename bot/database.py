@@ -573,7 +573,7 @@ class Database:
         await cursor.execute(
             f"""
             SELECT {ch_fields} FROM main_userchannel
-            INNER JOIN main_user ON (main_userchannel.owner_id = main_user.id)
+            INNER JOIN main_user ON (main_userchannel.user_id = main_user.id)
             ORDER BY main_userchannel.id
             """
         )
