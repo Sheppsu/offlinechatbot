@@ -1,3 +1,7 @@
+from .base import CommandBot, CommandArg
+from ..bot import BotMeta
+
+
 fonts = {
     "bold": '!"$\\\'(),-./𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗:;?@𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙_𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
     "double-struck": '!"$\\\'(),-./𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡:;?@𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ_𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€',
@@ -20,28 +24,37 @@ fonts = {
 
 }
 layout = '!"$\\\'(),-./0123456789:;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëìíîïñòóôõöøùúûüýÿ€'
-admins = [
-    156710598
-]
-proper_mode_name = {
-    "osu": "osu!standard",
-    "taiko": "osu!taiko",
-    "fruits": "osu!catch",
-    "mania": "osu!mania"
-}
-azur_lane_data_url = "https://raw.githubusercontent.com/AzurLaneTools/AzurLaneData/main/EN/sharecfgdata/ship_data_statistics.json"
-name_formatting = {
-    "\u00b7": " ",
-    "\u014C": "Oo",
-    "\u014D": "oo",
-    "\u00F6": "o",
-    "\u016A": "Uu",
-    "\u016B": "uu",
-    "\u00FC": "u",
-    "\u00DF": "ss",
-    "\u00E8": "e",
-    "\u00E9": "e",
-    "\u00C9": "E",
-    "\u00E2": "a",
-    "\u00C4": "A",
-}
+
+
+class FontBot(CommandBot, metaclass=BotMeta):
+    command_manager = CommandBot.command_manager
+
+    @command_manager.command(
+        "font",
+        "Slightly funny command that converts a message to a \"font\" of the message",
+        [
+            CommandArg("font", "!fonts command gives valid font names"),
+            CommandArg("message")
+        ]
+    )
+    async def font(self, ctx):
+        args = ctx.get_args()
+        if len(args) < 2:
+            return await self.send_message(
+                ctx.channel,
+                "Must provide a font name and characters to convert. Do !fonts to see a list of valid fonts."
+            )
+
+        font_name = args[0].lower()
+        if font_name not in fonts:
+            return await self.send_message(ctx.channel, f"{font_name} is not a valid font name.")
+
+        await self.send_message(ctx.channel, "".join(
+            [fonts[font_name][layout.index(char)] if char in layout else char for char in " ".join(args[1:])]))
+
+    @command_manager.command(
+        "fonts",
+        "List of valid font names for !font."
+    )
+    async def fonts(self, ctx):
+        await self.send_message(ctx.channel, f'Valid fonts: {", ".join(list(fonts.keys()))}.')

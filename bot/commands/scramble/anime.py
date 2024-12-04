@@ -1,6 +1,6 @@
 import json
 
-from .constants import name_formatting
+from .azur_lane import name_formatting
 
 
 def format_title(anime):

@@ -1,7 +1,23 @@
 import requests
 import json
 
-from .constants import azur_lane_data_url, name_formatting
+
+azur_lane_data_url = "https://raw.githubusercontent.com/AzurLaneTools/AzurLaneData/main/EN/sharecfgdata/ship_data_statistics.json"
+name_formatting = {
+    "\u00b7": " ",
+    "\u014C": "Oo",
+    "\u014D": "oo",
+    "\u00F6": "o",
+    "\u016A": "Uu",
+    "\u016B": "uu",
+    "\u00FC": "u",
+    "\u00DF": "ss",
+    "\u00E8": "e",
+    "\u00E9": "e",
+    "\u00C9": "E",
+    "\u00E2": "a",
+    "\u00C4": "A",
+}
 
 
 def format_name(name):

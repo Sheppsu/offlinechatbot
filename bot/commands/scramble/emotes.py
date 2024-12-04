@@ -1,9 +1,8 @@
-import os
 import asyncio
 import logging
 from aiohttp import client_exceptions, ClientSession
 
-from .helper_objects import TwitchAPIHelper
+from ...twitch_api import TwitchAPIHelper
 
 
 log = logging.getLogger(__name__)
@@ -191,22 +190,3 @@ class EmoteRequester:
     @catch_error(lambda: [])
     async def get_ffz_global_emotes(self):
         return list(map(get_ffz_name, await self.http.get(Path.get_ffz_global_emotes(), return_on_fail=[])))
-
-
-# Testing
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-    import sys
-
-    load_dotenv()
-
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-    async def main():
-        twitch_client = TwitchAPIHelper(os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET"))
-        emote_requester = EmoteRequester(twitch_client)
-        emotes = await emote_requester.get_channel_emotes("btmc")
-        print(f"{len(emotes)} emotes")
-
-    asyncio.new_event_loop().run_until_complete(main())

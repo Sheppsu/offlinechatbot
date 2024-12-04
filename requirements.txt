@@ -1,7 +1,7 @@
 python-dotenv==0.20.0
-osu.py==2.2.1
+osu.py==3.1.0
 websockets==11.0.3
-mysql-connector-python==8.0.29
 pytz==2022.1
 rosu-pp-py==1.1.0
 git+https://github.com/Sheppsu/beatmap_reader@984975b598f1275e8bf0b265d1eb638d4bd3a36f#egg=beatmap_reader
+psycopg[binary]==3.1.19

@@ -13,6 +13,8 @@ class ContextType(Enum):
     ROOMSTATE = "ROOMSTATE"
     CONNECTED = "376"
     RECONNECT = "RECONNECT"
+    SETUP = "custom-ctx-setup"
+    UPDATE = "custom-ctx-update"
 
 
 def parse_tags_string(string):
@@ -68,8 +70,8 @@ class JoinContext:
     type = ContextType.JOIN
 
     def __init__(self, channel, source):
-        self.channel = channel
-        self.source = source
+        self.channel: str = channel
+        self.source: str = source
 
 
 class PartContext:
@@ -77,8 +79,8 @@ class PartContext:
     type = ContextType.PART
 
     def __init__(self, channel, source):
-        self.channel = channel
-        self.source = source
+        self.channel: str = channel
+        self.source: str = source
 
 
 class MessageContext:
@@ -90,13 +92,13 @@ class MessageContext:
     type = ContextType.PRIVMSG
 
     def __init__(self, sending_user="", channel="", message="", tags=None, source=None, action=False):
-        self.user = UserStateContext(source, channel, tags) if tags is not None else sending_user
-        self.sending_user = sending_user
-        self.channel = channel
-        self.message = message
-        self.source = source
-        self.action = action
-        self.time_created = datetime.now().replace(tzinfo=pytz.UTC)
+        self.user: UserStateContext | str = UserStateContext(source, channel, tags) if tags is not None else sending_user
+        self.sending_user: str = sending_user
+        self.channel: str = channel
+        self.message: str = message
+        self.source: str = source
+        self.action: bool = action
+        self.time_created: datetime = datetime.now().replace(tzinfo=pytz.UTC)
 
         if tags is None:
             return
@@ -105,7 +107,7 @@ class MessageContext:
         self.flags = tags.get("flags", [])
         self.id = tags.get("id", None)
         self.returning_chatter = bool(int(tags.get("returning-chatter", 0)))
-        self.room_id = tags.get("room-id", None)
+        self.room_id = int(tags.get("room-id", 0))
         self.tmi_sent_ts = bool(int(tags.get("tmi-sent-ts", 0)))
         self.turbo = bool(int(tags.get("turbo", 0)))
         self.user_id = int(tags.get("user-id", -1))
