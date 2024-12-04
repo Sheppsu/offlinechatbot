@@ -23,6 +23,13 @@ def split_message(message):
 
 
 def format_date(date: datetime | int):
+    seconds = round(time() - date) if isinstance(date, int) else \
+        (datetime.now(pytz.UTC) - date.replace(tzinfo=pytz.UTC)).total_seconds()
+
+    return format_time_length(seconds)
+
+
+def format_time_length(seconds: float):
     time_values = {
         "seconds": ("minutes", 60),
         "minutes": ("hours", 60),
@@ -32,9 +39,7 @@ def format_date(date: datetime | int):
         "years": ("centuries", 100),
     }
 
-    seconds = round(time() - date) if isinstance(date, int) else \
-        (datetime.now(pytz.UTC) - date.replace(tzinfo=pytz.UTC)).total_seconds()
-    info = {"seconds": seconds}
+    info = {"seconds": round(seconds)}
     for label, time_value in time_values.items():
         if info[label] >= time_value[1]:
             info[time_value[0]] = info[label] // time_value[1]

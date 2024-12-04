@@ -1,7 +1,7 @@
 from .base import CommandBot, CommandArg
 from ..context import MessageContext, JoinContext
 from ..database import UserReminder
-from ..util import format_date
+from ..util import format_date, format_time_length
 from ..bot import BotMeta
 
 from datetime import datetime, timedelta, timezone
@@ -123,5 +123,5 @@ class ReminderBot(CommandBot, metaclass=BotMeta):
 
         await self.send_message(
             ctx.channel,
-            f"@{ctx.user.display_name} Set reminder to occur in {format_date(timestamp)} YIPPEE"
+            f"@{ctx.user.display_name} Set reminder to occur in {format_time_length(length.total_seconds())} YIPPEE"
         )
