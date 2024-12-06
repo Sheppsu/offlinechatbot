@@ -743,7 +743,7 @@ class Database:
             remind_at,
             msg,
             User(user_id, username, None, None, None),
-            UserChannel(None, None, User(channel_user_id, None, None, None, None), None)
+            UserChannel(None, None, None, User(channel_user_id, None, None, None, None), None)
         )
 
     @use_cursor(commit=True)
