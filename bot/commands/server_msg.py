@@ -17,7 +17,7 @@ class ServerMessageHandlerBot(CommandBot, metaclass=BotMeta):
                     await self.part(channel.user.username)
                     await self.join(new_channel.user.username)
 
-                break
+                return
 
         # new channel
         self.channels.append(new_channel)
