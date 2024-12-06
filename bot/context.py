@@ -15,6 +15,7 @@ class ContextType(Enum):
     RECONNECT = "RECONNECT"
     SETUP = "custom-ctx-setup"
     UPDATE = "custom-ctx-update"
+    SERVER_MSG = "custom-ctx-server-msg"
 
 
 def parse_tags_string(string):
@@ -206,3 +207,12 @@ class UnknownContext:
     def __init__(self, source, msg_type):
         self.source = source
         self.type = msg_type
+
+
+class ServerMessageContext:
+    __slots__ = ("data",)
+
+    type = ContextType.SERVER_MSG
+
+    def __init__(self, data):
+        self.data = data

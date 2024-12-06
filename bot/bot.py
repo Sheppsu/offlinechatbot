@@ -2,11 +2,11 @@ from .database import Database
 from .context import *
 from .util import *
 from .twitch_api import TwitchAPIHelper
+from .server import MessageServer
 
 import websockets
 import os
 import asyncio
-import importlib
 import sys
 
 
@@ -158,9 +158,6 @@ class BaseBot:
         log.info("Running setup")
         await self.db.setup()
 
-    async def on_update(self, ctx):
-        pass
-
     async def on_connected(self, ctx):
         log.info("Connected to server")
 
@@ -183,11 +180,15 @@ class BaseBot:
         log.info("Twitch requested the bot to reconnect")
         self.running.clear()
 
+    async def on_server_msg(self, ctx: ServerMessageContext):
+        log.info(f"Received server message: {ctx.data!r}")
+
     def __getattribute__(self, name):
         try:
             return super().__getattribute__(name)
-        except AttributeError:
-            pass
+        except AttributeError as exc:
+            if name == "dependencies":
+                raise exc
 
         for dependency in self.dependencies:
             try:
@@ -198,20 +199,24 @@ class BaseBot:
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
 
+BOT_CLASSES = []
+
+
 class BotMeta(type):
     def __new__(cls, name, bases, attrs):
-        attrs["dependencies"] = []
+        attrs["dependencies"] = list()
         if "__init__" not in attrs:
             attrs["__init__"] = lambda self: None
-        return type(name, bases, attrs)
+        new_cls = type(name, bases, attrs)
+        BOT_CLASSES.append(new_cls)
+        return new_cls
 
 
 class BotManager:
     __slots__ = ("bots", "ctx_queue", "base_bot", "running", "loop", "context_handlers")
 
-    def __init__(self, loop: asyncio.AbstractEventLoop, bot_classes: list[BaseBot]):
-        # avoid duplicate classes
-        bot_classes = list(set(bot_classes))
+    def __init__(self, loop: asyncio.AbstractEventLoop):
+        bot_classes = list(BOT_CLASSES)
 
         self.loop = loop
         self.ctx_queue: asyncio.Queue = asyncio.Queue()
@@ -248,7 +253,8 @@ class BotManager:
             ContextType.PRIVMSG: "on_message",
             ContextType.USERSTATE: "on_user_state",
             ContextType.ROOMSTATE: "on_room_state",
-            ContextType.RECONNECT: "on_reconnect"
+            ContextType.RECONNECT: "on_reconnect",
+            ContextType.SERVER_MSG: "on_server_msg"
         }
         self.context_handlers = {
             ctx_type: [
@@ -276,6 +282,9 @@ class BotManager:
                     self.loop.create_task(handler(ctx))
 
     async def run(self):
+        server = MessageServer(self.loop, self.ctx_queue)
+        self.loop.create_task(server.run())
+
         self.running.set()
 
         await self.ctx_queue.put(UnknownContext(None, ContextType.SETUP))
@@ -286,12 +295,3 @@ class BotManager:
             restart = await self.base_bot.run()
             if restart:
                 self.running.set()
-
-    @classmethod
-    def create(cls, loop: asyncio.AbstractEventLoop):
-        commands = importlib.import_module("bot.commands")
-        return cls(loop, [
-            getattr(commands, attr)
-            for attr in dir(commands)
-            if attr.endswith("Bot")
-        ])

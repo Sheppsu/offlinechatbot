@@ -1,5 +1,6 @@
 from ..static_data import StaticDataBot
 from .emotes import EmoteRequester
+from ...bot import BotMeta
 from ...context import MessageContext, JoinContext
 
 import random
@@ -174,7 +175,7 @@ class ScrambleManager:
         self.scrambles[identifier].progress[channel]["future"] = future
 
 
-class ScrambleBot(StaticDataBot):
+class ScrambleBot(StaticDataBot, metaclass=BotMeta):
     __slots__ = ("emote_requester", "emotes", "scrambles", "scramble_manager")
 
     command_manager = StaticDataBot.command_manager

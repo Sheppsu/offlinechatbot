@@ -17,3 +17,4 @@ from .trivia import TriviaBot
 from .user_data import UserDataBot
 from .osu import *
 from .scramble import *
+from .server_msg import ServerMessageHandlerBot

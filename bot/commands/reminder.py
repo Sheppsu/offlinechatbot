@@ -25,7 +25,7 @@ class ReminderBot(CommandBot, metaclass=BotMeta):
 
     async def send_reminder_msg(self, reminder: UserReminder):
         user = await self.db.get_user(reminder.user.id, reminder.user.username)
-        channel = await self.db.get_channel(reminder.channel.user.id)
+        channel = await self.db.get_channel_from_user_id(reminder.channel.user.id)
         await self.send_message(
             channel.user.username,
             f"@{user.username} DinkDonk Reminder! {reminder.message}"

@@ -586,21 +586,43 @@ class Database:
         return channels
 
     @use_cursor()
-    async def get_channel(self, user_id: int, cursor) -> UserChannel:
-        slices, fields = select_fields(UserChannel, User)
+    async def get_channel_from_user_id(self, user_id: int, cursor) -> UserChannel:
+        return await self._get_channel_where("main_user.id = %s", (user_id,), cursor)
+
+    @use_cursor()
+    async def get_channel(self, channel_id: int, cursor) -> UserChannel:
+        return await self._get_channel_where("main_userchannel.id = %s", (channel_id,), cursor)
+
+    async def _get_channel_where(self, where, params, cursor):
+        ch_slices, ch_fields = select_fields(UserChannel, User)
         await cursor.execute(
             f"""
-            SELECT {fields} FROM main_userchannel
+            SELECT {ch_fields} FROM main_userchannel
             INNER JOIN main_user ON (main_userchannel.user_id = main_user.id)
-            WHERE main_userchannel.user_id = %s
+            WHERE {where}
             """,
-            (user_id,)
+            params
         )
         channel = await cursor.fetchone()
         if channel is None:
-            raise ValueError("Invalid user id for getting channel")
+            raise ValueError("Failed to get channel")
 
-        return UserChannel(*channel[slices[0]], User(*channel[slices[1]]), None)
+        cmd_slices, cmd_fields = select_fields(ChannelCommand, Command)
+        await cursor.execute(
+            f"""
+            SELECT {cmd_fields} FROM main_channelcommand
+            INNER JOIN main_command ON (main_channelcommand.command_id = main_command.id)
+            WHERE main_channelcommand.channel_id = %s
+            """,
+            (channel[0],)
+        )
+        cmds = await cursor.fetchall()
+
+        return UserChannel(
+            *channel[ch_slices[0]],
+            User(*channel[ch_slices[1]]),
+            [ChannelCommand(*cmd[cmd_slices[0]], Command(*cmd[cmd_slices[1]])) for cmd in cmds]
+        )
 
     @use_cursor(commit=True)
     async def sync_commands(self, cmds: list[CallableCommand], cursor):

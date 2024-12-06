@@ -17,5 +17,5 @@ if __name__ == "__main__":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     loop = asyncio.new_event_loop()
-    manager = BotManager.create(loop)
+    manager = BotManager(loop)
     loop.run_until_complete(manager.run())

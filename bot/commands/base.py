@@ -1,4 +1,4 @@
-from ..context import MessageContext, JoinContext, UserStateContext
+from ..context import MessageContext, JoinContext, UserStateContext, ServerMessageContext
 from ..bot import BaseBot, BotMeta
 from ..database import UserChannel, User, ChannelCommand, Command
 
@@ -143,7 +143,7 @@ class CommandBot(BaseBot, metaclass=BotMeta):
         if self.IS_DEBUG:
             self.channels = [
                 UserChannel(
-                    0,
+                    19,
                     True,
                     User(156710598, "sheppsu", 0, True, False),
                     [
