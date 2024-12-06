@@ -1,10 +1,11 @@
 from .base import CommandBot, CommandArg
 from ..context import MessageContext, JoinContext
 from ..database import UserReminder
-from ..util import format_date, format_time_length
+from ..util import format_time_length
 from ..bot import BotMeta
 
 from datetime import datetime, timedelta, timezone
+from pytz import timezone as pytz_timezone
 from time import time
 
 
@@ -61,7 +62,7 @@ class ReminderBot(CommandBot, metaclass=BotMeta):
             except ValueError:
                 return await self.send_message(ctx.channel, "Not a valid integer Nerdge")
 
-            tz = timezone(tz.timezone)
+            tz = pytz_timezone(tz.timezone)
             now = datetime.now(tz=tz)
             future = now.replace(hour=hour, minute=minute, second=0)
             if now >= future:
