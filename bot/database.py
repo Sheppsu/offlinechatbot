@@ -148,12 +148,13 @@ class ChannelCommand:
 class UserChannel:
     id: int
     is_offline_only: bool
+    is_enabled: bool
     user: User
     commands: list[ChannelCommand]
 
     class Meta:
         TABLE = "main_userchannel"
-        FIELDS = ["id", "is_offline_only"]
+        FIELDS = ["id", "is_offline_only", "is_enabled"]
 
 
 USER_SETTINGS = (

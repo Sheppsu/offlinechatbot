@@ -141,19 +141,9 @@ class CommandBot(BaseBot, metaclass=BotMeta):
         await self.db.sync_commands(self.command_manager.commands)
 
         if self.IS_DEBUG:
-            self.channels = [
-                UserChannel(
-                    19,
-                    True,
-                    User(156710598, "sheppsu", 0, True, False),
-                    [
-                        ChannelCommand(i, True, i, 1, Command(i, cmd.name))
-                        for i, cmd in enumerate(self.command_manager.commands)
-                    ]
-                )
-            ]
+            self.channels = [ch for ch in await self.db.get_channels() if ch.is_enabled and ch.id == 19]
         else:
-            self.channels = await self.db.get_channels()
+            self.channels = [ch for ch in await self.db.get_channels() if ch.is_enabled]
 
         self.offline_channels = {
             channel.user.username: False
