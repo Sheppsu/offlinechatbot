@@ -232,7 +232,7 @@ class CommandBot(BaseBot, metaclass=BotMeta):
             if not channel.is_offline_only:
                 continue
 
-            self.offline_channels[channel.user.username] = channel.id not in online_streams
+            self.offline_channels[channel.user.username] = channel.user.id not in online_streams
 
     def process_value_arg(self, flag, args, default=None):
         lower_args = list(map(str.lower, args))
