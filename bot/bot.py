@@ -117,7 +117,7 @@ class BaseBot:
 
         messages = split_message(message)
         for msg in messages:
-            log.info(f"Sending message: {msg}")
+            log.info(f"Sending message in #{channel}: {msg}")
 
             await self.ws.send(
                 f"PRIVMSG #{channel} :/me " + msg + (" \U000e0000" if self.last_message[channel] == msg else "")
