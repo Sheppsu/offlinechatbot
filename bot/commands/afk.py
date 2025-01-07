@@ -63,6 +63,7 @@ class AFKBot(CommandBot, metaclass=BotMeta):
         for afk in self.afks:
             if afk.user.id == ctx.user_id:
                 await self.remove_user_afk(ctx, afk)
+                self._lock.release()
                 return
 
         self._lock.release()
