@@ -571,6 +571,8 @@ class Database:
                     ch = next(ch_iter)
                     lower = i
 
+            yield ch, ch_cmds[lower:]
+
         await cursor.execute(
             f"""
             SELECT {ch_fields} FROM main_userchannel
