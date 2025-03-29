@@ -54,29 +54,33 @@ class BaseBot:
 
     # Fundamental
 
-    async def run(self) -> bool:
+    async def run(self) -> None:
         async with websockets.connect(self.IRC_URI) as ws:
             self.ws = ws
 
+
             try:
                 await self.connect()
-                self.loop.create_task(self.run_update())
-                await self.run_receiver()
+
+                update_loop = None
+                while True:
+                    if update_loop is None or update_loop.done():
+                        update_loop = self.loop.create_task(self.run_update_loop())
+
+                    await self.receive()
 
             except KeyboardInterrupt:
-                return False
+                self.running.clear()
 
             except Exception as exc:
                 log.exception(exc)
 
-        return True
-
-    async def run_update(self):
+    async def run_update_loop(self):
         while self.running.is_set():
             await asyncio.sleep(1)
             await self.manager.queue_ctx(UnknownContext(None, ContextType.UPDATE))
 
-    async def run_receiver(self):
+    async def receive(self):
         while self.running.is_set():
             data = await self.ws.recv()
 
@@ -282,16 +286,19 @@ class BotManager:
                     self.loop.create_task(handler(ctx))
 
     async def run(self):
-        server = MessageServer(self.loop, self.ctx_queue)
-        self.loop.create_task(server.run())
-
         self.running.set()
+
+        server = MessageServer(self.loop, self.ctx_queue)
 
         await self.ctx_queue.put(UnknownContext(None, ContextType.SETUP))
 
+        server_task = None
+        ctx_handler_task = None
         while self.running.is_set():
-            self.loop.create_task(self.run_ctx_handler())
+            if server_task is None or server_task.done():
+                server_task = self.loop.create_task(server.run())
 
-            restart = await self.base_bot.run()
-            if restart:
-                self.running.set()
+            if ctx_handler_task is None or ctx_handler_task.done():
+                ctx_handler_task = self.loop.create_task(self.run_ctx_handler())
+
+            await self.base_bot.run()
