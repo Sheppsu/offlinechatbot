@@ -1,6 +1,6 @@
-from ..context import MessageContext, JoinContext, UserStateContext, ServerMessageContext
+from ..context import MessageContext, JoinContext, UserStateContext
 from ..bot import BaseBot, BotMeta
-from ..database import UserChannel, User, ChannelCommand, Command
+from ..database import UserChannel
 
 from collections import namedtuple, defaultdict
 from typing import Callable, Awaitable
