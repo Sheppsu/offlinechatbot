@@ -106,8 +106,10 @@ class TriviaBot(CommandBot, metaclass=BotMeta):
         if not self.trivia_helpers[ctx.channel].is_in_progress:
             return
 
+        ascii_msg = "".join((char for char in ctx.message if char.isascii()))
+
         try:
-            num = int(ctx.message[0])
+            num = int(ascii_msg)
             if num in range(1, 5):
                 await self.on_answer(ctx, num)
         except ValueError:
