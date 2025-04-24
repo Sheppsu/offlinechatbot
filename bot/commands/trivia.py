@@ -62,7 +62,7 @@ class TriviaHelper:
 
         answer_string = " ".join([html.unescape(f"[{i + 1}] {answers[i]} ") for i in range(len(answers))])
         return f"Difficulty: {self.difficulty} {self.difficulty_emotes[self.difficulty]} "\
-               f"Category: {results['category']} veryPog "\
+               f"Category: {html.unescape(results['category'])} veryPog "\
                f"Question: {html.unescape(results['question'])} monkaHmm "\
                f"Answers: {answer_string}"
 
