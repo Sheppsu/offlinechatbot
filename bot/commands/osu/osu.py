@@ -7,6 +7,7 @@ from .client import OsuClientBot
 
 from osu import Mod, SoloScore, GameModeStr, GameModeInt, Mods
 from aiohttp import client_exceptions, ClientSession
+from datetime import datetime
 import logging
 import json
 import asyncio
@@ -123,7 +124,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
     async def get_score_message(self, score: SoloScore, prefix="Recent score for {username}") -> tuple[
         str, BeatmapCalculator]:
         score_format = prefix + ":{passed} {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
-                                "{acc}% {combo}/{max_combo} | ({genki_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
+                                "{acc}% {combo}/{max_combo} | ({hit_counts}) | {pp}{if_fc_pp} | {time_ago} ago"
 
         calc = await BeatmapCalculator.from_beatmap_id(score.beatmap_id)
         perf, fc_perf, fc_acc, hits = self.get_score_attrs(calc, score)
@@ -146,12 +147,12 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
             "acc": round(score.accuracy * 100, 2),
             "combo": score.max_combo,
             "max_combo": bm_perf.difficulty.max_combo,
-            "genki_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
+            "hit_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
             "time_ago": format_date(score.ended_at)
         }), calc
 
     async def get_compact_scores_message(self, scores) -> str:
-        score_format = "{artist} - {title} [{diff}]{mods} ({sr}*) {acc}% ({genki_counts}): {pp}pp{fc_pp} | {time_ago} ago"
+        score_format = "{artist} - {title} [{diff}]{mods} ({sr}*) {acc}% ({hit_counts}): {pp}pp{fc_pp} | {time_ago} ago"
         message = ""
         calcs: tuple[BeatmapCalculator] = await asyncio.gather(
             *(BeatmapCalculator.from_beatmap_id(score.beatmap_id) for score in scores)
@@ -166,7 +167,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
                 "mods": " +" + self.get_mod_string(score.mods) if score.mods else "",
                 "sr": round((perf if score.passed else fc_perf).difficulty.stars, 2),
                 "acc": round(score.accuracy * 100, 2),
-                "genki_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
+                "hit_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
                 "pp": round(perf.pp, 2),
                 "fc_pp": f" ({round(fc_perf.pp, 2)} for {round(fc_acc * 100, 2)}% FC)" if fc_perf is not None else "",
                 "time_ago": format_date(score.ended_at),
@@ -331,7 +332,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
                 f"scores on that beatmap for mode {proper_mode_name[mode]}."
             )
 
-        score_format = "{mods} {acc}% {combo}/{max_combo} | ({genki_counts}) | {pp} | {time_ago} ago"
+        score_format = "{mods} {acc}% {combo}/{max_combo} | ({hit_counts}) | {pp} | {time_ago} ago"
         message = f"Scores for {username} on {calc.info.metadata.artist} - {calc.info.metadata.title} " \
                   f"[{calc.info.metadata.version}] ({calc.info.metadata.creator}): "
         for score in scores[:5]:
@@ -342,7 +343,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
                 "acc": round(score.accuracy * 100, 2),
                 "combo": score.max_combo,
                 "max_combo": perf.difficulty.max_combo,
-                "genki_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
+                "hit_counts": BeatmapCalculator.hits_to_string(hits, score.ruleset_id),
                 "pp": f"{round(perf.pp, 2)}pp",
                 "time_ago": format_date(score.ended_at)
             })
@@ -697,10 +698,28 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
 
     @command_manager.command(
         "random_score",
-        "Send a random score from all recent scores of all players"
+        "Send a random score from all recent scores of all players",
+        [
+            CommandArg(
+                "user",
+                "Indicate to get a random score from a user",
+                is_optional=True,
+                flag="user"
+            ),
+            CommandArg(
+                "username",
+                "Username of the user to get scores from if the -user flag is used. "
+                "Defaults to you if not specified.",
+                is_optional=True
+            )
+        ]
     )
     async def send_random_recent_score(self, ctx):
         args = ctx.get_args("ascii")
+
+        if self.process_arg("-user", args):
+            await self.send_random_score_for_user(ctx, args)
+            return
 
         mode = await self.process_osu_mode_args(ctx, args)
         if mode is None:
@@ -710,7 +729,50 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         score = random.choice(result.scores)
         score.user = await self.osu_client.get_user(score.user_id)
 
-        score_msg, bm_calc = await self.get_score_message(score, "Random recent score for {username}")
+        score_msg, bm_calc = await self.get_score_message(score, "Random recent score from {username}")
         msg = await self.send_message(ctx.channel, score_msg)
 
         self.add_recent_map(ctx, msg, bm_calc)
+
+    async def send_random_score_for_user(self, ctx, args):
+        user_id = await self.get_osu_user_id_from_args(ctx, args)
+        if user_id is None:
+            return
+        username = self.osu_username_from_id(user_id)
+
+        async with ClientSession() as session:
+            async with session.get(f"https://api.kirino.sh/inspector/scores/user/{user_id}?approved=1,2,4") as resp:
+                data = await resp.json()
+
+        if len(data) == 0:
+            await self.send_message(ctx.channel, f"@{ctx.user.display_name} No scores on score.kirino.sh")
+            return
+
+        score = random.choice(data)
+
+        calc = await BeatmapCalculator.from_beatmap_id(score["beatmap"]["beatmap_id"])
+
+        score_format = "Random score for {username}: {artist} - {title} [{diff}]{mods} ({mapper}, {star_rating}*) " \
+                       "{acc}% {combo}/{max_combo} | ({hit_counts}) | {pp}pp | {time_ago} ago"
+        msg = await self.send_message(
+            ctx.channel,
+            score_format.format(
+                username=username,
+                artist=score["beatmap"]["artist"],
+                title=score["beatmap"]["title"],
+                diff=score["beatmap"]["diffname"],
+                mods=(" +" + "".join((mod["acronym"] for mod in mods))) if len(mods := score.get("mods", [])) > 0 else "",
+                mapper=score["beatmap"]["creator"],
+                star_rating=round(float(score["beatmap"]["difficulty_data"]["star_rating"]), 2),
+                acc=score["accuracy"],
+                combo=score["combo"],
+                max_combo=score["beatmap"]["maxcombo"],
+                hit_counts="%d/%d/%d/%d" % (
+                    score["count300"], score["count100"], score["count50"], score["countmiss"]
+                ),
+                pp=round(float(score["pp"]), 2),
+                time_ago=format_date(datetime.fromisoformat(score["date_played"]))
+            )
+        )
+
+        self.add_recent_map(ctx, msg, calc)
