@@ -13,5 +13,8 @@ class OsuClientBot(CommandBot, metaclass=BotMeta):
 
     async def on_setup(self, ctx):
         self.osu_client = await AsynchronousClient.from_client_credentials(
-            int(os.getenv("OSU_CLIENT_ID")), os.getenv("OSU_CLIENT_SECRET"), None
+            int(os.getenv("OSU_CLIENT_ID")),
+            os.getenv("OSU_CLIENT_SECRET"),
+            None,
+            request_wait_time=0.7
         )
