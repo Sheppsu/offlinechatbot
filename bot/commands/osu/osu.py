@@ -11,6 +11,7 @@ import logging
 import json
 import asyncio
 import rosu_pp_py as rosu
+import random
 
 
 proper_mode_name = {
@@ -61,7 +62,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
             f"@{ctx.user.display_name} Please specify a username or link your account with !link [username]."
         )
 
-    async def process_osu_mode_args(self, ctx, args, required=True, as_int=False):
+    async def process_osu_mode_args(self, ctx, args, required=True, as_int=False) -> int | str:
         arg = self.process_value_arg("-m", args, 0)
         if arg is None and required:
             await self.send_message(
@@ -488,7 +489,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         if mode is None:
             return
         recent_tops = self.process_arg("-r", args)
-        index = await self.process_index_arg(ctx, args)
+        index = await self.process_index_arg(ctx, args, rng=range(1, 201))
         if index is None:
             return
 
@@ -497,15 +498,25 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
             return
         username = self.osu_username_from_id(user_id)
 
-        top_scores = await self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
+        if index == -1 and not recent_tops:
+            top_scores = await self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=5)
+        elif not recent_tops:
+            top_scores = await self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=1, offset=index)
+        else:
+            top_scores = await self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100)
+            top_scores += await self.osu_client.get_user_scores(user_id, "best", mode=mode, limit=100, offset=100)
+            top_scores = sorted(top_scores, key=lambda x: x.ended_at, reverse=True)
+            if index != -1:
+                top_scores = [top_scores[index]]
+            else:
+                top_scores = top_scores[:5]
+
         if not top_scores:
             return await self.send_message(
                 ctx.channel,
                 f"@{ctx.user.display_name} User {username} has no top scores for {proper_mode_name[mode]}."
             )
-        if recent_tops:
-            top_scores = sorted(top_scores, key=lambda x: x.ended_at, reverse=True)
-        top_scores = top_scores[:5] if index == -1 else [top_scores[index]]
+
         username = top_scores[0].user.username
 
         calc = None
@@ -683,3 +694,23 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
             f"@{ctx.user.display_name} {md.artist} - {md.title} [{md.version}] "
             f"https://preview.tryz.id.vn/?b={calc.beatmap_id}"
         )
+
+    @command_manager.command(
+        "random_score",
+        "Send a random score from all recent scores of all players"
+    )
+    async def send_random_recent_score(self, ctx):
+        args = ctx.get_args("ascii")
+
+        mode = await self.process_osu_mode_args(ctx, args)
+        if mode is None:
+            return
+
+        result = await self.osu_client.get_all_scores(mode)
+        score = random.choice(result.scores)
+        score.user = await self.osu_client.get_user(score.user_id)
+
+        score_msg, bm_calc = await self.get_score_message(score, "Random recent score for {username}")
+        msg = await self.send_message(ctx.channel, score_msg)
+
+        self.add_recent_map(ctx, msg, bm_calc)
