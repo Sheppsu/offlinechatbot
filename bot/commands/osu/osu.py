@@ -711,6 +711,12 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
                 "Username of the user to get scores from if the -user flag is used. "
                 "Defaults to you if not specified.",
                 is_optional=True
+            ),
+            CommandArg(
+                "mods",
+                "Specify mods to filter scores",
+                flag="mods",
+                is_optional=True
             )
         ]
     )
@@ -735,6 +741,15 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         self.add_recent_map(ctx, msg, bm_calc)
 
     async def send_random_score_for_user(self, ctx, args):
+        mods = self.process_value_arg("-mods", args)
+        if mods is not None:
+            mods = mods.upper()
+            mods = [mods[i * 2:i * 2 + 2] for i in range(len(mods) // 2)]
+            try:
+                mods.remove("CL")
+            except ValueError:
+                pass
+
         user_id = await self.get_osu_user_id_from_args(ctx, args)
         if user_id is None:
             return
@@ -743,6 +758,18 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         async with ClientSession() as session:
             async with session.get(f"https://api.kirino.sh/inspector/scores/user/{user_id}?approved=1,2,4") as resp:
                 data = await resp.json()
+
+        def without_cl(score_mods):
+            return [mod for mod in score_mods if mod["acronym"] != "CL"]
+
+        if mods is not None:
+            # filter scores by mods specified (exact match), ignoring CL
+            data = [
+                score
+                for score in data
+                if len(score_mods := without_cl(score.get("mods", []))) == len(mods) and
+                all((mod["acronym"] in mods for mod in score_mods))
+            ]
 
         if len(data) == 0:
             await self.send_message(ctx.channel, f"@{ctx.user.display_name} No scores on score.kirino.sh")
