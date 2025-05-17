@@ -1,4 +1,4 @@
-from .base import CommandBot
+from .base import CommandBot, Cooldown
 from ..bot import BotMeta
 
 
@@ -20,10 +20,30 @@ class HelpBot(CommandBot, metaclass=BotMeta):
         ]
     )
     async def help_command(self, ctx):
-        await self.send_message(
-            ctx.channel,
-            f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://bot.sheppsu.me/"
-        )
+        args = ctx.get_args("ascii")
+
+        if len(args) == 0:
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} sheppsubot help (do !commands for StreamElements): https://bot.sheppsu.me/"
+            )
+            return
+
+        cmd = self.command_manager.get_command(specified_cmd := args[0].lower())
+        if cmd is None:
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} {specified_cmd} is not a command"
+            )
+            return
+
+        msg = f"@{ctx.user.display_name} !{cmd.name}"
+        if len(cmd.aliases) > 0:
+            msg += f" (aliases: {', '.join(cmd.aliases)})"
+        msg += f" | {cmd.description}"
+        if len(cmd.args) > 0:
+            msg += " | args: " + " ".join(arg.get_syntax_help() for arg in cmd.args)
+        await self.send_message(ctx.channel, msg)
 
     @command_manager.command(
         "sourcecode",

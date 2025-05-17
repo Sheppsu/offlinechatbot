@@ -232,7 +232,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
                 flag="i"
             ),
             CommandArg(
-                "best",
+                "",
                 "get most recent score in the user's top 100 scores",
                 is_optional=True,
                 flag="b"
@@ -475,7 +475,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
                 flag="i"
             ),
             CommandArg(
-                "recent",
+                "",
                 "sorts by most recent scores in top 100 scores",
                 is_optional=True,
                 flag="r"
@@ -701,7 +701,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         "Send a random score from all recent scores of all players",
         [
             CommandArg(
-                "user",
+                "",
                 "Indicate to get a random score from a user",
                 is_optional=True,
                 flag="user"

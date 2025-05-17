@@ -29,6 +29,15 @@ class CommandArg:
             "f": self.flag,
         }
 
+    def get_syntax_help(self):
+        if not self.is_optional:
+            return f"<{self.name}>"
+
+        if self.flag is None:
+            return f"[{self.name}]"
+
+        return f"[-{self.flag}]" if len(self.name) == 0 else f"[-{self.flag} {self.name}]"
+
 
 class CallableCommand:
     __slots__ = ("function", "name", "description", "args", "aliases", "cooldown", "kwargs", "user_usage", "cmd_usage")
@@ -108,7 +117,7 @@ class CommandManager:
         if aliases is None:
             aliases = []
         if cooldown is None:
-            cooldown = Cooldown(3, 5)
+            cooldown = Cooldown(1, 3)
 
         def decorator(func):
             self.commands.append(CallableCommand(func, name, description, args, aliases, cooldown, **kwargs))
