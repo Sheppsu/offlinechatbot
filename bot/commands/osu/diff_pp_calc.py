@@ -6,9 +6,28 @@ from collections import namedtuple
 from aiohttp import ClientSession
 import logging
 import osu
+import asyncio
 
 
 log = logging.getLogger(__name__)
+
+
+class BeatmapFileManager:
+    __slots__ = ("_lock",)
+
+    def __init__(self):
+        self._lock = asyncio.Lock()
+
+    async def get_beatmap_file(self, beatmap_id: int) -> bytes | None:
+        async with self._lock:
+            async with ClientSession() as session:
+                async with session.get(f"https://osu.ppy.sh/osu/{beatmap_id}") as resp:
+                    try:
+                        resp.raise_for_status()
+                    except Exception as e:
+                        log.exception(f"Failed to get osu beatmap", exc_info=e)
+                        return
+                    return await resp.read()
 
 
 class BeatmapReader(br.BeatmapReader):
@@ -47,33 +66,33 @@ LegacyStats = namedtuple("SimpleStats", ("n_geki", "n300", "n_katu", "n100", "n5
 
 
 class BeatmapCalculator:
-    __slots__ = ("beatmap", "info", "last_diff", "last_perf", "last_mods", "last_clock_rate", "last_passed", "beatmap_id")
+    __slots__ = ("beatmap", "info", "last_diff", "last_perf", "last_mods", "last_clock_rate", "last_lazer", "last_passed", "beatmap_id")
+
+    beatmap_file_manager = BeatmapFileManager()
 
     def __init__(self, beatmap: rosu.Beatmap, info: br.Beatmap, beatmap_id: int):
         self.beatmap: rosu.Beatmap = beatmap
-        self.info: br.Beatmap = info
+        self.info: br.Beatmap = info  # used by commands for displaying artist information n stuff
         self.last_diff: None | rosu.DifficultyAttributes = None
         self.last_perf: None | rosu.PerformanceAttributes = None
         self.last_mods: None | int = None
         self.last_clock_rate: None | float = None
+        self.last_lazer: None | bool = None
         self.last_passed: None | bool = None
         self.beatmap_id = beatmap_id
 
     @classmethod
     async def from_beatmap_id(cls, beatmap_id: int) -> BeatmapCalculator | None:
-        async with ClientSession() as session:
-            async with session.get(f"https://osu.ppy.sh/osu/{beatmap_id}") as resp:
-                try:
-                    resp.raise_for_status()
-                except Exception as e:
-                    log.exception(f"Failed to get osu beatmap", exc_info=e)
-                content = await resp.read()
-                info = br.Beatmap(BeatmapReader(content.decode("utf-8").split("\n")))
-                info.load()
-                return cls(rosu.Beatmap(bytes=content), info, beatmap_id)
+        content = await cls.beatmap_file_manager.get_beatmap_file(beatmap_id)
+        if content is None or len(content) == 0:
+            return None
+
+        info = br.Beatmap(BeatmapReader(content.decode("utf-8").split("\n")))
+        info.load()
+        return cls(rosu.Beatmap(bytes=content), info, beatmap_id)
 
     @staticmethod
-    def parse_stats(stats: osu.ScoreDataStatistics):
+    def parse_stats(stats: osu.ScoreDataStatistics) -> LegacyStats:
         values = (
             stats.perfect,
             stats.great,
@@ -94,7 +113,7 @@ class BeatmapCalculator:
         }[ruleset_id]))
 
     @staticmethod
-    def get_perf(stats: osu.ScoreDataStatistics, combo: int, mods: int, clock_rate: float, passed: bool = True) -> rosu.Performance:
+    def get_perf(stats: osu.ScoreDataStatistics, combo: int, mods: int, clock_rate: float, lazer: bool, passed: bool = True) -> rosu.Performance:
         stats = BeatmapCalculator.parse_stats(stats)
         perf = rosu.Performance(
             n300=stats.n300,
@@ -105,31 +124,35 @@ class BeatmapCalculator:
             n_katu=stats.n_katu,
             combo=combo,
             mods=mods,
-            clock_rate=clock_rate
+            clock_rate=clock_rate,
+            lazer=lazer
         )
         if not passed:
             perf.set_passed_objects(sum(stats))
         return perf
 
     @staticmethod
-    def get_score_settings(score: osu.SoloScore) -> tuple[int, float]:
-        mods = sum(map(
-            lambda m: osu.Mods[m.mod.name].value,
-            filter(
-                lambda m: not isinstance(m.mod, str) and m.mod.name in osu.Mods._member_names_,
-                score.mods
-            )
-        ))
-        clock_rate = 1.0
+    def get_score_settings(score: osu.SoloScore) -> tuple[int, float, bool]:
+        mods = 0
+        lazer = True
+        for mod in score.mods:
+            if mod.mod == osu.Mod.Classic:
+                lazer = False
+
+            try:
+                mods += osu.Mods[mod.mod.name].value
+            except (AttributeError, KeyError):
+                continue
+
         for mod in score.mods:
             if mod.settings is not None and "speed_change" in mod.settings:
-                return mods, mod.settings["speed_change"]
+                return mods, mod.settings["speed_change"], lazer
             if mod.mod == osu.Mod.DoubleTime or mod.mod == osu.Mod.Nightcore:
-                return mods, 1.5
+                return mods, 1.5, lazer
             if mod.mod == osu.Mod.HalfTime or mod.mod == osu.Mod.Daycore:
-                return mods, 0.75
+                return mods, 0.75, lazer
 
-        return mods, clock_rate
+        return mods, 1.0, lazer
 
     @staticmethod
     def calc_acc(stats, ruleset_id) -> float:
@@ -155,20 +178,21 @@ class BeatmapCalculator:
         return self.last_diff
 
     def calculate(self, score: osu.SoloScore) -> rosu.PerformanceAttributes:
-        mods, clock_rate = self.get_score_settings(score)
-        perf = self.get_perf(score.statistics, score.max_combo, mods, clock_rate, score.passed)
+        mods, clock_rate, lazer = self.get_score_settings(score)
+        perf = self.get_perf(score.statistics, score.max_combo, mods, clock_rate, lazer, score.passed)
         self.last_perf = perf.calculate(
-            self.beatmap if self.last_mods != mods or self.last_clock_rate != clock_rate or
+            self.beatmap if self.last_mods != mods or self.last_clock_rate != clock_rate or self.last_lazer != lazer or
             not score.passed or not self.last_passed else self.last_diff
         )
         self.last_diff = self.last_perf.difficulty
         self.last_mods = mods
         self.last_clock_rate = clock_rate
+        self.last_lazer = lazer
         self.last_passed = score.passed
         return self.last_perf
 
     def calculate_if_fc(self, score: osu.SoloScore) -> tuple[rosu.PerformanceAttributes, float]:
-        mods, clock_rate = self.get_score_settings(score)
+        mods, clock_rate, lazer = self.get_score_settings(score)
 
         diff = self.calculate_difficulty(mods, clock_rate) if self.last_diff is None or self.last_mods != mods \
             or self.last_clock_rate != clock_rate or not score.passed or not self.last_passed else self.last_diff
