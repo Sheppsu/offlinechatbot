@@ -112,13 +112,12 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         ))
 
     def get_score_attrs(self, calc, score):
-        perf = calc.calculate(score)
+        perf, hits = calc.calculate(score)
         fc_perf, fc_acc = calc.calculate_if_fc(score) if (
                 (perf.effective_miss_count is not None and perf.effective_miss_count >= 1) or
                 not score.passed or
                 (score.statistics.miss is not None and score.statistics.miss > 0)
         ) else (None, None)
-        hits = BeatmapCalculator.parse_stats(score.statistics)
         return perf, fc_perf, fc_acc, hits
 
     async def get_score_message(self, score: SoloScore, prefix="Recent score for {username}") -> tuple[
@@ -336,8 +335,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         message = f"Scores for {username} on {calc.info.metadata.artist} - {calc.info.metadata.title} " \
                   f"[{calc.info.metadata.version}] ({calc.info.metadata.creator}): "
         for score in scores[:5]:
-            perf = calc.calculate(score)
-            hits = calc.parse_stats(score.statistics)
+            perf, hits = calc.calculate(score)
             message += "🌟" + score_format.format(**{
                 "mods": " +" + "".join(map(lambda m: m.mod.value, score.mods)) if score.mods else "",
                 "acc": round(score.accuracy * 100, 2),

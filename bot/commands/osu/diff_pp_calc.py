@@ -113,23 +113,26 @@ class BeatmapCalculator:
         }[ruleset_id]))
 
     @staticmethod
-    def get_perf(stats: osu.ScoreDataStatistics, combo: int, mods: int, clock_rate: float, lazer: bool, passed: bool = True) -> rosu.Performance:
-        stats = BeatmapCalculator.parse_stats(stats)
+    def get_perf(stats: osu.ScoreDataStatistics, combo: int, mods: int, clock_rate: float, lazer: bool, passed: bool = True) -> tuple[rosu.Performance, LegacyStats]:
+        legacy_stats = BeatmapCalculator.parse_stats(stats)
         perf = rosu.Performance(
-            n300=stats.n300,
-            n100=stats.n100,
-            n50=stats.n50,
-            misses=stats.misses,
-            n_geki=stats.n_geki,
-            n_katu=stats.n_katu,
+            n300=legacy_stats.n300,
+            n100=legacy_stats.n100,
+            n50=legacy_stats.n50,
+            misses=legacy_stats.misses,
+            n_geki=legacy_stats.n_geki,
+            n_katu=legacy_stats.n_katu,
+            large_tick_hits=stats.large_tick_hit or 0,
+            small_tick_hits=stats.small_tick_hit or 0,
+            slider_end_hits=stats.slider_tail_hit or 0,
             combo=combo,
             mods=mods,
             clock_rate=clock_rate,
             lazer=lazer
         )
         if not passed:
-            perf.set_passed_objects(sum(stats))
-        return perf
+            perf.set_passed_objects(sum(legacy_stats))
+        return perf, legacy_stats
 
     @staticmethod
     def get_score_settings(score: osu.SoloScore) -> tuple[int, float, bool]:
@@ -177,9 +180,9 @@ class BeatmapCalculator:
         self.last_clock_rate = clock_rate
         return self.last_diff
 
-    def calculate(self, score: osu.SoloScore) -> rosu.PerformanceAttributes:
+    def calculate(self, score: osu.SoloScore) -> tuple[rosu.PerformanceAttributes, LegacyStats]:
         mods, clock_rate, lazer = self.get_score_settings(score)
-        perf = self.get_perf(score.statistics, score.max_combo, mods, clock_rate, lazer, score.passed)
+        perf, stats = self.get_perf(score.statistics, score.max_combo, mods, clock_rate, lazer, score.passed)
         self.last_perf = perf.calculate(
             self.beatmap if self.last_mods != mods or self.last_clock_rate != clock_rate or self.last_lazer != lazer or
             not score.passed or not self.last_passed else self.last_diff
@@ -189,7 +192,7 @@ class BeatmapCalculator:
         self.last_clock_rate = clock_rate
         self.last_lazer = lazer
         self.last_passed = score.passed
-        return self.last_perf
+        return self.last_perf, stats
 
     def calculate_if_fc(self, score: osu.SoloScore) -> tuple[rosu.PerformanceAttributes, float]:
         mods, clock_rate, lazer = self.get_score_settings(score)
