@@ -30,7 +30,7 @@ class BaseBot:
     TWITCH_CLIENT_SECRET = os.getenv("CLIENT_SECRET")
     IRC_USERNAME = os.getenv("IRC_USERNAME")
     IRC_OAUTH = os.getenv("IRC_OAUTH")
-    IRC_URI = "ws://irc-ws.chat.twitch.tv:80"
+    IRC_URI = "wss://irc-ws.chat.twitch.tv:443"
 
     if IRC_USERNAME is None or IRC_OAUTH is None:
         raise RuntimeError("irc username or password could not be loaded from environment variables")
