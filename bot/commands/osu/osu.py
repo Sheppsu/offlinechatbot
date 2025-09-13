@@ -203,11 +203,43 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         while len(self.recent_score_cache[ctx.channel]) > 10:
             del self.recent_score_cache[ctx.channel][next(iter(self.recent_score_cache[ctx.channel].keys()))]
 
-    async def get_beatmap_from_arg(self, ctx, beatmap_link):
-        beatmap_id = tuple(filter(lambda s: len(s.strip()) > 0, beatmap_link.split("/")))[-1]
-        calc = await BeatmapCalculator.from_beatmap_id(beatmap_id)
+    def parse_beatmap_link(self, link: str):
+        parts = link.lower().split("/")
+        is_set = parts[3] in ("beatmapsets", "s")
+        is_map = parts[3] == "b"
+        try:
+            if is_map or len(parts) == 6:
+                return True, int(parts[-1])
+            elif is_set:
+                return False, int("".join(c for c in parts[-1] if c.isdigit()))
+        except ValueError:
+            return False, None
+
+    async def get_beatmap_from_link(self, beatmap_link):
+        is_map, id = self.parse_beatmap_link(beatmap_link)
+        if id is None:
+            return False, None
+        try:
+            if is_map:
+                return True, await self.osu_client.get_beatmap(id)
+            return False, await self.osu_client.get_beatmapset(id)
+        except:
+            return False, None
+
+    async def get_beatmap_calc_from_arg(self, ctx, beatmap_link):
+        is_map, id = self.parse_beatmap_link(beatmap_link)
+        if id is None:
+            await self.send_message(ctx.channel, "Failed to parse provided link/id.")
+            return
+        if not is_map:
+            await self.send_message(ctx.channel, "Must specify a beatmap id, not a beatmapset.")
+            return
+
+        calc = await BeatmapCalculator.from_beatmap_id(id)
         if calc is None:
-            return await self.send_message(ctx.channel, "Failed to get beatmap from the provided link/id.")
+            await self.send_message(ctx.channel, "Failed to get beatmap from the provided link/id.")
+            return
+
         return calc
 
     @command_manager.command(
@@ -348,9 +380,9 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         sent_message = await self.send_message(ctx.channel, message)
         self.add_recent_map(ctx, sent_message, calc)
 
-    async def get_beatmap_from_arg_or_cache(self, ctx, args):
+    async def get_beatmap_calc_from_arg_or_cache(self, ctx, args):
         if len(args) > 0:
-            return await self.get_beatmap_from_arg(ctx, args[0])
+            return await self.get_beatmap_calc_from_arg(ctx, args[0])
         elif len(self.recent_score_cache[ctx.channel]) == 0:
             await self.send_message(
                 ctx.channel,
@@ -358,6 +390,22 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
             )
         else:
             return self.get_map_cache(ctx)
+
+    async def _send_beatmap(self, ctx, calc):
+        diff = rosu.Difficulty().calculate(calc.beatmap)
+        text = (
+            f"{calc.info.metadata.artist} - {calc.info.metadata.title} [{calc.info.metadata.version}] "
+            f"({calc.info.metadata.creator}, {round(diff.stars, 2)}*) "
+            f"https://osu.ppy.sh/b/{calc.beatmap_id} | https://preview.tryz.id.vn/?b={calc.beatmap_id}"
+        )
+        sent_message = await self.send_message(ctx.channel, f"@{ctx.user.display_name} {text}")
+        self.add_recent_map(ctx, sent_message, calc)
+
+    async def _send_beatmapset(self, ctx, beatmapset):
+        text = (
+            f"{beatmapset.artist} - {beatmapset.title} ({beatmapset.creator}) https://osu.ppy.sh/s/{beatmapset.id}"
+        )
+        await self.send_message(ctx.channel, f"@{ctx.user.display_name} {text}")
 
     @command_manager.command(
         "map",
@@ -370,18 +418,27 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
     async def send_map(self, ctx):
         args = ctx.get_args('ascii')
 
-        calc = await self.get_beatmap_from_arg_or_cache(ctx, args)
-        if calc is None:
+        if len(args) > 0:
+            is_bm, beatmap = await self.get_beatmap_from_link(args[0])
+            if beatmap is None:
+                return await self.send_message(
+                    ctx.channel,
+                    f"@{ctx.user.display_name} There was a problem fetching the beatmap."
+                )
+
+            if is_bm:
+                await self._send_beatmap(ctx, await BeatmapCalculator.from_beatmap_id(beatmap.id))
+                return
+
+            await self._send_beatmapset(ctx, beatmap)
             return
 
-        diff = rosu.Difficulty().calculate(calc.beatmap)
-        text = (
-            f"{calc.info.metadata.artist} - {calc.info.metadata.title} [{calc.info.metadata.version}] "
-            f"({calc.info.metadata.creator}, {round(diff.stars, 2)}*) "
-            f"https://osu.ppy.sh/b/{calc.beatmap_id}"
-        )
-        sent_message = await self.send_message(ctx.channel, f"@{ctx.user.display_name} {text}")
-        self.add_recent_map(ctx, sent_message, calc)
+        calc = self.get_map_cache(ctx)
+        if calc is None:
+            await self.send_message(ctx.channel, f"@{ctx.user.display_name} No cache of the last sent beatmap")
+            return
+
+        await self._send_beatmap(ctx, calc)
 
     @command_manager.command(
         "osu",
@@ -631,7 +688,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
 
         if len(args) < 1:
             return await self.send_message(ctx.channel, "Must give a beatmap link or beatmap id.")
-        calc = await self.get_beatmap_from_arg(ctx, args[0])
+        calc = await self.get_beatmap_calc_from_arg(ctx, args[0])
         if calc is None:
             return
 
@@ -683,7 +740,7 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
     )
     async def send_osu_preview(self, ctx):
         args = ctx.get_args("ascii")
-        calc = await self.get_beatmap_from_arg_or_cache(ctx, args)
+        calc = await self.get_beatmap_calc_from_arg_or_cache(ctx, args)
         if calc is None:
             return
 
