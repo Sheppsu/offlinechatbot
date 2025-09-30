@@ -215,8 +215,11 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
         except ValueError:
             return False, None
 
-    async def get_beatmap_from_link(self, beatmap_link):
-        is_map, id = self.parse_beatmap_link(beatmap_link)
+    async def get_beatmap_from_link(self, beatmap_link, default_bm=True):
+        try:
+            is_map, id = default_bm, int(beatmap_link)
+        except ValueError:
+            is_map, id = self.parse_beatmap_link(beatmap_link)
         if id is None:
             return False, None
         try:
