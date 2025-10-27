@@ -55,11 +55,10 @@ class BaseBot:
     # Fundamental
 
     async def run(self) -> None:
-        async with websockets.connect(self.IRC_URI) as ws:
-            self.ws = ws
+        try:
+            async with websockets.connect(self.IRC_URI) as ws:
+                self.ws = ws
 
-
-            try:
                 await self.connect()
 
                 update_loop = None
@@ -69,11 +68,11 @@ class BaseBot:
 
                     await self.receive()
 
-            except KeyboardInterrupt:
-                self.running.clear()
+        except KeyboardInterrupt:
+            self.running.clear()
 
-            except Exception as exc:
-                log.exception(exc)
+        except Exception as exc:
+            log.exception(exc)
 
     async def run_update_loop(self):
         while self.running.is_set():
