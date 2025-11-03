@@ -54,7 +54,6 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
 
         osu_user = await self.db.get_osu_from_id(ctx.user_id)
         if osu_user is not None:
-            print(osu_user)
             self.osu_user_id_cache[osu_user.osu.username] = osu_user.osu.id
             return osu_user.osu.id
 

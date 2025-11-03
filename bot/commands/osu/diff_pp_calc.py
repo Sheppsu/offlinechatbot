@@ -219,7 +219,10 @@ class BeatmapCalculator:
             n_katu=stats.n_katu,
             combo=diff.max_combo,
             mods=mods,
-            clock_rate=clock_rate
+            clock_rate=clock_rate,
+            large_tick_hits=diff.n_large_ticks,
+            slider_end_hits=diff.n_sliders,
+            lazer=lazer
         )
 
         self.last_perf = perf.calculate(diff)
