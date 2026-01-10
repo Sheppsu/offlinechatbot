@@ -204,7 +204,7 @@ class ScrambleBot(StaticDataBot, metaclass=BotMeta):
     async def on_join(self, ctx: JoinContext):
         channel = next((channel for channel in self.channels if channel.user.username == ctx.channel), None)
         self.emotes[ctx.channel] = await self.emote_requester.get_channel_emotes(
-            channel.id if channel is not None else ctx.channel
+            channel.user.id if channel is not None else ctx.channel
         )
 
     @command_manager.command("scramble", "unscramble the word", scramble_type="word")
