@@ -48,6 +48,18 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
             log.exception("Unable to fetch total medals from osekai", exc_info=exc)
             return 0
 
+    async def get_user_with_feedback(self, ctx, username: str):
+        try:
+            return await self.osu_client.get_user(user="@"+username)
+        except client_exceptions.ClientResponseError as exc:
+            if exc.status == 404:
+                await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
+                return
+            await self.send_message(
+                ctx.channel,
+                f"@{ctx.user.display_name} API error occurred."
+            )
+
     async def process_osu_user_arg(self, ctx, args):
         if len(args) > 0:
             return " ".join(args).strip()
@@ -84,9 +96,8 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
 
     async def get_osu_user_id_from_osu_username(self, ctx, username):
         if username not in self.osu_user_id_cache:
-            user = await self.osu_client.get_user(user=username, key="username")
+            user = await self.get_user_with_feedback(ctx, username)
             if user is None:
-                await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
                 return
             self.osu_user_id_cache[username] = user.id
         return self.osu_user_id_cache[username]
@@ -607,10 +618,9 @@ class OsuBot(OsuClientBot, metaclass=BotMeta):
             return await self.send_message(ctx.channel, f"@{ctx.user.display_name} Please specify a username.")
 
         username = " ".join(args).strip()
-        osu_user = await self.osu_client.get_user(user=username, key="username")
-
+        osu_user = await self.get_user_with_feedback(ctx, username)
         if osu_user is None:
-            return await self.send_message(ctx.channel, f"@{ctx.user.display_name} User {username} not found.")
+            return
 
         await self.db.set_osu_info(
             ctx.user_id,

@@ -7,9 +7,11 @@ from typing import Callable, Awaitable
 from time import monotonic
 import asyncio
 import random
+import logging
 
 
 Cooldown = namedtuple("Cooldown", ["command_cd", "user_cd"])
+log = logging.getLogger(__name__)
 
 
 class CommandArg:
@@ -202,7 +204,19 @@ class CommandBot(BaseBot, metaclass=BotMeta):
             if not cmd.is_enabled:
                 return
 
-            self.loop.create_task(callable_cmd(self.manager.get_bot_for(callable_cmd.function), ctx))
+            def done_callback(task):
+                exc = task.exception()
+                if exc is not None:
+                    log.exception(f"Exception while running command {cmd.command.name}", exc_info=exc)
+                    self.loop.create_task(
+                        self.send_message(
+                            ctx.channel,
+                            f"@{ctx.user.display_name} Error occurred while processing the command NotLikeThis"
+                        )
+                    )
+
+            task = self.loop.create_task(callable_cmd(self.manager.get_bot_for(callable_cmd.function), ctx))
+            task.add_done_callback(done_callback)
 
     async def send_message(self, channel, message):
         if not self.can_send_in_channel(channel):
