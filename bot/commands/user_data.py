@@ -47,7 +47,7 @@ class UserDataBot(CommandBot, metaclass=BotMeta):
         "Check your ranking on the becky bucks leaderboard"
     )
     async def get_ranking(self, ctx: MessageContext):
-        rank = await self.db.get_user_ranking(ctx)
+        rank = await self.db.get_user_ranking(ctx.user_id, ctx.sending_user)
         await self.send_message(
             ctx.channel,
             f"@{ctx.user.display_name} You are currently rank {rank} in terms of Becky Bucks!"
