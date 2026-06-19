@@ -414,7 +414,7 @@ class Database:
             (user_id,)
         )
         rank = await cursor.fetchone()
-        return rank
+        return rank[0]
 
     # ac games
 
