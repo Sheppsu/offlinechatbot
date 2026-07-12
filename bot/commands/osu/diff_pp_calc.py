@@ -141,6 +141,8 @@ class BeatmapCalculator:
         for mod in score.mods:
             if mod.mod == osu.Mod.Classic:
                 lazer = False
+            if mod.mod == osu.Mod.Nightcore:
+                mods += osu.Mods.DoubleTime
 
             try:
                 mods += osu.Mods[mod.mod.name].value
